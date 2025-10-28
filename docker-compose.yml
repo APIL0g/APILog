@@ -3,9 +3,8 @@
 # Compose stack that wires InfluxDB, the API, and the edge proxy.
 # InfluxDB, API, 엣지 프록시를 연결하는 Compose 스택입니다.
 services:
-  influxdb:
+  apilog-influx:
     image: influxdb:2.7
-    container_name: apilog-influx
     environment:
       DOCKER_INFLUXDB_INIT_MODE: setup
       DOCKER_INFLUXDB_INIT_USERNAME: admin
@@ -18,29 +17,41 @@ services:
     volumes:
       - influx-data:/var/lib/influxdb2
 
-  api:
-    build: ./back/apps/api
+  apilog-api:
     container_name: apilog-api
+    build: ./back/apps/api
     environment:
-      INFLUX_URL: http://influxdb:8086
+      # Point FastAPI to the Influx service by its Docker name.
+      # FastAPI에서 InfluxDB에 접속할 때 Docker 네트워크 이름을 사용합니다.
+      INFLUX_URL: http://apilog-influx:8086
       INFLUX_TOKEN: dev-token
       INFLUX_ORG: apilog
       INFLUX_BUCKET: apilog_raw
+
+      # Allow CORS from anywhere for now (dev only).
+      # 개발 단계에서는 CORS를 전체 허용합니다.
       CORS_ALLOW_ORIGIN: "*"
     depends_on:
-      - influxdb
+      - apilog-influx
+    expose:
+      - "8000"
+    # 만약 API를 로컬호스트에서 직접 테스트하고 싶으면 대신 이렇게도 가능:
+    # ports:
+    #   - "8000:8000"
 
-  nginx:
+  apilog-nginx:
+    container_name: apilog-nginx
     build:
       # Use the workspace root so nginx receives built frontend artefacts.
-      # 작업공간 루트를 컨텍스트로 사용하여 nginx가 빌드 산출물을 받도록 합니다.
+      # 작업공간 루트를 컨텍스트로 사용하여 nginx가 프론트엔드 빌드 산출물을 복사할 수 있게 합니다.
       context: .
       dockerfile: infra/nginx/Dockerfile
-    container_name: apilog-nginx
     ports:
+      # Host 8080 -> container 80
+      # 호스트 8080 포트를 nginx 80 포트에 바인딩합니다.
       - "8080:80"
     depends_on:
-      - api
+      - apilog-api
 
 volumes:
   influx-data:

@@ -1,6 +1,6 @@
 ﻿########################################
-# Build the dashboard frontend with Vite.
-# Vite로 대시보드 프런트엔드를 빌드합니다.
+# 1) Build the dashboard frontend with Vite.
+#    Vite로 대시보드 프런트엔드를 빌드합니다.
 ########################################
 FROM node:20-alpine AS build-dashboard
 
@@ -21,13 +21,17 @@ RUN npm ci --legacy-peer-deps
 # 나머지 애플리케이션 소스와 구성을 복사합니다.
 COPY front/apps/dashboard ./
 
+# Bring plugin widgets into the expected alias path (/app/plugins).
+COPY front/apps/plugins /app/plugins
+
 # Produce the static dashboard bundle in /app/dashboard/dist.
 # /app/dashboard/dist에 정적 대시보드 번들을 생성합니다.
 RUN npm run build
 
+
 ########################################
-# Build the collector SDK with Rollup.
-# Rollup으로 수집기 SDK를 빌드합니다.
+# 2) Build the collector SDK with Rollup.
+#    Rollup으로 수집기 SDK를 빌드합니다.
 ########################################
 FROM node:20-alpine AS build-collector
 
@@ -50,16 +54,18 @@ COPY front/apps/collector-js ./
 # Rollup 빌드를 실행해 /app/collector/dist를 채웁니다.
 RUN npm run build
 
+
 ########################################
-# Assemble the runtime nginx image.
-# 런타임 nginx 이미지를 조립합니다.
+# 3) Assemble the runtime nginx image.
+#    런타임 nginx 이미지를 조립합니다.
 ########################################
 FROM nginx:alpine AS runtime
 
 # Prepare the public directories that host static assets.
 # 정적 자산을 제공할 디렉터리를 준비합니다.
 RUN mkdir -p /usr/share/nginx/html \
-    && mkdir -p /usr/share/nginx/html/apilog
+    && mkdir -p /usr/share/nginx/html/apilog \
+    && rm /etc/nginx/conf.d/default.conf
 
 # Copy the dashboard SPA into the nginx html root.
 # 대시보드 SPA를 nginx html 루트에 복사합니다.
@@ -76,3 +82,5 @@ COPY infra/nginx/nginx.conf /etc/nginx/nginx.conf
 # Expose port 80 for downstream services.
 # 다운스트림 서비스가 접근할 수 있도록 80번 포트를 엽니다.
 EXPOSE 80
+
+# nginx:alpine 기본 CMD 그대로 사용 (nginx -g 'daemon off;')
