@@ -1,0 +1,48 @@
+﻿version: "3.9"
+
+# Compose stack that wires InfluxDB, the API, and the edge proxy.
+# InfluxDB, API, 엣지 프록시를 연결하는 Compose 스택입니다.
+services:
+  influxdb:
+    image: influxdb:2.7
+    container_name: apilog-influx
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: adminpass
+      DOCKER_INFLUXDB_INIT_ORG: apilog
+      DOCKER_INFLUXDB_INIT_BUCKET: apilog_raw
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: dev-token
+    ports:
+      - "8086:8086"
+    volumes:
+      - influx-data:/var/lib/influxdb2
+
+  api:
+    build: ./back/apps/api
+    container_name: apilog-api
+    environment:
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: dev-token
+      INFLUX_ORG: apilog
+      INFLUX_BUCKET: apilog_raw
+      CORS_ALLOW_ORIGIN: "*"
+    depends_on:
+      - influxdb
+
+  nginx:
+    build:
+      # Use the workspace root so nginx receives built frontend artefacts.
+      # 작업공간 루트를 컨텍스트로 사용하여 nginx가 빌드 산출물을 받도록 합니다.
+      context: .
+      dockerfile: infra/nginx/Dockerfile
+    container_name: apilog-nginx
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  influx-data:
+    # Persist InfluxDB state across container restarts.
+    # 컨테이너 재시작 후에도 InfluxDB 상태를 유지합니다.

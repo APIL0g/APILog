@@ -1,0 +1,60 @@
+/* Layout container that centres the demo dashboard. */
+/* 데모 대시보드를 가운데 정렬하는 레이아웃 컨테이너입니다. */
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* Shared styles for the rotating logos. */
+/* 회전하는 로고를 위한 공통 스타일입니다. */
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+
+/* Highlight each logo when hovered. */
+/* 로고 위에 마우스를 올렸을 때 강조 표시합니다. */
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+
+/* Provide a React-specific hover colour. */
+/* React 로고에만 적용되는 호버 색상을 지정합니다. */
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+/* Spin the React logo to emphasise interactivity. */
+/* 상호작용을 강조하기 위해 React 로고를 회전시킵니다. */
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Only animate when the user allows motion. */
+  /* 사용자가 동적 효과를 허용할 때만 애니메이션을 실행합니다. */
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+/* Card styling for the counter block. */
+/* 카운터 블록을 위한 카드 스타일입니다. */
+.card {
+  padding: 2em;
+}
+
+/* Subdued tone for helper copy. */
+/* 보조 설명 문구에 은은한 톤을 적용합니다. */
+.read-the-docs {
+  color: #888;
+}

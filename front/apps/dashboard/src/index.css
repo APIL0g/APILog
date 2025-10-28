@@ -1,0 +1,91 @@
+/* Global design tokens and typography rules for the dashboard. */
+/* 대시보드 전역에서 사용하는 디자인 토큰과 타이포그래피 규칙입니다. */
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Anchor defaults with reachable colour contrast. */
+/* 접근하기 쉬운 대비를 제공하는 앵커 기본 스타일입니다. */
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+
+/* Emphasise links on hover while keeping the layout static. */
+/* 레이아웃을 유지하면서 호버 시 링크를 강조합니다. */
+a:hover {
+  color: #535bf2;
+}
+
+/* Base body styles keep the preview centred on the screen. */
+/* 프리뷰를 화면 중앙에 유지하기 위한 기본 body 스타일입니다. */
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+/* Oversized heading draws attention to the demo title. */
+/* 데모 제목을 강조하기 위해 큰 헤드라인을 사용합니다. */
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+/* Button baseline for reusable interactive components. */
+/* 재사용 가능한 인터랙티브 컴포넌트를 위한 버튼 기본값입니다. */
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+
+/* Provide a subtle hover affordance. */
+/* 미묘한 호버 변화를 제공하여 상호작용을 알립니다. */
+button:hover {
+  border-color: #646cff;
+}
+
+/* Improve keyboard accessibility states. */
+/* 키보드 접근성을 향상하는 포커스 상태를 제공합니다. */
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  /* Adjust palette when the OS prefers light mode. */
+  /* 운영체제가 라이트 모드를 선호할 때 팔레트를 조정합니다. */
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+
+  a:hover {
+    color: #747bff;
+  }
+
+  button {
+    background-color: #f9f9f9;
+  }
+}

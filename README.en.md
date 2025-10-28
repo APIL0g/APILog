@@ -1,7 +1,5 @@
 ﻿# ApiLog Analytics Platform
 
-> Prefer Korean? [한국어 안내서 보기](README.ko.md)
-
 ## Overview
 - Lightweight analytics pipeline that ingests events through FastAPI and stores them in InfluxDB.
 - Collector SDK (Rollup + TypeScript) captures browser behaviour and shares an embeddable loader.
@@ -54,3 +52,4 @@ infra/
 
 ## Licensing
 - Open-source licensing to be confirmed. Add your preferred SPDX identifier before release.
+
