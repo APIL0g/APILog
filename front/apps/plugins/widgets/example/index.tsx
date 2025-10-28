@@ -1,6 +1,6 @@
 import { CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Sparkles } from "@/components/icons"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
-import { Sparkles } from "lucide-react"
 
 // Example widget showcasing how to build custom plugin widgets
 export default function ExampleWidget({ timeRange }: WidgetProps) {
