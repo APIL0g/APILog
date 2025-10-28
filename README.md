@@ -1,4 +1,4 @@
-﻿# ApiLog Analytics Platform
+﻿﻿# ApiLog Analytics Platform
 
 > Prefer Korean? [한국어 안내서 보기](README.ko.md)
 
@@ -19,11 +19,11 @@
    npm install --prefix front/apps/dashboard
    npm install --prefix front/apps/collector-js
    python -m pip install fastapi uvicorn[standard] influxdb-client
-   `
+   ```
 2. Bring up the stack
    `bash
    docker compose up --build
-   `
+   ```
 3. Visit the dashboard at <http://localhost:8080> and validate the API at <http://localhost:8080/api/health>.
 
 ## Development Workflow
@@ -42,7 +42,7 @@ pm run lint (if configured) and add component tests with your preferred runner.
 - Infrastructure: use docker compose up --build to validate the production image locally.
 
 ## Project Structure
-`
+```
 back/
   apps/api/            # FastAPI service & Influx helpers
 front/
@@ -50,7 +50,7 @@ front/
   apps/dashboard/      # React dashboard scaffold
 infra/
   nginx/               # Multi-stage nginx build & config
-`
+```
 
 ## Licensing
-- Open-source licensing to be confirmed. Add your preferred SPDX identifier before release.
+![Static Badge](https://img.shields.io/badge/license-MIT-green)
