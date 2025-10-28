@@ -12,7 +12,10 @@ WORKDIR /app/dashboard
 # Docker 레이어 캐시를 활용하기 위해 의존성 매니페스트를 먼저 복사합니다.
 COPY front/apps/dashboard/package.json ./
 COPY front/apps/dashboard/package-lock.json ./
-RUN npm ci
+
+# Install dependencies for the dashboard.
+# 대시보드 의존성을 설치합니다 (peerDependencies 충돌 무시).
+RUN npm ci --legacy-peer-deps
 
 # Copy the remaining application sources and configuration.
 # 나머지 애플리케이션 소스와 구성을 복사합니다.
@@ -34,7 +37,10 @@ WORKDIR /app/collector
 # 의존성 설치를 위해 패키지 메타데이터를 복사합니다.
 COPY front/apps/collector-js/package.json ./
 COPY front/apps/collector-js/package-lock.json ./
-RUN npm ci
+
+# Install dependencies for the collector SDK.
+# 수집기 SDK 의존성을 설치합니다 (peerDependencies 충돌 무시).
+RUN npm ci --legacy-peer-deps
 
 # Copy the collector source tree and configuration files.
 # 수집기 소스 트리와 구성 파일을 복사합니다.
