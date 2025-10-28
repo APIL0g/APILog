@@ -1,4 +1,4 @@
-﻿# ApiLog Analytics Platform
+﻿﻿# ApiLog Analytics Platform
 
 > Prefer Korean? [한국어 안내서 보기](README.ko.md)
 
@@ -8,41 +8,41 @@
 - Dashboard (React + Vite) provides a starting point for visualising aggregated metrics.
 
 ## Architecture
-- **Backend**: ack/apps/api exposes ingestion (/api/ingest/events) and reporting (/api/query/top-pages) endpoints.
-- **Collector**: ront/apps/collector-js bundles an ESM SDK, an embeddable loader, and an IIFE runtime.
-- **Dashboard**: ront/apps/dashboard is a Vite-based React app that consumes API data.
+- **Backend**: back/apps/api exposes ingestion (/api/ingest/events) and reporting (/api/query/top-pages) endpoints.
+- **Collector**: front/apps/collector-js bundles an ESM SDK, an embeddable loader, and an IIFE runtime.
+- **Dashboard**: front/apps/dashboard is a Vite-based React app that consumes API data.
 - **Edge**: infra/nginx serves the dashboard, collector bundles, and reverse-proxies API calls.
 
 ## Getting Started
 1. Install dependencies
-   `ash
+   ```bash
    npm install --prefix front/apps/dashboard
    npm install --prefix front/apps/collector-js
    python -m pip install fastapi uvicorn[standard] influxdb-client
-   `
+   ```
 2. Bring up the stack
-   `ash
+   ```bash
    docker compose up --build
-   `
+   ```
 3. Visit the dashboard at <http://localhost:8080> and validate the API at <http://localhost:8080/api/health>.
 
 ## Development Workflow
-- ront/apps/collector-js: 
+- front/apps/collector-js: 
 pm run dev launches Rollup in watch mode; 
 pm run build emits distributable bundles.
-- ront/apps/dashboard: 
+- front/apps/dashboard: 
 pm run dev serves the UI; 
 pm run build produces static assets for nginx.
-- ack/apps/api: uvicorn app.main:app --reload --port 8000 runs the FastAPI server locally.
+- back/apps/api: uvicorn app.main:app --reload --port 8000 runs the FastAPI server locally.
 
 ## Testing & Quality
-- Backend: add pytest suites under ack/apps/api/tests and run pytest.
+- Backend: add pytest suites under back/apps/api/tests and run pytest.
 - Collector & Dashboard: lint with 
 pm run lint (if configured) and add component tests with your preferred runner.
 - Infrastructure: use docker compose up --build to validate the production image locally.
 
 ## Project Structure
-`
+```
 back/
   apps/api/            # FastAPI service & Influx helpers
 front/
@@ -50,7 +50,7 @@ front/
   apps/dashboard/      # React dashboard scaffold
 infra/
   nginx/               # Multi-stage nginx build & config
-`
+```
 
 ## Licensing
-- Open-source licensing to be confirmed. Add your preferred SPDX identifier before release.
+![Static Badge](https://img.shields.io/badge/license-MIT-green)
