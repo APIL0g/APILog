@@ -22,7 +22,7 @@
    pip install -r back/apps/api/requirements.txt
    ```
 2. Bring up the stack
-   `bash
+   ```bash
    docker compose up --build
    ```
 3. Visit the dashboard at <http://localhost:8080> and validate the API at <http://localhost:8080/api/health>.
@@ -54,4 +54,7 @@ infra/
 ```
 
 ## Licensing
-- ApiLog is released under the MIT license, see [LICENSE](https://github.com/APIL0g/APILog/blob/develop/LICENSE).
+- ApiLog is released under the MIT license, see [LICENSE](LICENSE).
+
+## If you want to contribute
+- ApiLog welcomes active contributions. Please contribute according to the [contribution method](CONTRIBUTING.md) document.
