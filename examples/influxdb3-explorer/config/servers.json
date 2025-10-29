@@ -1,0 +1,11 @@
+{
+  "servers": [
+    {
+      "id": "apilog-dev",
+      "name": "APILog Dev",
+      "url": "http://influxdb3-core:8181",
+      "token": "apilog-dev-token",
+      "verifyTLS": false
+    }
+  ]
+}
