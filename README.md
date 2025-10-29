@@ -15,13 +15,14 @@
 
 ## Getting Started
 1. Install dependencies
-   `bash
-   npm install --prefix front/apps/dashboard
-   npm install --prefix front/apps/collector-js
-   python -m pip install fastapi uvicorn[standard] influxdb-client
+   ```bash
+   git clone https://github.com/APIL0g/APILog.git
+   cd APILog
+   npm install
+   pip install -r back/apps/api/requirements.txt
    ```
 2. Bring up the stack
-   `bash
+   ```bash
    docker compose up --build
    ```
 3. Visit the dashboard at <http://localhost:8080> and validate the API at <http://localhost:8080/api/health>.
@@ -33,7 +34,7 @@ pm run build emits distributable bundles.
 - front/apps/dashboard: 
 pm run dev serves the UI; 
 pm run build produces static assets for nginx.
-- fack/apps/api: uvicorn app.main:app --reload --port 8000 runs the FastAPI server locally.
+- back/apps/api: uvicorn app.main:app --reload --port 8000 runs the FastAPI server locally.
 
 ## Testing & Quality
 - Backend: add pytest suites under back/apps/api/tests and run pytest.
@@ -53,4 +54,4 @@ infra/
 ```
 
 ## Licensing
-![Static Badge](https://img.shields.io/badge/license-MIT-green)
+- ApiLog is released under the MIT license, see [LICENSE](https://github.com/APIL0g/APILog/blob/develop/LICENSE).
