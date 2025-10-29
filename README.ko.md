@@ -55,4 +55,7 @@ infra/
 ```
 
 ## 라이선스
-- ApiLog는 MIT 라이선스에 따라 배포됩니다. [LICENSE](https://github.com/APIL0g/APILog/blob/develop/LICENSE)를 참조하세요.
+- ApiLog는 MIT 라이선스에 따라 배포됩니다. [LICENSE](LICENSE)를 참조하세요.
+
+## 기여를 하고 싶다면
+- ApiLog는 적극적인 기여를 환영합니다. [기여 방법](CONTRIBUTING.ko.md) 문서에 따라서 기여해주시기 바랍니다.
