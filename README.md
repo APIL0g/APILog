@@ -22,7 +22,7 @@
    pip install -r back/apps/api/requirements.txt
    ```
 2. Bring up the stack
-   ```bash
+   `bash
    docker compose up --build
    ```
 3. Visit the dashboard at <http://localhost:8080> and validate the API at <http://localhost:8080/api/health>.
@@ -34,7 +34,7 @@ pm run build emits distributable bundles.
 - front/apps/dashboard: 
 pm run dev serves the UI; 
 pm run build produces static assets for nginx.
-- back/apps/api: uvicorn app.main:app --reload --port 8000 runs the FastAPI server locally.
+- fack/apps/api: uvicorn app.main:app --reload --port 8000 runs the FastAPI server locally.
 
 ## Testing & Quality
 - Backend: add pytest suites under back/apps/api/tests and run pytest.
