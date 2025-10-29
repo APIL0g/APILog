@@ -1,0 +1,38 @@
+[
+  {
+    "id": "fashion",
+    "name": "패션",
+    "slug": "fashion",
+    "description": "최신 트렌드 의류 및 액세서리"
+  },
+  {
+    "id": "electronics",
+    "name": "전자기기",
+    "slug": "electronics",
+    "description": "스마트폰, 노트북, 태블릿 등"
+  },
+  {
+    "id": "beauty",
+    "name": "뷰티",
+    "slug": "beauty",
+    "description": "화장품 및 스킨케어"
+  },
+  {
+    "id": "home",
+    "name": "홈·리빙",
+    "slug": "home",
+    "description": "가구 및 인테리어 소품"
+  },
+  {
+    "id": "sports",
+    "name": "스포츠",
+    "slug": "sports",
+    "description": "운동용품 및 아웃도어"
+  },
+  {
+    "id": "food",
+    "name": "식품",
+    "slug": "food",
+    "description": "신선식품 및 가공식품"
+  }
+]

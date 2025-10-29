@@ -42,7 +42,35 @@ services:
     restart: unless-stopped
 
   ############################################################
-  # 2) apilog-api (FastAPI)
+  # 2) InfluxDB 3 Explorer (웹 UI)
+  # DB 연결, 토큰/DB 관리, 쿼리 테스트용
+  # http://localhost:8888
+  ############################################################
+  influxdb3-explorer:
+    image: influxdata/influxdb3-ui:1.3.0
+    container_name: influxdb3-explorer
+
+    # admin 모드: 브라우저에서 Core를 등록하고 다룰 수 있게 함
+    command: ["--mode=admin"]
+
+    ports:
+      - "8888:80"     # 호스트 8888 → 웹 UI
+
+    environment:
+      # 세션 키 (로컬 개발용 값. 배포 시 바꿔도 됨)
+      SESSION_SECRET_KEY: "dev-secret-change-me"
+
+    volumes:
+      - explorer-data:/db
+      - ./examples/influxdb3-explorer/config:/app-root/config:ro
+
+    depends_on:
+      - influxdb3-core
+
+    restart: unless-stopped
+
+  ############################################################
+  # 3) apilog-api (FastAPI)
   # 수집 엔드포인트 /api/ingest/events 등
   # 내부적으로 InfluxDB에 line protocol로 write
   ############################################################
@@ -57,9 +85,6 @@ services:
       # InfluxDB 3에서 자동으로 생성된 관리자/쓰기 토큰 (Authorization 헤더에 사용)
       INFLUX_TOKEN: apilog-dev-token
 
-      # apilog-api는 아직 InfluxDB 2.x Python 클라이언트(influxdb_client)를 쓰고 있음.
-      # 이 클라이언트는 org / bucket 파라미터를 요구한다.
-      #
       # InfluxDB 3에는 org 개념이 없어도 상관 없지만,
       # 호환 레이어(/api/v2/write)에서는 org=... 값이 필요하므로
       # 임의 문자열을 유지하면 된다.
@@ -76,14 +101,11 @@ services:
 
     expose:
       - "8000"
-    # 로컬에서 직접 테스트하고 싶으면 포트 직접 오픈:
-    # ports:
-    #   - "8000:8000"
 
     restart: unless-stopped
 
   ############################################################
-  # 3) apilog-nginx
+  # 4) apilog-nginx
   # 프론트엔드 + 리버스 프록시 (예: /api -> apilog-api:8000)
   # 외부 유저는 http://localhost:8080 으로 접속
   ############################################################
@@ -100,6 +122,22 @@ services:
     depends_on:
       - apilog-api
 
+    restart: unless-stopped
+
+  
+  ############################################################
+  # 5) dummy-frontend
+  # 내부 개발용 테스트 더미 프론트엔드 사이트
+  ############################################################
+  dummy-frontend:
+    build:
+      context: ./examples/dummy-frontend
+      dockerfile: Dockerfile
+    container_name: dummy-frontend
+    ports:
+      - "80:3000"
+    environment:
+      NODE_ENV: production
     restart: unless-stopped
 
 ##############################################################
