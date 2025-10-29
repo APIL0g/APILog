@@ -16,9 +16,10 @@
 ## Getting Started
 1. Install dependencies
    ```bash
-   npm install --prefix front/apps/dashboard
-   npm install --prefix front/apps/collector-js
-   python -m pip install fastapi uvicorn[standard] influxdb-client
+   git clone https://github.com/APIL0g/APILog.git
+   cd APILog
+   npm install
+   pip install -r back/apps/api/requirements.txt
    ```
 2. Bring up the stack
    ```bash
@@ -53,4 +54,4 @@ infra/
 ```
 
 ## Licensing
-![Static Badge](https://img.shields.io/badge/license-MIT-green)
+- ApiLog is released under the MIT license, see [LICENSE](https://github.com/APIL0g/APILog/blob/develop/LICENSE).
