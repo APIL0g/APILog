@@ -54,4 +54,7 @@ infra/
 ```
 
 ## Licensing
-- ApiLog is released under the MIT license, see [LICENSE](https://github.com/APIL0g/APILog/blob/develop/LICENSE).
+- ApiLog is released under the MIT license, see [LICENSE](LICENSE).
+
+## If you want to contribute
+- ApiLog welcomes active contributions. Please contribute according to the [contribution method](CONTRIBUTING.md) document.

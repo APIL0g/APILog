@@ -2,6 +2,10 @@
 # 수집 API 서버를 위한 Python 3.11 베이스 이미지를 사용합니다.
 FROM python:3.11-slim
 
+# Copy the requirements.txt file(a dependency package of FastAPI) to the container.
+# FastAPI의 의존성 패키지인 requirements.txt 파일을 컨테이너로 복사합니다.
+COPY requirements.txt .
+
 # Install the runtime dependencies without caching wheels to reduce image size.
 # 이미지 크기를 줄이기 위해 캐시를 남기지 않고 런타임 의존성을 설치합니다.
 RUN pip install --no-cache-dir -r requirements.txt
