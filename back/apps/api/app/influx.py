@@ -12,6 +12,7 @@ INFLUX_URL = os.getenv("INFLUX_URL", "http://localhost:8086")
 INFLUX_TOKEN = os.getenv("INFLUX_TOKEN", "dev-token")
 INFLUX_ORG = os.getenv("INFLUX_ORG", "apilog")
 INFLUX_BUCKET = os.getenv("INFLUX_BUCKET", "apilog_raw")
+DEFAULT_TAG_VALUE = os.getenv("INFLUX_TAG_DEFAULT", "none")
 
 _client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
 _write = _client.write_api(write_options=SYNCHRONOUS)
@@ -98,16 +99,16 @@ def write_events(events: List[Dict[str, Any]]) -> None:
             Point("events")
             # Tags describe low-cardinality dimensions for fast grouping.
             # 태그는 빠른 그룹화를 위한 저카디널리티 차원을 설명합니다.
-            .tag("site_id", _safe_str(event.get("site_id")))
-            .tag("path", _safe_str(event.get("path")))
-            .tag("page_variant", _safe_str(event.get("page_variant")))
-            .tag("event_name", _safe_str(event.get("event_name")))
-            .tag("element_hash", _safe_str(event.get("element_hash")))
-            .tag("device_type", _safe_str(event.get("device_type")))
-            .tag("browser_family", _safe_str(event.get("browser_family")))
-            .tag("country_code", _safe_str(event.get("country_code")))
-            .tag("utm_source", _safe_str(event.get("utm_source")))
-            .tag("utm_campaign", _safe_str(event.get("utm_campaign")))
+            .tag("site_id", _safe_tag_str(event.get("site_id")))
+            .tag("path", _safe_tag_str(event.get("path")))
+            .tag("page_variant", _safe_tag_str(event.get("page_variant")))
+            .tag("event_name", _safe_tag_str(event.get("event_name")))
+            .tag("element_hash", _safe_tag_str(event.get("element_hash")))
+            .tag("device_type", _safe_tag_str(event.get("device_type")))
+            .tag("browser_family", _safe_tag_str(event.get("browser_family")))
+            .tag("country_code", _safe_tag_str(event.get("country_code")))
+            .tag("utm_source", _safe_tag_str(event.get("utm_source")))
+            .tag("utm_campaign", _safe_tag_str(event.get("utm_campaign")))
             # Fields hold the high-cardinality metrics we query over time.
             # 필드는 시간에 따라 조회할 고카디널리티 지표를 저장합니다.
             .field("count", _safe_int(event.get("count"), 1) or 1)
@@ -172,3 +173,7 @@ from(bucket: "{INFLUX_BUCKET}")
             )
 
     return rows
+def _safe_tag_str(value: Any) -> str:
+    """Ensure tag values always exist to keep tag sets consistent."""
+    text = _safe_str(value, DEFAULT_TAG_VALUE).strip()
+    return text or DEFAULT_TAG_VALUE
