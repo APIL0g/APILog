@@ -1,59 +1,142 @@
 ﻿version: "3.9"
 
-# Compose stack that wires InfluxDB, the API, and the edge proxy.
-# InfluxDB, API, 엣지 프록시를 연결하는 Compose 스택입니다.
 services:
-  apilog-influx:
-    image: influxdb:2.7
-    environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: admin
-      DOCKER_INFLUXDB_INIT_PASSWORD: adminpass
-      DOCKER_INFLUXDB_INIT_ORG: apilog
-      DOCKER_INFLUXDB_INIT_BUCKET: apilog_raw
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: dev-token
-    ports:
-      - "8086:8086"
-    volumes:
-      - influx-data:/var/lib/influxdb2
+  ############################################################
+  # 1) InfluxDB 3 Core
+  # 시계열 DB. 8181 포트로 API 노출
+  ############################################################
+  influxdb3-core:
+    image: quay.io/influxdb/influxdb3:latest
+    container_name: influxdb3-core
 
+    # 퍼미션 지옥 방지: 루트로 실행해서 volume 권한 문제 안 나게 함.
+    # (로컬 개발/온보딩용. 프로덕션에서는 보안 정책 따라 조정 가능)
+    user: "0:0"
+
+    environment:
+      # 컨테이너 최초 기동 시 자동으로 DB/토큰을 생성한다.
+      INFLUXDB_INIT_MODE: setup
+      INFLUXDB_INIT_USERNAME: admin
+      INFLUXDB_INIT_PASSWORD: adminpass
+      INFLUXDB_INIT_ORG: apilog
+      INFLUXDB_INIT_DATABASE: apilog_db
+      INFLUXDB_INIT_RETENTION: autogen
+      INFLUXDB_INIT_ADMIN_TOKEN: apilog-dev-token
+
+    command:
+      - serve
+      - --host-id=influx-node0
+      - --object-store=file
+      - --data-dir=/var/lib/influxdb3/data
+      - --plugin-dir=/var/lib/influxdb3/plugins
+      # 기본 HTTP 바인딩은 0.0.0.0:8181
+
+    ports:
+      - "8181:8181"   # 호스트 → 컨테이너 (API/ingest/query)
+
+    volumes:
+      # named volume을 사용해서 권한 이슈 없이 영구 저장
+      - influx-data:/var/lib/influxdb3/data
+      - influx-plugins:/var/lib/influxdb3/plugins
+
+    restart: unless-stopped
+
+  ############################################################
+  # 2) InfluxDB 3 Explorer (웹 UI)
+  # DB 연결, 토큰/DB 관리, 쿼리 테스트용
+  # http://localhost:8888
+  ############################################################
+  influxdb3-explorer:
+    image: influxdata/influxdb3-ui:1.3.0
+    container_name: influxdb3-explorer
+
+    # admin 모드: 브라우저에서 Core를 등록하고 다룰 수 있게 함
+    command: ["--mode=admin"]
+
+    ports:
+      - "8888:80"     # 호스트 8888 → 웹 UI
+
+    environment:
+      # 세션 키 (로컬 개발용 값. 배포 시 바꿔도 됨)
+      SESSION_SECRET_KEY: "dev-secret-change-me"
+
+    volumes:
+      - explorer-data:/db
+      - ./infra/influxdb3-explorer/config:/app-root/config:ro
+
+    depends_on:
+      - influxdb3-core
+
+    restart: unless-stopped
+
+  ############################################################
+  # 3) apilog-api (FastAPI)
+  # 수집 엔드포인트 /api/ingest/events 등
+  # 내부적으로 InfluxDB에 line protocol로 write
+  ############################################################
   apilog-api:
     container_name: apilog-api
     build: ./back/apps/api
-    environment:
-      # Point FastAPI to the Influx service by its Docker name.
-      # FastAPI에서 InfluxDB에 접속할 때 Docker 네트워크 이름을 사용합니다.
-      INFLUX_URL: http://apilog-influx:8086
-      INFLUX_TOKEN: dev-token
-      INFLUX_ORG: apilog
-      INFLUX_BUCKET: apilog_raw
 
-      # Allow CORS from anywhere for now (dev only).
-      # 개발 단계에서는 CORS를 전체 허용합니다.
+    environment:
+      # InfluxDB Core, 도커 네트워크 내부 주소
+      INFLUX_URL: http://influxdb3-core:8181
+
+      # InfluxDB 3에서 자동으로 생성된 관리자/쓰기 토큰 (Authorization 헤더에 사용)
+      INFLUX_TOKEN: apilog-dev-token
+
+      # apilog-api는 아직 InfluxDB 2.x Python 클라이언트(influxdb_client)를 쓰고 있음.
+      # 이 클라이언트는 org / bucket 파라미터를 요구한다.
+      #
+      # InfluxDB 3에는 org 개념이 없어도 상관 없지만,
+      # 호환 레이어(/api/v2/write)에서는 org=... 값이 필요하므로
+      # 임의 문자열을 유지하면 된다.
+      INFLUX_ORG: "apilog"
+
+      # InfluxDB 3에서는 database/retention-policy 조합이 bucket으로 매핑된다.
+      # 위 초기화 스텝에서 apilog_db + autogen 을 만들었으므로 bucket도 동일하게 지정한다.
+      INFLUX_BUCKET: "apilog_db/autogen"
+
+      # 개발 단계: CORS 전부 허용
       CORS_ALLOW_ORIGIN: "*"
+
     depends_on:
-      - apilog-influx
+      - influxdb3-core
+
     expose:
       - "8000"
-    # 만약 API를 로컬호스트에서 직접 테스트하고 싶으면 대신 이렇게도 가능:
+    # 로컬에서 직접 테스트하고 싶으면 포트 직접 오픈:
     # ports:
     #   - "8000:8000"
 
+    restart: unless-stopped
+
+  ############################################################
+  # 4) apilog-nginx
+  # 프론트엔드 + 리버스 프록시 (예: /api -> apilog-api:8000)
+  # 외부 유저는 http://localhost:8080 으로 접속
+  ############################################################
   apilog-nginx:
     container_name: apilog-nginx
     build:
-      # Use the workspace root so nginx receives built frontend artefacts.
-      # 작업공간 루트를 컨텍스트로 사용하여 nginx가 프론트엔드 빌드 산출물을 복사할 수 있게 합니다.
       context: .
       dockerfile: infra/nginx/Dockerfile
+
     ports:
-      # Host 8080 -> container 80
-      # 호스트 8080 포트를 nginx 80 포트에 바인딩합니다.
-      - "8080:80"
+      - "8080:80"    # 호스트 8080 -> nginx 80
+                     # 예: http://localhost:8080
+
     depends_on:
       - apilog-api
 
+    restart: unless-stopped
+
+##############################################################
+# Named Volumes
+# (권한 충돌 없이 영구 데이터 저장)
+##############################################################
 volumes:
   influx-data:
-    # Persist InfluxDB state across container restarts.
-    # 컨테이너 재시작 후에도 InfluxDB 상태를 유지합니다.
+  influx-plugins:
+  explorer-data:
+  explorer-config:
