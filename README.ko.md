@@ -1,5 +1,8 @@
 ﻿# ApiLog 분석 플랫폼
 
+![Static Badge](https://img.shields.io/badge/license-MIT-green)
+
+
 ## 개요
 - FastAPI로 이벤트를 수집하고 InfluxDB에 저장하는 경량 분석 파이프라인입니다.
 - Rollup + TypeScript 기반의 수집기 SDK가 브라우저 행동을 기록하고 임베드 가능한 로더를 제공합니다.
@@ -14,9 +17,10 @@
 ## 시작하기
 1. 의존성 설치
    ```bash
-   npm install --prefix front/apps/dashboard
-   npm install --prefix front/apps/collector-js
-   python -m pip install fastapi uvicorn[standard] influxdb-client
+   git clone https://github.com/APIL0g/APILog.git
+   cd APILog
+   npm install
+   pip install -r back/apps/api/requirements.txt
    ```
 2. 스택 실행
    ```bash
@@ -51,4 +55,4 @@ infra/
 ```
 
 ## 라이선스
-![Static Badge](https://img.shields.io/badge/license-MIT-green)
+- ApiLog는 MIT 라이선스에 따라 배포됩니다. [LICENSE](https://github.com/APIL0g/APILog/blob/develop/LICENSE)를 참조하세요.
