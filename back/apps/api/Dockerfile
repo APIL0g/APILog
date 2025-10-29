@@ -4,7 +4,7 @@ FROM python:3.11-slim
 
 # Install the runtime dependencies without caching wheels to reduce image size.
 # 이미지 크기를 줄이기 위해 캐시를 남기지 않고 런타임 의존성을 설치합니다.
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir fastapi uvicorn[standard] influxdb-client
 
 # Set the working directory for application code.
 # 애플리케이션 코드를 위한 작업 디렉터리를 설정합니다.
