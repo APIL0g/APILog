@@ -17,12 +17,7 @@ except Exception:  # pragma: no cover - 런타임에만 필요한 경우 대비
 from influxdb_client import InfluxDBClient
 
 # 재사용을 위해 수집 모듈의 설정을 참조합니다.
-from ingest.influx import (
-    INFLUX_URL,
-    INFLUX_TOKEN,
-    INFLUX_ORG,
-    INFLUX_BUCKET,
-)
+from config import INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET
 
 
 def _iso_date(dt: datetime) -> str:
