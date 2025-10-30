@@ -34,7 +34,7 @@ pm run build emits distributable bundles.
 - front/apps/dashboard: 
 pm run dev serves the UI; 
 pm run build produces static assets for nginx.
-- fack/apps/api: uvicorn app.main:app --reload --port 8000 runs the FastAPI server locally.
+- back/apps/api: uvicorn app.main:app --reload --port 8000 runs the FastAPI server locally.
 
 ## Testing & Quality
 - Backend: add pytest suites under back/apps/api/tests and run pytest.
