@@ -4,12 +4,12 @@
 
 from typing import Any, Dict
 from fastapi import APIRouter, Query
-from .service import query_top_pages
+from .service import get_top_pages
 
 router = APIRouter()
 
-@router.get("/top-page")
-def top_page(limit: int = Query(5, description="조회할 상위 페이지 수")) -> Dict[str, Any]:
+@router.get("/top-pages")
+def top_pages(limit: int = Query(5, description="조회할 상위 페이지 수")) -> Dict[str, Any]:
     """
     인기 페이지 Top 5를 반환합니다.
     
@@ -22,5 +22,5 @@ def top_page(limit: int = Query(5, description="조회할 상위 페이지 수")
             ]
         }
     """  
-    rows = query_top_pages(limit)
+    rows = get_top_pages(limit)
     return {"rows": rows}
