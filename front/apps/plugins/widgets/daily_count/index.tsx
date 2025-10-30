@@ -13,22 +13,7 @@ import {
 
 type Row = { date: string; cnt: number }
 
-function buildMockWeek(): Row[] {
-  const today = new Date()
-  const out: Row[] = []
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(today.getDate() - i)
-    const iso = d.toISOString().slice(0, 10) // YYYY-MM-DD
-    // 간단 목값(고정성 약간 보장): 날짜 합으로 seed 흉내
-    const seed = d.getFullYear() + d.getMonth() + d.getDate()
-    const cnt = Math.floor(((seed * 9301 + 49297) % 233280) / 233280 * 500) + 608
-    out.push({ date: iso, cnt })
-  }
-  return out
-}
-
-// 축 스케일을 "예쁜" 수(1/2/5 계열)로 올림
+// "예쁜" 1/2/5 계열 보정 상한
 function niceCeil(n: number): number {
   if (!isFinite(n) || n <= 0) return 10
   const exp = Math.floor(Math.log10(n))
@@ -47,23 +32,33 @@ function niceStep(n: number): number {
   return nice * base
 }
 
-// API 연동 참고 예시(추후 백엔드 구현 시 활성화)
-// const API_BASE = ""
-// async function fetchDaily(range: string): Promise<Row[]> {
-//   const res = await fetch(`${API_BASE}/api/query/daily-count?range=${encodeURIComponent(range)}`)
-//   if (!res.ok) throw new Error(await res.text())
-//   const data = await res.json()
-//   return data?.rows ?? []
-// }
+// 동일 오리진 프록시(/api/*) 사용 → 상대 경로 호출
+const API_BASE = ""
+async function fetchDaily(range: string): Promise<Row[]> {
+  const res = await fetch(`${API_BASE}/api/query/daily-count?range=${encodeURIComponent(range)}`)
+  if (!res.ok) throw new Error(await res.text())
+  const data = await res.json()
+  return data?.rows ?? []
+}
 
 export default function DailyCountWidget({ timeRange }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // TODO: 백엔드 준비되면 API로 교체
-    // fetchDaily(timeRange || "7d").then(setRows).catch(e => setError(String(e)))
-    setRows(buildMockWeek())
+    let alive = true
+    setRows(null)
+    setError(null)
+    fetchDaily(timeRange || "7d")
+      .then((r) => {
+        if (alive) setRows(r)
+      })
+      .catch((e) => {
+        if (alive) setError(String(e))
+      })
+    return () => {
+      alive = false
+    }
   }, [timeRange])
 
   const chartData = useMemo(
@@ -76,7 +71,7 @@ export default function DailyCountWidget({ timeRange }: WidgetProps) {
     [rows],
   )
 
-  // Y축 상한과 눈금 고정: 최대값에 여유를 주고 1/2/5 계열로 스냅
+  // Y축 상한 고정: 최대값에 여유를 주고 1/2/5 계열로 맞춤
   const { yMax, yTicks } = useMemo(() => {
     const maxVal = chartData.reduce((m, d) => (d.value > m ? d.value : m), 0)
     const padded = maxVal * 1.12
@@ -149,9 +144,10 @@ export default function DailyCountWidget({ timeRange }: WidgetProps) {
 }
 
 export const widgetMeta: WidgetMeta = {
-  id: "daily_count", // 디렉터리명과 일치시켜 자동 추론과 동일
+  id: "daily_count",
   name: "Daily Log Count",
-  description: "최근 1주일 일자별 로그 수를 막대 그래프로 표시",
+  description: "최근 1주일 일자별 로그 합계를 막대 그래프로 표시",
   defaultWidth: 520,
   defaultHeight: 360,
 }
+
