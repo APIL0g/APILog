@@ -16,12 +16,13 @@ services:
     environment:
       # 컨테이너 최초 기동 시 자동으로 DB/토큰을 생성한다.
       INFLUXDB_INIT_MODE: setup
-      INFLUXDB_INIT_USERNAME: admin
-      INFLUXDB_INIT_PASSWORD: adminpass
-      INFLUXDB_INIT_ORG: apilog
-      INFLUXDB_INIT_DATABASE: apilog_db
+      INFLUXDB_INIT_USERNAME: ${INFLUX_USERNAME}
+      INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD}
+      INFLUXDB_INIT_ORG: ${INFLUX_ORG}
+      INFLUXDB_INIT_DATABASE: ${INFLUX_DATABASE}
       INFLUXDB_INIT_RETENTION: autogen
-      INFLUXDB_INIT_ADMIN_TOKEN: apilog-dev-token
+      INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN}
+      
 
     command:
       - serve
@@ -48,14 +49,14 @@ services:
   ############################################################
   apilog-api:
     container_name: apilog-api
-    build: ./back/apps/api
+    build: ./back/app
 
     environment:
       # InfluxDB Core, 도커 네트워크 내부 주소
       INFLUX_URL: http://influxdb3-core:8181
 
       # InfluxDB 3에서 자동으로 생성된 관리자/쓰기 토큰 (Authorization 헤더에 사용)
-      INFLUX_TOKEN: apilog-dev-token
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
 
       # apilog-api는 아직 InfluxDB 2.x Python 클라이언트(influxdb_client)를 쓰고 있음.
       # 이 클라이언트는 org / bucket 파라미터를 요구한다.
@@ -63,13 +64,13 @@ services:
       # InfluxDB 3에는 org 개념이 없어도 상관 없지만,
       # 호환 레이어(/api/v2/write)에서는 org=... 값이 필요하므로
       # 임의 문자열을 유지하면 된다.
-      INFLUX_ORG: "apilog"
+      INFLUX_ORG: ${INFLUX_ORG}
 
       # InfluxDB 3 Core 호환 API에서는 bucket이 데이터베이스 이름에 대응한다.
-      INFLUX_BUCKET: "apilog_db"
+      INFLUX_BUCKET: ${INFLUX_DATABASE}
 
       # 개발 단계: CORS 전부 허용
-      CORS_ALLOW_ORIGIN: "*"
+      CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN}
 
     depends_on:
       - influxdb3-core

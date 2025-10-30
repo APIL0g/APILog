@@ -16,7 +16,7 @@ WORKDIR /app
 
 # Copy the FastAPI source into the container.
 # FastAPI 소스 코드를 컨테이너로 복사합니다.
-COPY app /app/app
+COPY . /app
 
 # Ensure logs are flushed directly to stdout/stderr.
 # 로그를 stdout/stderr로 즉시 플러시하도록 설정합니다.
@@ -24,4 +24,4 @@ ENV PYTHONUNBUFFERED=1
 
 # Launch the API under python -m for proper module resolution.
 # 모듈 해석을 위해 python -m으로 API를 실행합니다.
-CMD ["python", "-m", "app.main"]
+CMD ["python", "-m", "main"]
