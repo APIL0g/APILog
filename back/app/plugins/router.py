@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter
 
-from app.ingest.influx import query_top_pages
+from ingest.influx import query_top_pages
 
 
 router = APIRouter(prefix="/api/query", tags=["plugins"])

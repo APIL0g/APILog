@@ -9,8 +9,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from app.ingest.router import router as ingest_router
-from app.plugins.router import router as plugins_router
+from ingest.router import router as ingest_router
+from plugins.router import router as plugins_router
 
 
 app = FastAPI()
@@ -36,5 +36,5 @@ async def health() -> Dict[str, bool]:
 
 
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
 
