@@ -1,9 +1,12 @@
 import { CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Sparkles } from "@/components/icons"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
+import dayjs from "dayjs"
 
 // Example widget showcasing how to build custom plugin widgets
 export default function ExampleWidget({ timeRange }: WidgetProps) {
+  const renderedAt = dayjs().format("YYYY-MM-DD HH:mm:ss")
+
   const highlights = [
     {
       title: "Getting Started",
@@ -16,6 +19,10 @@ export default function ExampleWidget({ timeRange }: WidgetProps) {
     {
       title: "Next Steps",
       description: "Clone this component to add more widgets or fetch data from your API.",
+    },
+    {
+      title: "Rendered At",
+      description: `The widget rendered at ${renderedAt} using dayjs formatting.`,
     },
   ]
 
