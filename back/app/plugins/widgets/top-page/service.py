@@ -38,7 +38,7 @@ def get_top_pages(limit: int = 5) -> List[Dict[str, Any]]:
         path,
         SUM(count) AS total_views
     FROM events
-    WHRER event_name = 'page_view'
+    WHERE event_name = 'page_view'
     GROUP BY path
     ORDER BY total_views DESC
     LIMIT {limit}
@@ -79,7 +79,7 @@ def get_top_pages(limit: int = 5) -> List[Dict[str, Any]]:
                 "total_views" : int(data_dict['total_views'][i]),
             })
 
-            return rows
+        return rows
         
     except Exception as e:
         # Log error and return empty list if query execution fails
