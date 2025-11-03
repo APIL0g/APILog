@@ -27,8 +27,9 @@ interface DashboardConfig {
 }
 
 export default function DashboardPage() {
-  const id = "default"
+  const dashboardId = "default"
   const [dashboard, setDashboard] = useState<DashboardConfig | null>(null)
+  const [isHydrated, setIsHydrated] = useState(false)
   const [isAddingWidget, setIsAddingWidget] = useState(false)
   const [selectedWidgetType, setSelectedWidgetType] = useState<string>("")
   const [timeRange, setTimeRange] = useState("12h")
@@ -44,32 +45,76 @@ export default function DashboardPage() {
 
   const widgetMetadataKey = Object.keys(widgetMetadata).join(",")
   const availableWidgets = Object.values(widgetMetadata)
+  const sortedAvailableWidgets = [...availableWidgets].sort((a, b) => {
+    if (a.id === "example") return 1
+    if (b.id === "example") return -1
+    return 0
+  })
+  const storageKey = `dashboard-config-${dashboardId}`
 
   // Load dashboard configuration
   useEffect(() => {
-    const metadataList = Object.values(widgetMetadata)
-
-    const widgets = metadataList.map((meta, index) => ({
-      id: `widget-${index + 1}`,
-      type: meta.id,
-      position: index,
-      width: meta.defaultWidth ?? 400,
-      height: meta.defaultHeight ?? 300,
-      config: meta.defaultConfig,
-    }))
-
-    setDashboard({
-      id: id || "default",
+    const baseDashboard: DashboardConfig = {
+      id: dashboardId,
       name: "Analytics Overview",
-      widgets,
-    })
-  }, [id, widgetMetadataKey])
+      widgets: [],
+    }
+
+    if (typeof window === "undefined") {
+      setDashboard(baseDashboard)
+      setIsHydrated(true)
+      return
+    }
+
+    const storedValue = localStorage.getItem(storageKey)
+
+    if (storedValue) {
+      try {
+        const parsed = JSON.parse(storedValue) as Partial<DashboardConfig>
+        const storedWidgets = Array.isArray(parsed.widgets) ? parsed.widgets : []
+
+        const validWidgets = storedWidgets
+          .filter((widget): widget is Widget => Boolean(widget?.type))
+          .map((widget, index) => {
+            const meta = widgetMetadata[widget.type]
+            return {
+              ...widget,
+              id: widget.id ?? `widget-${index + 1}`,
+              position: index,
+              width: widget.width ?? meta?.defaultWidth ?? 400,
+              height: widget.height ?? meta?.defaultHeight ?? 300,
+              config: widget.config ?? meta?.defaultConfig,
+            }
+          })
+
+        setDashboard({
+          ...baseDashboard,
+          ...parsed,
+          widgets: validWidgets,
+        })
+        setIsHydrated(true)
+        return
+      } catch (error) {
+        console.warn("[dashboard] Failed to restore widgets from localStorage.", error)
+      }
+    }
+
+    setDashboard(baseDashboard)
+    setIsHydrated(true)
+  }, [dashboardId, storageKey, widgetMetadataKey])
+
+  useEffect(() => {
+    if (!dashboard) return
+    if (!isHydrated) return
+    if (typeof window === "undefined") return
+
+    localStorage.setItem(storageKey, JSON.stringify(dashboard))
+  }, [dashboard, isHydrated, storageKey])
 
   useEffect(() => {
     if (!selectedWidgetType) {
-      const metadataList = Object.values(widgetMetadata)
-      if (metadataList.length > 0) {
-        setSelectedWidgetType(metadataList[0].id)
+      if (sortedAvailableWidgets.length > 0) {
+        setSelectedWidgetType(sortedAvailableWidgets[0].id)
       }
     }
   }, [selectedWidgetType, widgetMetadataKey])
@@ -119,9 +164,16 @@ export default function DashboardPage() {
   const handleRemoveWidget = (widgetId: string) => {
     if (!dashboard) return
 
+    const updatedWidgets = dashboard.widgets
+      .filter((w) => w.id !== widgetId)
+      .map((widget, index) => ({
+        ...widget,
+        position: index,
+      }))
+
     setDashboard({
       ...dashboard,
-      widgets: dashboard.widgets.filter((w) => w.id !== widgetId),
+      widgets: updatedWidgets,
     })
   }
 
@@ -226,7 +278,7 @@ export default function DashboardPage() {
                             <SelectValue placeholder="Choose a widget..." />
                           </SelectTrigger>
                           <SelectContent>
-                            {availableWidgets.map((meta) => (
+                            {sortedAvailableWidgets.map((meta) => (
                               <SelectItem key={meta.id} value={meta.id}>
                                 {meta.name ?? meta.id}
                               </SelectItem>

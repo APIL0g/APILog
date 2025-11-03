@@ -41,7 +41,14 @@ export function WidgetHost({
   const [isResizing, setIsResizing] = useState(false)
   const [currentWidth, setCurrentWidth] = useState(width)
   const [currentHeight, setCurrentHeight] = useState(height)
-  const resizeRef = useRef<{ startX: number; startY: number; startWidth: number; startHeight: number } | null>(null)
+  const resizeRef = useRef<{
+    startX: number
+    startY: number
+    startWidth: number
+    startHeight: number
+    lastWidth: number
+    lastHeight: number
+  } | null>(null)
 
   useEffect(() => {
     setCurrentWidth(width)
@@ -58,6 +65,8 @@ export function WidgetHost({
       startY: e.clientY,
       startWidth: currentWidth,
       startHeight: currentHeight,
+      lastWidth: currentWidth,
+      lastHeight: currentHeight,
     }
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -68,19 +77,24 @@ export function WidgetHost({
 
       if (direction === "se" || direction === "e") {
         const newWidth = Math.max(300, resizeRef.current.startWidth + deltaX)
+        resizeRef.current.lastWidth = newWidth
         setCurrentWidth(newWidth)
       }
 
       if (direction === "se" || direction === "s") {
         const newHeight = Math.max(200, resizeRef.current.startHeight + deltaY)
+        resizeRef.current.lastHeight = newHeight
         setCurrentHeight(newHeight)
       }
     }
 
     const handleMouseUp = () => {
       setIsResizing(false)
-      if (onResize && resizeRef.current) {
-        onResize(currentWidth, currentHeight)
+      const resizeState = resizeRef.current
+      if (onResize && resizeState) {
+        const finalWidth = resizeState.lastWidth ?? currentWidth
+        const finalHeight = resizeState.lastHeight ?? currentHeight
+        onResize(finalWidth, finalHeight)
       }
       resizeRef.current = null
       document.removeEventListener("mousemove", handleMouseMove)
