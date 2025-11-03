@@ -18,7 +18,6 @@ preferences within our organization.
 ## Comments
 * **Write clear and concise comments:** Explain the "why" behind the code, not just the "what".
 * **Comment sparingly:** Well-written code should be self-documenting where possible.
-* **Use complete sentences:** Start comments with a capital letter and use proper punctuation.
 
 ## Logging
 * **Use a standard logging framework:**  Company X uses the built-in `logging` module.
@@ -36,16 +35,16 @@ preferences within our organization.
 
 # Code review comments
 
-When Gemini generates code review summary comments (e.g., PR descriptions), the following guidelines must be followed:
+When Gemini generates code review comments (e.g., PR descriptions), the following guidelines must be followed:
 
-1. **Bilingual Output:** All summaries must be written in **English** first.
+1. **Bilingual Output:** All reviews must be written in **English** first.
 2. **Korean Translation:** Immediately following the English summary, a **complete and accurate Korean translation** of the summary must be attached, separated by a "---" (horizontal bar).
 3. **Format:** Use Markdown to write clearly and readably.
 4. **Content:** Summarize the highlights and potential issues of the change.
 
-Gemini가 코드 리뷰 요약 댓글(예: PR 설명 생성)을 생성할 때, 다음 지침을 **반드시** 따라야 합니다.
+Gemini가 코드 리뷰 댓글(예: PR 설명 생성)을 생성할 때, 다음 지침을 **반드시** 따라야 합니다.
 
-1.  **이중 언어 출력:** 모든 요약은 **영어(English)**로 먼저 작성해야 합니다.
+1.  **이중 언어 출력:** 모든 리뷰는 **영어(English)**로 먼저 작성해야 합니다.
 2.  **한국어 번역:** 영어 요약문 바로 다음에, 해당 요약문의 **완전하고 정확한 한국어(Korean) 번역**을 "---" (수평선)으로 구분하여 첨부해야 합니다.
 3.  **형식:** 마크다운(Markdown)을 사용하여 명확하고 읽기 쉽게 작성합니다.
 4.  **내용:** 변경 사항의 핵심(Highlights)과 잠재적인 문제점을 요약합니다.
@@ -73,3 +72,15 @@ Gemini가 코드 리뷰 요약 댓글(예: PR 설명 생성)을 생성할 때, �
 **잠재적 문제**
 
 * 새 서비스는 데이터베이스 연결 실패에 대한 더 구체적인 오류 처리를 추가하면 좋습니다
+
+---
+
+![medium](https://www.gstatic.com/codereviewagent/medium-priority.svg)
+
+The `datetime` module is imported but is not used anywhere in this file. It's best practice to remove unused imports to keep the code clean and avoid potential confusion.
+
+---
+
+![medium](https://www.gstatic.com/codereviewagent/medium-priority.svg)
+
+모듈 datetime을 가져왔지만 이 파일 어디에서도 사용되지 않았습니다. 코드를 깔끔하게 유지하고 잠재적인 혼란을 방지하려면 사용되지 않는 imports를 제거하는 것이 가장 좋습니다.
