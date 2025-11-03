@@ -1,0 +1,2 @@
+"""Browser Share widget package."""
+
