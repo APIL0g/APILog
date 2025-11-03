@@ -7,5 +7,8 @@ export {
   CartesianGrid,
   Tooltip,
   LabelList,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from 'recharts'
-
