@@ -5,17 +5,13 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "@/lib/rechart
 
 type Row = { browser: string; sessions: number }
 
-// Mocked data for now (no network request)
-async function fetchBrowserShare(range: string): Promise<Row[]> {
-  // keep a short delay to show loading state
-  await new Promise((r) => setTimeout(r, 250))
-  return [
-    { browser: "Chrome", sessions: 532 },
-    { browser: "Safari", sessions: 214 },
-    { browser: "Edge", sessions: 128 },
-    { browser: "Firefox", sessions: 96 },
-    { browser: "Others", sessions: 62 },
-  ]
+const API_BASE = ""
+async function fetchBrowserShare(range: string, top = 10): Promise<Row[]> {
+  const url = `${API_BASE}/api/query/browser-share?range=${encodeURIComponent(range)}&top=${top}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(await res.text())
+  const data = await res.json()
+  return data?.rows ?? []
 }
 
 export default function BrowserShareWidget({ timeRange }: WidgetProps) {
@@ -26,7 +22,7 @@ export default function BrowserShareWidget({ timeRange }: WidgetProps) {
     let alive = true
     setRows(null)
     setError(null)
-    fetchBrowserShare(timeRange || "7d")
+    fetchBrowserShare(timeRange || "7d", 10)
       .then((r) => {
         if (alive) setRows(r)
       })
