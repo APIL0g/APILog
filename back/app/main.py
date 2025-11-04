@@ -11,7 +11,7 @@ import uvicorn
 
 from ingest.router import router as ingest_router
 from plugins.router import router as plugins_router
-
+from plugins.widgets.ai_insights.router import router as ai_insights_router
 
 app = FastAPI()
 
@@ -28,7 +28,7 @@ app.add_middleware(
 # Mount feature routers
 app.include_router(ingest_router)
 app.include_router(plugins_router)
-
+app.include_router(ai_insights_router)
 
 @app.get("/api/health")
 async def health() -> Dict[str, bool]:
