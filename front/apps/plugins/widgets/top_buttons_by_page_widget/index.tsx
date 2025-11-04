@@ -1,33 +1,45 @@
 ﻿import { useEffect, useMemo, useState } from "react"
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
-import {
-  MousePointerClick,
-  ChevronDown,
-  LogIn,
-  UserPlus,
-  ShoppingCart,
-  Download,
-  Search as SearchIcon,
-  Filter,
-  ArrowUpDown,
-  Share2,
-  Heart,
-  CreditCard,
-  TicketPercent,
-} from "lucide-react"
+import { ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { getIconFor } from "../utils"
 
 type Row = { site_id: string; element_text: string; count: number }
+type PathOption = { path: string; count: number }
 
 const API_BASE = ""
-async function fetchPaths(range: string): Promise<string[]> {
+async function fetchPaths(range: string): Promise<PathOption[]> {
   const res = await fetch(`${API_BASE}/api/query/top-buttons/paths?range=${encodeURIComponent(range)}`)
   if (!res.ok) throw new Error(await res.text())
   const data = await res.json()
-  return (data?.paths ?? []) as string[]
+  const rows = Array.isArray(data?.rows) ? data.rows : []
+  const options: PathOption[] = []
+
+  if (rows.length) {
+    for (const item of rows) {
+      if (!item) continue
+      const rawPath = typeof item.path === "string" ? item.path.trim() : ""
+      if (!rawPath) continue
+      const normalizedPath = rawPath.startsWith("/") ? rawPath : `/${rawPath.replace(/^\/+/, "")}`
+      const count = Number(item.count ?? 0) || 0
+      options.push({ path: normalizedPath, count })
+    }
+  }
+
+  if (!options.length && Array.isArray(data?.paths)) {
+    for (const path of data.paths) {
+      if (typeof path !== "string") continue
+      const trimmed = path.trim()
+      if (!trimmed) continue
+      const normalizedPath = trimmed.startsWith("/") ? trimmed : `/${trimmed.replace(/^\/+/, "")}`
+      options.push({ path: normalizedPath, count: 0 })
+    }
+  }
+
+  return options
 }
 
 async function fetchTopButtonsByPath(path: string, range: string): Promise<Row[]> {
@@ -40,32 +52,8 @@ async function fetchTopButtonsByPath(path: string, range: string): Promise<Row[]
   return rows.map((r) => ({ site_id: path, element_text: r?.element_text ?? "unknown", count: Number(r?.count ?? 0) }))
 }
 
-function normalizeLabel(s: string) {
-  return (s || "")
-    .replace(/[_-]+/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .toLowerCase()
-    .trim()
-}
-
-function getIconFor(label: string) {
-  const s = normalizeLabel(label)
-  if (s.includes('sign in') || s.includes('signin') || s.includes('login')) return LogIn
-  if (s.includes('sign up') || s.includes('signup') || s.includes('register')) return UserPlus
-  if (s.includes('add to cart') || s.includes('cart')) return ShoppingCart
-  if (s.includes('download')) return Download
-  if (s.includes('search')) return SearchIcon
-  if (s.includes('filter')) return Filter
-  if (s.includes('sort')) return ArrowUpDown
-  if (s.includes('share')) return Share2
-  if (s.includes('wishlist') || s.includes('favorite') || s.includes('heart')) return Heart
-  if (s.includes('pay') || s.includes('checkout')) return CreditCard
-  if (s.includes('coupon')) return TicketPercent
-  return MousePointerClick
-}
-
 export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
-  const [paths, setPaths] = useState<string[]>([])
+  const [paths, setPaths] = useState<PathOption[]>([])
   const [pagePath, setPagePath] = useState<string>("")
   const [range, setRange] = useState<string>("7d")
   const [openRange, setOpenRange] = useState(false)
@@ -78,14 +66,38 @@ export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
     fetchPaths(range || "7d")
       .then((list) => {
         if (cancelled) return
-        const sanitized = list.filter((p) => p && p !== "/")
+        const unique = new Map<string, PathOption>()
+        for (const item of list) {
+          const key = typeof item.path === "string" ? item.path.trim() : ""
+          if (!key) continue
+          const normalized = key.startsWith("/") ? key : `/${key.replace(/^\/+/, "")}`
+          if (!normalized) continue
+          const count = Number(item.count ?? 0) || 0
+          if (!unique.has(normalized)) {
+            unique.set(normalized, { path: normalized, count })
+          } else {
+            const prev = unique.get(normalized)!
+            unique.set(normalized, { path: normalized, count: prev.count + count })
+          }
+        }
+        const sanitized = Array.from(unique.values()).sort((a, b) => {
+          const diff = (b.count || 0) - (a.count || 0)
+          if (diff !== 0) return diff
+          return b.path.localeCompare(a.path)
+        })
         setPaths(sanitized)
         setPagePath((prev) => {
-          if (prev && sanitized.includes(prev)) return prev
-          return sanitized[0] ?? ""
+          if (prev && sanitized.some((opt) => opt.path === prev)) return prev
+          return sanitized[0]?.path ?? ""
         })
+        setError(null)
       })
-      .catch(() => void 0)
+      .catch((e) => {
+        if (cancelled) return
+        setError(String((e as any)?.message || "Failed to load page paths"))
+        setPaths([])
+        setPagePath("")
+      })
     return () => {
       cancelled = true
     }
@@ -94,8 +106,8 @@ export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
   useEffect(() => {
     let cancelled = false
     setRows(null)
-    setError(null)
     if (!pagePath) return
+    setError(null)
     fetchTopButtonsByPath(pagePath, range || "7d")
       .then((data) => {
         if (cancelled) return
@@ -111,6 +123,10 @@ export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
     const list = rows ? [...rows] : []
     return list.sort((a, b) => b.count - a.count).slice(0, 10)
   }, [rows])
+
+  const totalPathCount = useMemo(() => {
+    return paths.reduce((sum, item) => sum + (item.count || 0), 0)
+  }, [paths])
 
   const fmt = (n: number) => new Intl.NumberFormat().format(n)
   const displayPath = (p: string) => {
@@ -168,18 +184,26 @@ export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
                 <CommandList>
                   <CommandEmpty>No results found</CommandEmpty>
                   <CommandGroup>
-                    {paths.map((p) => (
-                      <CommandItem
-                        key={p}
-                        value={displayPath(p)}
-                        onSelect={() => {
-                          setPagePath(p)
-                          setOpen(false)
-                        }}
-                      >
-                        {displayPath(p)}
-                      </CommandItem>
-                    ))}
+                    {paths.map((p) => {
+                      const percent = totalPathCount > 0 ? ((p.count / totalPathCount) * 100).toFixed(1) : null
+                      return (
+                        <CommandItem
+                          key={p.path}
+                          value={displayPath(p.path)}
+                          onSelect={() => {
+                            setPagePath(p.path)
+                            setOpen(false)
+                          }}
+                        >
+                          <div className="flex flex-col">
+                            <span>{displayPath(p.path)}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {fmt(p.count)} clicks{percent ? ` · ${percent}%` : ""}
+                            </span>
+                          </div>
+                        </CommandItem>
+                      )
+                    })}
                   </CommandGroup>
                 </CommandList>
               </Command>
@@ -198,7 +222,7 @@ export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
         {!error && rows && rows.length > 0 && (
           <div className="divide-y">
             {topSorted.map((r, idx) => (
-              <div key={`${pagePath}-${r.element_text}-${idx}`} className="flex items-center justify-between py-2">
+              <div key={`${pagePath}-${r.element_text || "unknown"}`} className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="h-8 w-8 rounded-full bg-muted grid place-items-center">
                     {(() => {
