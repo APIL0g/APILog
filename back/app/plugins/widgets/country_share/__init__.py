@@ -1,0 +1,1 @@
+"""Country share widget package."""
