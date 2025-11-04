@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 from influxdb_client_3 import InfluxDBClient3 
 
 # 재사용을 위해 수집 모듈의 설정을 참조합니다.
-from config import INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET
+from config import INFLUX_URL, INFLUX_TOKEN, INFLUX_BUCKET
 
 def get_top_pages(limit: int = 5) -> List[Dict[str, Any]]:
     """Return top viewed pages.
