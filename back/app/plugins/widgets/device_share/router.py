@@ -9,7 +9,7 @@ from .service import get_device_share
 router = APIRouter()
 
 @router.get("/device-share")
-def device_share(days: int = Query(7, ge=1, le=90), limit: int = Query(3, ge=1, le=4),):
+def device_share(days: int = Query(7, ge=1, le=90), limit: int = Query(2, ge=1, le=4),):
     rows = get_device_share(days=days, limit=limit)
 
     now = datetime.now(timezone.utc)
