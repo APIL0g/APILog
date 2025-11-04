@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+import re
 
 import os
 import math
@@ -90,6 +91,18 @@ def _normalize_bucket(s: str) -> str:
     allow = {"1h": "1 hour", "3h": "3 hour", "6h": "6 hour", "1d": "1 day"}
     return allow.get(s, "1 hour")
 
+def _validate_site_id(site_id: str) -> str:
+    """Validate `site_id` to prevent SQL injection.
+
+    Allows only letters, digits, underscore, and hyphen. Raises ValueError
+    if the input is not compliant.
+    """
+    if not isinstance(site_id, str) or not site_id:
+        raise ValueError("site_id must be a non-empty string")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", site_id):
+        raise ValueError("Invalid site_id: only alphanumerics, `_` and `-` are allowed")
+    return site_id
+
 def _iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -124,7 +137,7 @@ def _timed(name: str, fn):
 # ──────────────────────────────────────────────────────────────────────────────
 def q_pv_series(from_iso: str, to_iso: str, bucket_str: str, site_id: Optional[str]=None) -> List[Dict[str, Any]]:
     bucket_sql = _normalize_bucket(bucket_str)
-    where_site = f"AND site_id = '{site_id}'" if site_id else ""
+    where_site = f"AND site_id = '{_validate_site_id(site_id)}'" if site_id else ""
     sql = f"""
 SELECT DATE_BIN(INTERVAL '{bucket_sql}', time) AS bucket,
        SUM("count")::BIGINT AS pv
@@ -144,7 +157,7 @@ ORDER BY bucket;
     return out
 
 def q_top_paths(from_iso: str, to_iso: str, site_id: Optional[str]=None, limit:int=10) -> List[Dict[str, Any]]:
-    where_site = f"AND site_id = '{site_id}'" if site_id else ""
+    where_site = f"AND site_id = '{_validate_site_id(site_id)}'" if site_id else ""
     sql = f"""
 SELECT path, SUM("count")::BIGINT AS pv
 FROM "events"
@@ -160,7 +173,7 @@ LIMIT {int(limit)};
 
 def q_error_series(from_iso: str, to_iso: str, bucket_str: str, site_id: Optional[str]=None) -> List[Dict[str, Any]]:
     bucket_sql = _normalize_bucket(bucket_str)
-    where_site = f"AND site_id = '{site_id}'" if site_id else ""
+    where_site = f"AND site_id = '{_validate_site_id(site_id)}'" if site_id else ""
     sql = f"""
 SELECT DATE_BIN(INTERVAL '{bucket_sql}', time) AS bucket,
        SUM(CASE WHEN COALESCE(TRY_CAST(error_flag AS BOOLEAN), false) THEN 1 ELSE 0 END)::BIGINT AS errors,
@@ -183,7 +196,7 @@ ORDER BY bucket;
     return out
 
 def q_sessions(from_iso: str, to_iso: str, site_id: Optional[str]=None) -> int:
-    where_site = f"AND site_id = '{site_id}'" if site_id else ""
+    where_site = f"AND site_id = '{_validate_site_id(site_id)}'" if site_id else ""
     sql = f"""
 SELECT COUNT(DISTINCT session_id)::BIGINT AS sessions
 FROM "events"
@@ -194,7 +207,7 @@ WHERE time BETWEEN TIMESTAMP '{from_iso}' AND TIMESTAMP '{to_iso}'
     return int(rows[0].get("sessions", 0) or 0) if rows else 0
 
 def q_funnel(from_iso: str, to_iso: str, site_id: Optional[str]=None) -> Dict[str, int]:
-    where_site = f"AND site_id = '{site_id}'" if site_id else ""
+    where_site = f"AND site_id = '{_validate_site_id(site_id)}'" if site_id else ""
     sql = f"""
 WITH s AS (
   SELECT
