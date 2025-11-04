@@ -14,6 +14,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 애플리케이션 코드를 위한 작업 디렉터리를 설정합니다.
 WORKDIR /app
 
+# Install the browser and dependencies required by the playwright library to take snapshots for use in heatmaps.
+# 히트맵에 사용할 스냅샷을 찍기 위한 라이브러리 playwright에 필요한 브라우저와 의존성을 설치합니다.
+RUN playwright install-deps
+RUN playwright install chromium
+
 # Copy the FastAPI source into the container.
 # FastAPI 소스 코드를 컨테이너로 복사합니다.
 COPY . /app

@@ -112,3 +112,4 @@ volumes:
   influx-plugins:
   explorer-data:
   explorer-config:
+  snapshots:

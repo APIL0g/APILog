@@ -7,6 +7,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from ingest.router import router as ingest_router
@@ -29,6 +30,10 @@ app.add_middleware(
 app.include_router(ingest_router)
 app.include_router(plugins_router)
 
+# Snapshot routers
+SNAPSHOT_STORAGE_ROOT = "/snapshots"
+os.makedirs(SNAPSHOT_STORAGE_ROOT, exist_ok=True)
+app.mount("/api/snapshots", StaticFiles(directory=SNAPSHOT_STORAGE_ROOT), name="snapshots")
 
 @app.get("/api/health")
 async def health() -> Dict[str, bool]:
