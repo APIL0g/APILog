@@ -1,24 +1,11 @@
 ﻿import { useEffect, useMemo, useState } from "react"
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
-import {
-  MousePointerClick,
-  LogIn,
-  UserPlus,
-  ShoppingCart,
-  Download,
-  Search as SearchIcon,
-  Filter,
-  ArrowUpDown,
-  Share2,
-  Heart,
-  CreditCard,
-  TicketPercent,
-} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 import { ChevronDown } from "lucide-react"
+import { getIconFor } from "../utils"
 
 type Row = { element_text: string; count: number }
 
@@ -32,30 +19,6 @@ async function fetchTopButtonsGlobal(range: string): Promise<Row[]> {
     element_text: r?.element_text ?? "unknown",
     count: Number(r?.count ?? 0),
   }))
-}
-
-function normalizeLabel(s: string) {
-  return (s || "")
-    .replace(/[_-]+/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .toLowerCase()
-    .trim()
-}
-
-function getIconFor(label: string) {
-  const s = normalizeLabel(label)
-  if (s.includes('sign in') || s.includes('signin') || s.includes('login')) return LogIn
-  if (s.includes('sign up') || s.includes('signup') || s.includes('register')) return UserPlus
-  if (s.includes('add to cart') || s.includes('cart')) return ShoppingCart
-  if (s.includes('download')) return Download
-  if (s.includes('search')) return SearchIcon
-  if (s.includes('filter')) return Filter
-  if (s.includes('sort')) return ArrowUpDown
-  if (s.includes('share')) return Share2
-  if (s.includes('wishlist') || s.includes('favorite') || s.includes('heart')) return Heart
-  if (s.includes('pay') || s.includes('checkout')) return CreditCard
-  if (s.includes('coupon')) return TicketPercent
-  return MousePointerClick
 }
 
 export default function TopButtonsGlobalWidget({ timeRange }: WidgetProps) {
@@ -116,17 +79,17 @@ export default function TopButtonsGlobalWidget({ timeRange }: WidgetProps) {
         </div>
       </CardHeader>
       <CardContent className="pt-2">
+        <div className="mb-2 flex items-center justify-between text-sm font-semibold text-foreground">
+          <span>Button</span>
+          <span>Clicks</span>
+        </div>
         {error && <div className="text-sm text-red-500">Error: {error}</div>}
         {!error && rows === null && <div className="text-sm text-muted-foreground">Loading...</div>}
         {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">No data</div>}
         {!error && rows && rows.length > 0 && (
           <div className="divide-y">
-            <div className="mb-2 flex items-center justify-between text-sm font-semibold text-foreground">
-              <span>Button</span>
-              <span>Clicks</span>
-            </div>
             {topSorted.map((r, idx) => (
-              <div key={`${r.element_text}-${idx}`} className="flex items-center justify-between py-2">
+              <div key={r.element_text || "unknown"} className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="h-8 w-8 rounded-full bg-muted grid place-items-center">
                     {(() => {
@@ -154,4 +117,3 @@ export const widgetMeta: WidgetMeta = {
   defaultWidth: 420,
   defaultHeight: 360,
 }
-
