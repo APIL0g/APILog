@@ -145,8 +145,7 @@ LIMIT {int(limit)}
             if hasattr(res, "iterrows"):
                 for _, r in res.iterrows():  # type: ignore[attr-defined]
                     p = r.get("path") or "/"
-                    if not _is_asset_path(str(p)):
-                        items.append({"path": str(p), "count": int(r.get("cnt") or 0)})
+                    items.append({"path": str(p), "count": int(r.get("cnt") or 0)})
             else:
                 data: List[Dict[str, Any]] = []
                 if hasattr(res, "to_pylist"):
@@ -163,8 +162,7 @@ LIMIT {int(limit)}
 
                 for r in data:
                     p = (r.get("path") if isinstance(r, dict) else "/") or "/"  # type: ignore
-                    if not _is_asset_path(str(p)):
-                        items.append({"path": str(p), "count": int((r.get("cnt") if isinstance(r, dict) else 0) or 0)})  # type: ignore
+                    items.append({"path": str(p), "count": int((r.get("cnt") if isinstance(r, dict) else 0) or 0)})  # type: ignore
             return items
         except Exception:
             pass
@@ -188,6 +186,5 @@ from(bucket: "{INFLUX_BUCKET}")
     for table in tables:
         for rec in table.records:
             p = rec.get("path") or "/"
-            if not _is_asset_path(str(p)):
-                items2.append({"path": str(p), "count": int(rec.get("_value", 0) or 0)})
+            items2.append({"path": str(p), "count": int(rec.get("_value", 0) or 0)})
     return items2
