@@ -447,14 +447,10 @@
 
       const pendingCountry = requestCountryCode();
       if (pendingCountry) {
-        pendingCountry
-          .then((code) => {
-            this.countryCode = code || COUNTRY_DEFAULT;
-            this.q.updatePendingField("country_code", this.countryCode);
-          })
-          .catch(() => {
-            this.countryCode = COUNTRY_DEFAULT;
-          });
+        pendingCountry.then((code) => {
+          this.countryCode = code || COUNTRY_DEFAULT;
+          this.q.updatePendingField("country_code", this.countryCode);
+        });
       }
 
       this.installListeners();
