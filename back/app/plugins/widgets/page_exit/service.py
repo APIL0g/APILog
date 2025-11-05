@@ -69,6 +69,7 @@ def get_page_exit_rate(days: int = 7) -> List[Dict[str, Any]]:
         ROUND( 100.0 * COALESCE(x.exit_sessions, 0) / NULLIF(v.views, 0), 2) AS exit_rate
     FROM views v
     LEFT JOIN exits x ON v.path = x.path
+    WHERE COALESCE(x.exit_sessions, 0) > 0
     ORDER BY exit_rate DESC, views DESC
     """
 
