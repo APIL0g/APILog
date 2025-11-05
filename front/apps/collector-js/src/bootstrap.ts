@@ -111,6 +111,48 @@
     return pathname.split("?")[0];
   }
 
+  const COUNTRY_DEFAULT = "none";
+  let countryLookupInFlight: Promise<string> | null = null;
+
+  async function lookupCountryFromApi(): Promise<string> {
+    try {
+      const supportsAbort = typeof AbortController === "function";
+      const abort = supportsAbort ? new AbortController() : null;
+      const timeout = window.setTimeout(() => {
+        if (abort) abort.abort();
+      }, 4000);
+      try {
+        const res = await fetch("https://ipinfo.io/json", {
+          cache: "no-store",
+          signal: abort ? abort.signal : undefined,
+        });
+        if (!res.ok) {
+          throw new Error("geoip request failed");
+        }
+        const data = await res.json();
+        const raw = typeof data?.country === "string" ? data.country.trim() : "";
+        return raw ? raw.toUpperCase() : COUNTRY_DEFAULT;
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    } catch {
+      return COUNTRY_DEFAULT;
+    }
+  }
+
+  function requestCountryCode(): Promise<string> | null {
+    if (typeof fetch !== "function") {
+      return null;
+    }
+    if (countryLookupInFlight) {
+      return countryLookupInFlight;
+    }
+    countryLookupInFlight = lookupCountryFromApi().finally(() => {
+      countryLookupInFlight = null;
+    });
+    return countryLookupInFlight;
+  }
+
   // ===========================================================================
   // 2. Scroll depth
   // 스크롤 도달 깊이 계산
@@ -366,6 +408,12 @@
         body: JSON.stringify(payload),
       }).catch(() => {});
     }
+
+    updatePendingField(field: string, value: any) {
+      for (let i = 0; i < this.buf.length; i += 1) {
+        this.buf[i][field] = value;
+      }
+    }
   }
 
   // ===========================================================================
@@ -386,6 +434,7 @@
     destroyed: boolean;
     maxScrollSeen: number;
     q: BatchQueue;
+    countryCode: string;
 
     constructor(opts: CollectorOpts) {
       this.opts = opts;
@@ -394,6 +443,15 @@
       this.destroyed = false;
       this.maxScrollSeen = getMaxScrollPct();
       this.q = new BatchQueue(opts.ingestUrl);
+      this.countryCode = COUNTRY_DEFAULT;
+
+      const pendingCountry = requestCountryCode();
+      if (pendingCountry) {
+        pendingCountry.then((code) => {
+          this.countryCode = code || COUNTRY_DEFAULT;
+          this.q.updatePendingField("country_code", this.countryCode);
+        });
+      }
 
       this.installListeners();
       this.emitPageView();
@@ -448,7 +506,7 @@
         element_hash: elementHash || null,
         device_type: detectDeviceType(),
         browser_family: detectBrowserFamily(),
-        country_code: null as string | null,
+        country_code: this.countryCode,
         utm_source: this.opts.utmSource ?? getUtmParam("utm_source"),
         utm_campaign: this.opts.utmCampaign ?? getUtmParam("utm_campaign"),
       };

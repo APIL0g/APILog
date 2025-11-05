@@ -1,0 +1,2 @@
+"""Device Share widget package."""
+
