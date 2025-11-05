@@ -96,8 +96,16 @@ services:
       # 개발 단계: CORS 전부 허용
       CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN}
 
+      #llama 관련 환경변수
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      LLM_ENDPOINT: ${LLM_ENDPOINT}
+      LLM_MODEL: ${LLM_MODEL}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE}
+      LLM_TIMEOUT_S: ${LLM_TIMEOUT_S}
+
     depends_on:
       - influxdb3-core
+      - ollama
 
     expose:
       - "8000"
@@ -140,6 +148,33 @@ services:
       NODE_ENV: production
     restart: unless-stopped
 
+  ############################################################
+  # 6) LLM-llama
+  # LLM 모델 서버 (Ollama 기반)
+  ############################################################
+  ollama:
+      image: ollama/ollama:latest
+      container_name: ollama
+      environment:
+        - OLLAMA_HOST=0.0.0.0
+        - OLLAMA_KEEP_ALIVE=1h
+      ports:
+        - "11434:11434"             # 선택: 외부에서 직접 접근 필요 없으면 주석처리 가능
+      volumes:
+        - ollama-data:/root/.ollama # 모델 캐시 보존
+      healthcheck:
+        test: ["CMD", "curl", "-fsS", "http://localhost:11434/api/tags"]
+        interval: 10s
+        timeout: 5s
+        retries: 20
+      restart: unless-stopped
+      # GPU가 가능하면 주석 해제(WSL2 + NVIDIA 셋업 필요)
+      # deploy:
+      #   resources:
+      #     reservations:
+      #       devices:
+      #         - capabilities: ["gpu"]
+
 ##############################################################
 # Named Volumes
 # (권한 충돌 없이 영구 데이터 저장)
@@ -149,3 +184,4 @@ volumes:
   influx-plugins:
   explorer-data:
   explorer-config:
+  ollama-data:
