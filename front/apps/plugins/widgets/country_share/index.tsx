@@ -8,9 +8,9 @@ type ApiResponse = { rows?: Row[]; total?: number }
 
 const API_BASE = ""
 
-async function fetchCountryShare(range: string, top = 5): Promise<{ rows: Row[]; total: number }> {
+async function fetchCountryShare(range: string, top = 5, signal?: AbortSignal): Promise<{ rows: Row[]; total: number }> {
   const url = `${API_BASE}/api/query/country-share?range=${encodeURIComponent(range)}&top=${top}`
-  const res = await fetch(url)
+  const res = await fetch(url, { signal })
   if (!res.ok) throw new Error(await res.text())
   const data: ApiResponse = await res.json()
   const rows = Array.isArray(data?.rows) ? data.rows : []
@@ -29,24 +29,25 @@ export default function CountryShareWidget({ timeRange }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [total, setTotal] = useState<number>(0)
   const [error, setError] = useState<string | null>(null)
+  const effectiveRange = timeRange && timeRange !== "12h" ? timeRange : "7d"
 
   useEffect(() => {
-    let alive = true
+    const controller = new AbortController()
     setRows(null)
     setError(null)
-    fetchCountryShare(timeRange || "7d", 5)
+    fetchCountryShare(effectiveRange, 5, controller.signal)
       .then((res) => {
-        if (!alive) return
         setRows(res.rows)
         setTotal(res.total)
       })
       .catch((e) => {
-        if (alive) setError(String(e))
+        if ((e as Error)?.name === "AbortError") return
+        setError(String(e))
       })
     return () => {
-      alive = false
+      controller.abort()
     }
-  }, [timeRange])
+  }, [effectiveRange])
 
   const chartData = useMemo(
     () =>
@@ -108,7 +109,8 @@ export default function CountryShareWidget({ timeRange }: WidgetProps) {
                 <div className="space-y-1.5">
                   {chartData.map((d, idx) => {
                     const pct = totalSessions ? Math.round(((d.value as number) / totalSessions) * 100) : 0
-                    const display = d.code === "UNKNOWN" ? "Unknown" : d.name
+                    const code = d.code || ""
+                    const display = code === "OTHERS" ? "Others" : code.startsWith("UNKNOWN") ? "Unknown" : d.name
                     return (
                       <div key={`legend-${idx}`} className="flex items-center justify-between leading-6">
                         <div className="flex items-center gap-2 min-w-0">
@@ -117,7 +119,7 @@ export default function CountryShareWidget({ timeRange }: WidgetProps) {
                             style={{ backgroundColor: COLORS[idx % COLORS.length] }}
                           />
                           <span className="truncate text-muted-foreground">
-                            {d.code === "OTHERS" ? "Others" : display}
+                            {display}
                           </span>
                         </div>
                         <span className="font-mono tabular-nums">{pct}%</span>
