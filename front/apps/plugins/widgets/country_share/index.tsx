@@ -7,6 +7,7 @@ type Row = { code: string; label: string; sessions: number }
 type ApiResponse = { rows?: Row[]; total?: number }
 
 const API_BASE = ""
+const DEFAULT_RANGE = "7d"
 
 async function fetchCountryShare(range: string, top = 5, signal?: AbortSignal): Promise<{ rows: Row[]; total: number }> {
   const url = `${API_BASE}/api/query/country-share?range=${encodeURIComponent(range)}&top=${top}`
@@ -25,11 +26,11 @@ async function fetchCountryShare(range: string, top = 5, signal?: AbortSignal): 
   }
 }
 
-export default function CountryShareWidget({ timeRange }: WidgetProps) {
+export default function CountryShareWidget({ timeRange: _timeRange }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [total, setTotal] = useState<number>(0)
   const [error, setError] = useState<string | null>(null)
-  const effectiveRange = timeRange && timeRange !== "12h" ? timeRange : "7d"
+  const effectiveRange = DEFAULT_RANGE
 
   useEffect(() => {
     const controller = new AbortController()
