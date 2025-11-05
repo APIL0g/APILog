@@ -2,6 +2,8 @@ import os
 from fastapi import APIRouter, BackgroundTasks, Request, Query
 from pydantic import BaseModel
 
+from typing import Any, Dict, List
+
 # 1. (수정) snapshot_bot의 전체 경로를 import합니다.
 from .snapshot_bot import take_snapshot
 # 2. (수정) .service는 현재 디렉토리에 있으므로 상대 경로를 사용합니다.
@@ -19,7 +21,7 @@ router = APIRouter()
 
 class HeatmapData(BaseModel):
     snapshot_url: str | None # 이미지가 없으면 null
-    clicks: list # InfluxDB에서 가져온 클릭 데이터
+    clicks: List[Dict[str, Any]] # InfluxDB에서 가져온 클릭 데이터
 
 # --- API 엔드포인트 ---
 
@@ -70,7 +72,7 @@ async def get_heatmap_data(
         )
 
     # 5. (서비스 호출) InfluxDB에서 클릭 데이터 조회
-    clicks_data = await get_click_data_from_influx(site_id, path, deviceType)
+    clicks_data = get_click_data_from_influx(path, deviceType)
 
     # 6. 스냅샷 URL(있거나 null)과 클릭 데이터를 즉시 반환
     return HeatmapData(
