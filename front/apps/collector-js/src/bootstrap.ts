@@ -495,12 +495,61 @@
         this.q.flush(true);
         this.destroyed = true;
       });
+
+      // SPA ROUTE CHANGE HOOKS
+      // Detect client-side navigations (pushState/replaceState, back/forward, hashchange)
+      // On route change: finalize previous page (scroll depth + dwell), then start new page_view
+      const self = this;
+
+      function onRouteChange() {
+        try {
+          self.emitScrollDepth();
+          self.emitDwell();
+          self.q.flush(false);
+        } catch {}
+
+        self.startTime = now();
+        self.maxScrollSeen = getMaxScrollPct();
+        self.emitPageView();
+      }
+
+      // Patch history.pushState / replaceState to catch SPA navigations
+      try {
+        const origPush = history.pushState;
+        history.pushState = function (...args: any[]) {
+          const prev = location.href;
+          const ret = origPush.apply(this, args as any);
+          const next = location.href;
+          if (next !== prev) onRouteChange();
+          return ret;
+        } as typeof history.pushState;
+
+        const origReplace = history.replaceState;
+        history.replaceState = function (...args: any[]) {
+          const prev = location.href;
+          const ret = origReplace.apply(this, args as any);
+          const next = location.href;
+          if (next !== prev) onRouteChange();
+          return ret;
+        } as typeof history.replaceState;
+      } catch {}
+
+      // Back/forward and hash-only navigations
+      window.addEventListener("popstate", onRouteChange);
+      window.addEventListener("hashchange", onRouteChange);
     }
 
     baseTags(eventName: string, elementHash: string | null) {
       return {
         site_id: this.opts.siteId,
-        path: normalizePath(location.pathname),
+        path: (() => {
+          const base = normalizePath(location.pathname);
+          const h = location.hash || "";
+          if (h.startsWith("#/")) {
+            return h.slice(1).split("?")[0];
+          }
+          return base;
+        })(),
         page_variant: this.opts.pageVariant || "default",
         event_name: eventName,
         element_hash: elementHash || null,
