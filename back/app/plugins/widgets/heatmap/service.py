@@ -60,8 +60,8 @@ def get_click_data_from_influx(path: str, device_type: str) -> List[Dict[str, An
     # (예: "siteId", "pageUrl", "deviceType", "x", "y")
     query = f'''
         SELECT 
-            (CAST("click_x" AS FLOAT) / "viewport_w") as x, 
-            (CAST("click_y" AS FLOAT) / "viewport_h") as y, 
+            click_x as x, 
+            click_y as y, 
             count(*) as value 
         FROM events
         WHERE
