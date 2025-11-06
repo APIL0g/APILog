@@ -1,14 +1,6 @@
-import React, { useEffect, useRef, useState, useMemo } from "react"
-// 1. deck.gl 관련 모듈 import
-import { DeckGL } from "@deck.gl/react"
-import { OrthographicView } from "@deck.gl/core"
-import { HeatmapLayer } from "@deck.gl/aggregation-layers"
-// 2. heatmap.js import 삭제
-// import h337 from "heatmap.js"
-
+import React, { useEffect, useRef, useState, useCallback } from "react"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
 import {
-  Card,
   CardContent,
   CardHeader,
   CardTitle,
@@ -28,19 +20,27 @@ import { Spinner } from "@/components/ui/spinner"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ChevronDown, Smartphone, Tablet } from "lucide-react"
 
-// --- API 요청 로직 (변경 없음) ---
+// deck.gl imports
+import { HeatmapLayer } from "@deck.gl/aggregation-layers"
+import { Deck, OrthographicView, OrthographicViewState } from "@deck.gl/core"
+
+// --- Types ---
+
+interface ApiClickData {
+  x: number // percentage (0-100)
+  y: number // percentage (0-100)
+  value: number
+}
+
+interface HeatmapData {
+  snapshot_url: string | null
+  clicks: ApiClickData[]
+}
+
+// --- API Functions ---
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ""
 
-// 백엔드 API로부터 받을 데이터 타입 정의
-interface HeatmapData {
-  snapshot_url: string | null
-  clicks: Array<{ x: any; y: any; value: any }>
-}
-
-/**
- * 백엔드에서 히트맵 데이터(스냅샷 URL, 클릭 좌표)를 가져옵니다.
- */
 async function fetchHeatmapData(
   path: string,
   deviceType: string
@@ -57,149 +57,239 @@ async function fetchHeatmapData(
   return result
 }
 
-// (임시) 페이지 목록.
+async function generateSnapshot(
+  path: string,
+  deviceType: string
+): Promise<void> {
+  const apiUrl = `${API_BASE_URL}/api/query/heatmap/generate?path=${encodeURIComponent(
+    path
+  )}&deviceType=${deviceType}`
+
+  const response = await fetch(apiUrl, { method: "POST" })
+  if (!response.ok) {
+    throw new Error(`Failed to generate snapshot: ${response.status}`)
+  }
+}
+
 const MOCK_PAGES = ["/", "/cart", "/products", "/checkout"]
 
-// --- 3. 위젯 컴포넌트 (deck.gl 적용 및 폴링) ---
+// --- Main Widget Component ---
 
 export default function HeatmapWidget({ timeRange }: WidgetProps) {
-  // --- 상태 관리 ---
   const [selectedPage, setSelectedPage] = useState<string>(MOCK_PAGES[0])
   const [selectedDevice, setSelectedDevice] = useState<"desktop" | "mobile">(
     "desktop"
   )
   const [data, setData] = useState<HeatmapData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [hasClickData, setHasClickData] = useState(true)
-  
-
-  // (추가) 로드된 스냅샷 이미지의 원본 크기를 저장할 상태
   const [imageDimensions, setImageDimensions] = useState<{
     width: number
     height: number
   } | null>(null)
 
-  // (삭제) heatmap.js 관련 ref 삭제
+  const containerRef = useRef<HTMLDivElement>(null)
+  const canvasContainerRef = useRef<HTMLDivElement>(null)
+  const deckRef = useRef<Deck | null>(null)
 
-  // --- API 데이터 연동 (폴링 기능 추가) ---
-  useEffect(() => {
-    // 폴링 중단 플래그
-    let isCancelled = false
-    let pollingTimeout: NodeJS.Timeout | null = null
+  // Polling for snapshot generation
+  const pollForSnapshot = useCallback(async () => {
+    let attempts = 0
+    const maxAttempts = 30 // 30 seconds max
 
-    // 데이터를 폴링하는 비동기 함수
-    const pollData = async () => {
-      if (isCancelled) return
-
-      setIsLoading(true) // 항상 로딩 상태로 시작
-
+    while (attempts < maxAttempts) {
       try {
         const result = await fetchHeatmapData(selectedPage, selectedDevice)
-        if (isCancelled) return // fetch 후에도 체크
-
-        // 1. 스냅샷 URL이 있는 경우 (성공)
         if (result.snapshot_url) {
           setData(result)
-          setError(null) // 성공했으니 에러 메시지(폴링 메시지 포함) 제거
-          setIsLoading(false) // 로딩 완료!
-
-          if (!result.clicks || result.clicks.length === 0) {
-            setHasClickData(false)
-          } else {
-            setHasClickData(true)
-          }
-          // (imageDimensions는 handleImageLoad가 설정할 것임)
-          
-        } else {
-          // 2. 스냅샷 URL이 없는 경우 (폴링)
-          setData(null) // 이전 데이터가 보이지 않도록 함
-          setHasClickData(true) // 클릭 데이터 상태 리셋
-          // (수정) 에러 대신 로딩 상태 + 메시지 유지
-          setError(
-            "Creating a snapshot... It will refresh after a while."
-          )
-          setIsLoading(true) // 스피너를 계속 보여줌
-
-          pollingTimeout = setTimeout(pollData, 1000)
+          setIsGenerating(false)
+          setIsLoading(false)
+          return
         }
-      } catch (err: any) {
-        // 3. '진짜' 에러가 발생한 경우 (네트워크 오류 등)
-        if (isCancelled) return
-        setError(err.message || "fail to fetch data.")
-        setIsLoading(false) // 로딩 중단
-        setData(null)
+      } catch (err) {
+        // Continue polling
       }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      attempts++
     }
 
-    // 첫 번째 데이터 요청 시작
-    pollData()
+    setError("Snapshot generation timed out. Please try again.")
+    setIsGenerating(false)
+    setIsLoading(false)
+  }, [selectedPage, selectedDevice])
 
-    // --- Cleanup 함수 ---
-    // dependency(selectedPage, selectedDevice)가 변경되거나
-    // 컴포넌트가 언마운트되면 실행됩니다.
-    return () => {
-      isCancelled = true
-      if (pollingTimeout) {
-        clearTimeout(pollingTimeout) // 예약된 다음 폴링을 취소
-      }
+  // Fetch data and handle snapshot generation
+  useEffect(() => {
+    setIsLoading(true)
+    setError(null)
+    setData(null)
+    setImageDimensions(null)
+    setIsGenerating(false)
+
+    // Cleanup deck.gl instance
+    if (deckRef.current) {
+      deckRef.current.finalize()
+      deckRef.current = null
     }
-  }, [selectedPage, selectedDevice]) // 의존성은 동일
 
+    fetchHeatmapData(selectedPage, selectedDevice)
+      .then((result) => {
+        if (!result.snapshot_url) {
+          // No snapshot exists, generate it
+          setIsGenerating(true)
+          generateSnapshot(selectedPage, selectedDevice)
+            .then(() => pollForSnapshot())
+            .catch((err) => {
+              setError(err.message || "Failed to generate snapshot")
+              setIsLoading(false)
+              setIsGenerating(false)
+            })
+        } else {
+          setData(result)
+          setIsLoading(false)
+        }
+      })
+      .catch((err: any) => {
+        setError(err.message || "Failed to fetch data")
+        setIsLoading(false)
+      })
+  }, [selectedPage, selectedDevice, pollForSnapshot])
 
-  // --- (변경) 이미지 로드 핸들러: 크기만 상태에 저장 ---
+  // Handle image load and set dimensions
   const handleImageLoad = (
     event: React.SyntheticEvent<HTMLImageElement, Event>
   ) => {
-    // <img> 태그가 로드되면, 해당 이미지의 원본 크기를 상태에 저장합니다.
     const img = event.currentTarget
+    const { naturalWidth, naturalHeight } = img
+
+    if (!containerRef.current || !data) return
+
+    // Get container width to scale image
+    const containerWidth = containerRef.current.offsetWidth
+    const scale = containerWidth / naturalWidth
+    const scaledHeight = naturalHeight * scale
+
     setImageDimensions({
-      width: img.naturalWidth,
-      height: img.naturalHeight,
+      width: containerWidth,
+      height: scaledHeight,
     })
   }
 
-  // --- (추가) deck.gl 데이터 포맷팅 ---
-  const heatmapData = useMemo(() => {
-    if (!data?.clicks || !imageDimensions) return []
+  // Initialize deck.gl heatmap
+  const initializeDeck = useCallback((
+    width: number,
+    height: number,
+    clicks: ApiClickData[]
+  ) => {
+    if (!canvasContainerRef.current) {
+      console.log("Canvas container ref not available")
+      return
+    }
 
-    return data.clicks
-      .map((pt) => ({
-        // deck.gl의 HeatmapLayer는 getPosition으로 좌표를, getWeight로 가중치를 받습니다.
-        coordinates: [
-          Number(pt.x) * imageDimensions.width,
-          Number(pt.y) * imageDimensions.height,
-        ],
-        weight: Number(pt.value),
-      }))
-      .filter(
-        (pt) =>
-          !isNaN(pt.coordinates[0]) &&
-          !isNaN(pt.coordinates[1]) &&
-          !isNaN(pt.weight)
-      )
-  }, [data?.clicks])
+    // Clean up previous instance
+    if (deckRef.current) {
+      deckRef.current.finalize()
+    }
 
-  // --- (추가) deck.gl 레이어 정의 (HeatmapLayer만 사용) ---
-  const layers = [
-    new HeatmapLayer({
-      id: "heatmap-layer",
-      data: hasClickData ? heatmapData : [],
-      getPosition: (d: any) => d.coordinates,
-      getWeight: (d: any) => d.weight,
-      radiusPixels: 40,
-      opacity: 0.8,
-      blendMode: "multiply", 
-    }),
-  ]
+    // Convert percentage coordinates to pixel coordinates
+    const points = clicks.map((click) => ({
+      position: [click.x * width, click.y * height] as [
+        number,
+        number
+      ],
+      weight: click.value,
+    }))
+
+    console.log("Initializing deck.gl with:", {
+      width,
+      height,
+      pointsCount: points.length,
+      samplePoint: points[0],
+    })
+
+    const INITIAL_VIEW_STATE = {
+      target: [width/2, height/2, 0],
+      zoom: 0
+    };
+
+    // Create deck.gl instance - use parent element, not canvas ID
+    const deck = new Deck({
+      parent: canvasContainerRef.current,
+      width,
+      height,
+      viewState: INITIAL_VIEW_STATE,
+      controller: false,
+      views: [
+        new OrthographicView({
+          id: 'ortho',
+          controller: false,
+          flipY : true,
+        })
+      ],
+      layers: [
+        new HeatmapLayer({
+        id: "heatmap-layer",
+        data: points,
+        getPosition: (d: any) => d.position,
+        getWeight: (d: any) => d.weight,
+        radiusPixels: 40,
+        intensity: 2,
+          threshold: 0.05,
+          opacity: 0.2,
+          colorRange: [
+            [0, 0, 255, 25], // transparent blue
+            [0, 128, 255, 102], // light blue
+            [0, 255, 255, 153], // cyan
+            [0, 255, 0, 204], // green
+            [255, 255, 0, 230], // yellow
+            [255, 128, 0, 255], // orange
+            [255, 0, 0, 255], // red
+          ],
+        }),
+      ]
+    })
+
+    deckRef.current = deck
+    
+    // Force a redraw
+    deck.redraw(true)
+  }, [])
+
+  // Initialize deck.gl after dimensions are set and canvas container is available
+  useEffect(() => {
+    if (!imageDimensions || !data?.clicks || !canvasContainerRef.current) {
+      return
+    }
+
+    if (data.clicks.length === 0) {
+      return
+    }
+
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      initializeDeck(imageDimensions.width, imageDimensions.height, data.clicks)
+    }, 100)
+
+    return () => clearTimeout(timer)
+  }, [imageDimensions, data, initializeDeck])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (deckRef.current) {
+        deckRef.current.finalize()
+      }
+    }
+  }, [])
 
   return (
     <>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Heatmap Widget</CardTitle>
-        
-        {/* --- 컨트롤러 (페이지/기기 선택) --- */}
+        <CardTitle className="text-sm font-medium">Page Heatmap</CardTitle>
         <div className="flex items-center space-x-2">
+          {/* Page Selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-8">
@@ -219,6 +309,7 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Device Toggle */}
           <ToggleGroup
             type="single"
             value={selectedDevice}
@@ -237,27 +328,26 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
         </div>
       </CardHeader>
       <CardContent>
-        {/* --- 스크롤 가능한 뷰포트 --- */}
+        {/* Scrollable Viewport */}
         <div
-          className="relative h-[600px] w-full overflow-auto rounded-md border"
+          ref={containerRef}
+          className="relative w-full h-[600px] overflow-auto rounded-md border"
+          style={{ background: "#f9f9f9" }}
         >
-          {/* --- (변경) 로딩 및 에러 상태 표시 --- */}
-
-          {/* 1. 로딩 중일 때: 스피너 + (있다면) 폴링 메시지 표시 */}
-          {isLoading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-white/50 p-4">
-              <Spinner className="h-8 w-8" />
-              {/* error 상태를 폴링 메시지용으로 활용 */}
-              {error && (
-                <AlertDescription className="mt-2 text-center text-sm text-muted-foreground">
-                  {error}
-                </AlertDescription>
-              )}
+          {/* Loading State */}
+          {(isLoading || isGenerating) && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-white/80">
+              <Spinner className="h-8 w-8 mb-4" />
+              <p className="text-sm text-muted-foreground">
+                {isGenerating
+                  ? "Creating a snapshot... It will refresh after a while."
+                  : "Loading..."}
+              </p>
             </div>
           )}
-          
-          {/* 2. 로딩이 끝났는데, '진짜' 에러가 있을 때 (폴링 메시지 아님) */}
-          {error && !isLoading && (
+
+          {/* Error State */}
+          {error && !isLoading && !isGenerating && (
             <div className="absolute inset-0 flex items-center justify-center z-10 p-4">
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
@@ -265,46 +355,50 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
             </div>
           )}
 
-          {/* --- 백그라운드 스냅샷 + 히트맵 오버레이 --- */}
-          {data?.snapshot_url && !isLoading && !error && (
-            <div className="relative" style={{ width: "fit-content" }}>
-                <img
-                    src={`${API_BASE_URL}${data.snapshot_url}`}
-                    alt={`snapshot (${selectedPage} - ${selectedDevice})`}
-                    className="block"
-                    style={{ 
-                        opacity: 0.5,
-                        maxWidth: "none",
-                        display: "block"
-                    }}
-                    onLoad={handleImageLoad}
+          {/* No Click Data */}
+          {data &&
+            data.snapshot_url &&
+            (!data.clicks || data.clicks.length === 0) &&
+            !isLoading &&
+            !isGenerating && (
+              <div className="absolute inset-0 flex items-center justify-center z-10 p-4">
+                <Alert>
+                  <AlertDescription>
+                    No click data available for this page.
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
+
+          {/* Background Image + Heatmap Overlay */}
+          {data?.snapshot_url && !isLoading && !isGenerating && (
+            <div className="relative" style={{ width: "100%" }}>
+              {/* Background Snapshot */}
+              <img
+                src={`${API_BASE_URL}${data.snapshot_url}`}
+                alt={`Snapshot (${selectedPage} - ${selectedDevice})`}
+                style={{
+                  width: "100%",
+                  height: "auto",
+                  display: "block",
+                }}
+                onLoad={handleImageLoad}
+              />
+
+              {/* deck.gl Canvas Overlay */}
+              {imageDimensions && data.clicks && data.clicks.length > 0 && (
+                <div
+                  ref={canvasContainerRef}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: `${imageDimensions.width}px`,
+                    height: `${imageDimensions.height}px`,
+                    pointerEvents: "none",
+                  }}
                 />
-                
-                {imageDimensions && (
-                    <DeckGL
-                        style={{
-                            position: 'absolute',
-                            left: 0,
-                            top: 0,
-                            zIndex: 10,
-                            width: `${imageDimensions.width}px`,
-                            height: `${imageDimensions.height}px`,
-                            pointerEvents: "none",
-                            mixBlendMode: "multiply",
-                        }}
-                        views={new OrthographicView({ flipY: true })}
-                        initialViewState={{
-                            target: [
-                            imageDimensions.width / 2,
-                            imageDimensions.height / 2,
-                            0,
-                            ],
-                            zoom: 0,
-                        }}
-                        controller={false} 
-                        layers={layers}
-                    />
-                )}
+              )}
             </div>
           )}
         </div>
@@ -313,12 +407,12 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
   )
 }
 
-// --- 4. 위젯 메타데이터 (변경 없음) ---
+// --- Widget Metadata ---
 
 export const widgetMeta: WidgetMeta = {
-  id: "heatmap", // 고유 ID
-  name: "heatmap widget", // 대시보드에 표시될 이름
-  description: "페이지별 클릭 히트맵을 스냅샷 위에 표시합니다.",
-  defaultWidth: 600, // 위젯 기본 너비
-  defaultHeight: 700, // 위젯 기본 높이
+  id: "heatmap",
+  name: "Page Heatmap",
+  description: "Displays click heatmap overlayed on page snapshots using deck.gl",
+  defaultWidth: 600,
+  defaultHeight: 700,
 }
