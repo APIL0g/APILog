@@ -1,4 +1,11 @@
-import React, { useEffect, useRef, useState } from "react"
+import React, { useEffect, useRef, useState, useMemo } from "react"
+// 1. deck.gl 관련 모듈 import
+import { DeckGL } from "@deck.gl/react"
+import { OrthographicView } from "@deck.gl/core"
+import { HeatmapLayer } from "@deck.gl/aggregation-layers"
+// 2. heatmap.js import 삭제
+// import h337 from "heatmap.js"
+
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
 import {
   Card,
@@ -21,32 +28,19 @@ import { Spinner } from "@/components/ui/spinner"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ChevronDown, Smartphone, Tablet } from "lucide-react"
 
-// 1. (수정) D3.js를 임포트합니다.
-import * as d3 from "d3"
-
-// --- API 요청 로직 ---
+// --- API 요청 로직 (변경 없음) ---
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ""
 
-// 2. (수정) API가 반환하는 타입 (값이 문자열일 수 있음)
-interface ApiClickData {
-  x: any
-  y: any
-  value: any
-}
-
-// D3가 사용할, 숫자로 변환된 데이터 타입
-interface ClickPoint {
-  x: number
-  y: number
-  value: number
-}
-
+// 백엔드 API로부터 받을 데이터 타입 정의
 interface HeatmapData {
   snapshot_url: string | null
-  clicks: ApiClickData[]
+  clicks: Array<{ x: any; y: any; value: any }>
 }
 
+/**
+ * 백엔드에서 히트맵 데이터(스냅샷 URL, 클릭 좌표)를 가져옵니다.
+ */
 async function fetchHeatmapData(
   path: string,
   deviceType: string
@@ -63,11 +57,13 @@ async function fetchHeatmapData(
   return result
 }
 
+// (임시) 페이지 목록.
 const MOCK_PAGES = ["/", "/cart", "/products", "/checkout"]
 
-// --- 3. 위젯 컴포넌트 ---
+// --- 3. 위젯 컴포넌트 (deck.gl 적용 및 폴링) ---
 
 export default function HeatmapWidget({ timeRange }: WidgetProps) {
+  // --- 상태 관리 ---
   const [selectedPage, setSelectedPage] = useState<string>(MOCK_PAGES[0])
   const [selectedDevice, setSelectedDevice] = useState<"desktop" | "mobile">(
     "desktop"
@@ -76,115 +72,132 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hasClickData, setHasClickData] = useState(true)
+  
 
-  // 4. (수정) D3가 SVG를 그릴 컨테이너를 참조합니다.
-  const svgContainerRef = useRef<HTMLDivElement>(null)
+  // (추가) 로드된 스냅샷 이미지의 원본 크기를 저장할 상태
+  const [imageDimensions, setImageDimensions] = useState<{
+    width: number
+    height: number
+  } | null>(null)
 
-  // --- API 데이터 연동 ---
+  // (삭제) heatmap.js 관련 ref 삭제
+
+  // --- API 데이터 연동 (폴링 기능 추가) ---
   useEffect(() => {
-    setIsLoading(true)
-    setError(null)
-    setData(null)
-    setHasClickData(true)
+    // 폴링 중단 플래그
+    let isCancelled = false
+    let pollingTimeout: NodeJS.Timeout | null = null
 
-    // 5. (수정) D3 렌더링을 위해 이전에 그려진 SVG를 지웁니다.
-    if (svgContainerRef.current) {
-      d3.select(svgContainerRef.current).selectAll("svg").remove()
+    // 데이터를 폴링하는 비동기 함수
+    const pollData = async () => {
+      if (isCancelled) return
+
+      setIsLoading(true) // 항상 로딩 상태로 시작
+
+      try {
+        const result = await fetchHeatmapData(selectedPage, selectedDevice)
+        if (isCancelled) return // fetch 후에도 체크
+
+        // 1. 스냅샷 URL이 있는 경우 (성공)
+        if (result.snapshot_url) {
+          setData(result)
+          setError(null) // 성공했으니 에러 메시지(폴링 메시지 포함) 제거
+          setIsLoading(false) // 로딩 완료!
+
+          if (!result.clicks || result.clicks.length === 0) {
+            setHasClickData(false)
+          } else {
+            setHasClickData(true)
+          }
+          // (imageDimensions는 handleImageLoad가 설정할 것임)
+          
+        } else {
+          // 2. 스냅샷 URL이 없는 경우 (폴링)
+          setData(null) // 이전 데이터가 보이지 않도록 함
+          setHasClickData(true) // 클릭 데이터 상태 리셋
+          // (수정) 에러 대신 로딩 상태 + 메시지 유지
+          setError(
+            "Creating a snapshot... It will refresh after a while."
+          )
+          setIsLoading(true) // 스피너를 계속 보여줌
+
+          pollingTimeout = setTimeout(pollData, 1000)
+        }
+      } catch (err: any) {
+        // 3. '진짜' 에러가 발생한 경우 (네트워크 오류 등)
+        if (isCancelled) return
+        setError(err.message || "fail to fetch data.")
+        setIsLoading(false) // 로딩 중단
+        setData(null)
+      }
     }
 
-    fetchHeatmapData(selectedPage, selectedDevice)
-      .then((result) => {
-        setData(result)
+    // 첫 번째 데이터 요청 시작
+    pollData()
 
-        if (!result.snapshot_url) {
-          setError(
-            "스냅샷이 없습니다. 백엔드가 생성 중입니다. 15초 후 다시 시도해 주세요."
-          )
-        }
-        if (!result.clicks || result.clicks.length === 0) {
-          setHasClickData(false)
-        }
-      })
-      .catch((err: any) => {
-        setError(err.message || "데이터를 불러오는 데 실패했습니다.")
-      })
-      .finally(() => {
-        setIsLoading(false)
-      })
-  }, [selectedPage, selectedDevice])
+    // --- Cleanup 함수 ---
+    // dependency(selectedPage, selectedDevice)가 변경되거나
+    // 컴포넌트가 언마운트되면 실행됩니다.
+    return () => {
+      isCancelled = true
+      if (pollingTimeout) {
+        clearTimeout(pollingTimeout) // 예약된 다음 폴링을 취소
+      }
+    }
+  }, [selectedPage, selectedDevice]) // 의존성은 동일
 
-  // --- 6. (!!! 핵심 수정 !!!) D3.js 히트맵 렌더링 로직 ---
+
+  // --- (변경) 이미지 로드 핸들러: 크기만 상태에 저장 ---
   const handleImageLoad = (
     event: React.SyntheticEvent<HTMLImageElement, Event>
   ) => {
-    if (!svgContainerRef.current || !data || !data.clicks) {
-      return
-    }
-
+    // <img> 태그가 로드되면, 해당 이미지의 원본 크기를 상태에 저장합니다.
     const img = event.currentTarget
-    const { naturalWidth, naturalHeight } = img
-
-    // 1. 데이터 파싱: API 데이터를 숫자로 명시적 변환
-    const validData: ClickPoint[] = data.clicks
-      .map((pt) => ({
-        x: Number(pt.x), // 'x'가 문자열일 수 있으므로 Number()로 변환
-        y: Number(pt.y), // 'y'가 문자열일 수 있으므로 Number()로 변환
-        value: Number(pt.value), // 'value'가 문자열일 수 있으므로 Number()로 변환
-      }))
-      .filter((pt) => !isNaN(pt.x) && !isNaN(pt.y) && !isNaN(pt.value)) // 유효하지 않은 데이터(NaN) 제거
-
-    // 2. 데이터가 없으면 렌더링 중단
-    if (validData.length === 0) {
-      setHasClickData(false)
-      return
-    }
-
-    // 3. D3를 사용해 이전에 그린 SVG가 있다면 삭제 (중복 방지)
-    d3.select(svgContainerRef.current).selectAll("svg").remove()
-
-    // 4. D3로 SVG 캔버스 생성 (이미지 크기와 동일하게)
-    const svg = d3
-      .select(svgContainerRef.current)
-      .append("svg")
-      .attr("width", naturalWidth)
-      .attr("height", naturalHeight)
-      .style("position", "absolute")
-      .style("top", 0)
-      .style("left", 0)
-
-    // 5. 'value' (클릭 횟수)에 따른 색상 스케일 정의
-    const maxClicks = d3.max(validData, (d) => d.value) || 1
-    const colorScale = d3
-      .scaleLinear<string>()
-      .domain([1, maxClicks])
-      // 6. 히트맵 색상: 투명한 파란색 -> 불투명한 빨간색
-      .range(["rgba(0, 0, 255, 0.1)", "rgba(255, 0, 0, 1)"])
-
-    // 7. (선택사항) 히트맵처럼 보이게 하는 SVG 블러(blur) 필터 정의
-    const defs = svg.append("defs")
-    const filter = defs.append("filter").attr("id", "heatmap-blur")
-    filter
-      .append("feGaussianBlur")
-      .attr("in", "SourceGraphic")
-      .attr("stdDeviation", 15) // 블러 반경 (조절 가능)
-
-    // 8. 데이터 바인딩: 각 클릭 데이터를 SVG 원(circle)으로 그리기
-    svg
-      .selectAll("circle")
-      .data(validData)
-      .enter()
-      .append("circle")
-      .attr("cx", (d) => d.x) // x 좌표
-      .attr("cy", (d) => d.y) // y 좌표
-      .attr("r", 20) // 원의 반경 (조절 가능)
-      .style("fill", (d) => colorScale(d.value)) // 클릭 횟수에 따라 색상 적용
-      .style("filter", "url(#heatmap-blur)") // 7번에서 만든 블러 필터 적용
+    setImageDimensions({
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+    })
   }
+
+  // --- (추가) deck.gl 데이터 포맷팅 ---
+  const heatmapData = useMemo(() => {
+    if (!data?.clicks || !imageDimensions) return []
+
+    return data.clicks
+      .map((pt) => ({
+        // deck.gl의 HeatmapLayer는 getPosition으로 좌표를, getWeight로 가중치를 받습니다.
+        coordinates: [
+          Number(pt.x) * imageDimensions.width,
+          Number(pt.y) * imageDimensions.height,
+        ],
+        weight: Number(pt.value),
+      }))
+      .filter(
+        (pt) =>
+          !isNaN(pt.coordinates[0]) &&
+          !isNaN(pt.coordinates[1]) &&
+          !isNaN(pt.weight)
+      )
+  }, [data?.clicks])
+
+  // --- (추가) deck.gl 레이어 정의 (HeatmapLayer만 사용) ---
+  const layers = [
+    new HeatmapLayer({
+      id: "heatmap-layer",
+      data: hasClickData ? heatmapData : [],
+      getPosition: (d: any) => d.coordinates,
+      getWeight: (d: any) => d.weight,
+      radiusPixels: 40,
+      opacity: 0.8,
+      blendMode: "multiply", 
+    }),
+  ]
 
   return (
     <>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">페이지 히트맵</CardTitle>
+        <CardTitle className="text-sm font-medium">Heatmap Widget</CardTitle>
+        
         {/* --- 컨트롤러 (페이지/기기 선택) --- */}
         <div className="flex items-center space-x-2">
           <DropdownMenu>
@@ -227,14 +240,23 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
         {/* --- 스크롤 가능한 뷰포트 --- */}
         <div
           className="relative h-[600px] w-full overflow-auto rounded-md border"
-          style={{ background: "#f9f9f9" }}
         >
-          {/* 로딩 및 에러 상태 표시 */}
+          {/* --- (변경) 로딩 및 에러 상태 표시 --- */}
+
+          {/* 1. 로딩 중일 때: 스피너 + (있다면) 폴링 메시지 표시 */}
           {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center z-20 bg-white/50">
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-white/50 p-4">
               <Spinner className="h-8 w-8" />
+              {/* error 상태를 폴링 메시지용으로 활용 */}
+              {error && (
+                <AlertDescription className="mt-2 text-center text-sm text-muted-foreground">
+                  {error}
+                </AlertDescription>
+              )}
             </div>
           )}
+          
+          {/* 2. 로딩이 끝났는데, '진짜' 에러가 있을 때 (폴링 메시지 아님) */}
           {error && !isLoading && (
             <div className="absolute inset-0 flex items-center justify-center z-10 p-4">
               <Alert variant="destructive">
@@ -242,32 +264,47 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
               </Alert>
             </div>
           )}
-          {!hasClickData && !isLoading && !error && data?.snapshot_url && (
-            <div className="absolute inset-0 flex items-center justify-center z-10 p-4">
-              <Alert>
-                <AlertDescription>
-                  선택된 페이지의 클릭 데이터가 없습니다.
-                </AlertDescription>
-              </Alert>
-            </div>
-          )}
 
           {/* --- 백그라운드 스냅샷 + 히트맵 오버레이 --- */}
-          {data?.snapshot_url && !isLoading && (
+          {data?.snapshot_url && !isLoading && !error && (
             <div className="relative" style={{ width: "fit-content" }}>
-              {/* (A) 백그라운드 스냅샷 이미지 */}
-              <img
-                src={`${API_BASE_URL}${data.snapshot_url}`}
-                alt={`스냅샷 (${selectedPage} - ${selectedDevice})`}
-                // 7. (수정) D3가 SVG를 100% 덮어쓰므로 이미지 투명도 제거
-                onLoad={handleImageLoad}
-              />
-
-              {/* (B) D3가 SVG를 그릴 컨테이너 (이미지 위에 겹침) */}
-              <div
-                ref={svgContainerRef}
-                className="absolute top-0 left-0"
-              />
+                <img
+                    src={`${API_BASE_URL}${data.snapshot_url}`}
+                    alt={`snapshot (${selectedPage} - ${selectedDevice})`}
+                    className="block"
+                    style={{ 
+                        opacity: 0.5,
+                        maxWidth: "none",
+                        display: "block"
+                    }}
+                    onLoad={handleImageLoad}
+                />
+                
+                {imageDimensions && (
+                    <DeckGL
+                        style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            zIndex: 10,
+                            width: `${imageDimensions.width}px`,
+                            height: `${imageDimensions.height}px`,
+                            pointerEvents: "none",
+                            mixBlendMode: "multiply",
+                        }}
+                        views={new OrthographicView({ flipY: true })}
+                        initialViewState={{
+                            target: [
+                            imageDimensions.width / 2,
+                            imageDimensions.height / 2,
+                            0,
+                            ],
+                            zoom: 0,
+                        }}
+                        controller={false} 
+                        layers={layers}
+                    />
+                )}
             </div>
           )}
         </div>
@@ -276,12 +313,12 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
   )
 }
 
-// --- 4. 위젯 메타데이터 (등록) ---
+// --- 4. 위젯 메타데이터 (변경 없음) ---
 
 export const widgetMeta: WidgetMeta = {
-  id: "heatmap",
-  name: "페이지 히트맵",
+  id: "heatmap", // 고유 ID
+  name: "heatmap widget", // 대시보드에 표시될 이름
   description: "페이지별 클릭 히트맵을 스냅샷 위에 표시합니다.",
-  defaultWidth: 600,
-  defaultHeight: 700,
+  defaultWidth: 600, // 위젯 기본 너비
+  defaultHeight: 700, // 위젯 기본 높이
 }
