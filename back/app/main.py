@@ -7,6 +7,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from ingest.router import router as ingest_router
@@ -28,6 +29,13 @@ app.add_middleware(
 # Mount feature routers
 app.include_router(ingest_router)
 app.include_router(plugins_router)
+
+# Snapshot routers
+SNAPSHOT_STORAGE_ROOT = "/snapshots"
+os.makedirs(SNAPSHOT_STORAGE_ROOT, exist_ok=True)
+app.mount("/api/snapshots", StaticFiles(directory=SNAPSHOT_STORAGE_ROOT), name="snapshots")
+
+# AI routers
 app.include_router(ai_insights_router)
 
 @app.get("/api/health")

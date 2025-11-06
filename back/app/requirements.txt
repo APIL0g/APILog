@@ -2,6 +2,7 @@ fastapi
 uvicorn[standard]
 influxdb-client
 influxdb3-python
+playwright
 
 pydantic>=2
 pyarrow 

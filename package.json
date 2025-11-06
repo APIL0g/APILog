@@ -43,6 +43,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
+    "d3": "^7.9.0",
     "date-fns": "4.1.0",
     "dayjs": "^1.11.19",
     "embla-carousel-react": "8.5.1",
@@ -63,6 +64,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",
+    "@types/d3": "^7.4.3",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",

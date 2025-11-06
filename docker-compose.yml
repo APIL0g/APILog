@@ -88,6 +88,9 @@ services:
     # ports:
     #   - "8000:8000"
 
+    volumes:
+      - snapshots:/snapshots
+
     restart: unless-stopped
 
   ############################################################
@@ -142,4 +145,5 @@ volumes:
   influx-plugins:
   explorer-data:
   explorer-config:
+  snapshots:
   ollama-data:
