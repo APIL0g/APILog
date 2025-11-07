@@ -463,6 +463,7 @@
         "click",
         (ev: MouseEvent) => {
           const docEl = document.documentElement;
+          const bodyEl = document.body;
           const scrollX = window.pageXOffset || docEl.scrollLeft || 0;
           const scrollY = window.pageYOffset || docEl.scrollTop || 0;
 
@@ -471,8 +472,20 @@
           const x = (ev.pageX || (ev.clientX + scrollX) || 0);
           const y = (ev.pageY || (ev.clientY + scrollY) || 0);
 
+          const maxH = Math.max(
+          bodyEl.scrollHeight, bodyEl.offsetHeight,
+          docEl.clientHeight, docEl.scrollHeight, docEl.offsetHeight
+          );
+          const maxW = Math.max(
+          bodyEl.scrollWidth, bodyEl.offsetWidth,
+          docEl.clientWidth, docEl.scrollWidth, docEl.offsetWidth
+          );
+
+          const x_pct = (maxW > 0) ? (x / maxW) : 0;
+          const y_pct = (maxH > 0) ? (y / maxH) : 0;
+
           const targetEl = (ev.target as Element) || document.body;
-          this.emitClick(targetEl, x, y);
+          this.emitClick(targetEl, x_pct, y_pct);
         },
         true // capture
       );
@@ -495,12 +508,61 @@
         this.q.flush(true);
         this.destroyed = true;
       });
+
+      // SPA ROUTE CHANGE HOOKS
+      // Detect client-side navigations (pushState/replaceState, back/forward, hashchange)
+      // On route change: finalize previous page (scroll depth + dwell), then start new page_view
+      const self = this;
+
+      function onRouteChange() {
+        try {
+          self.emitScrollDepth();
+          self.emitDwell();
+          self.q.flush(false);
+        } catch {}
+
+        self.startTime = now();
+        self.maxScrollSeen = getMaxScrollPct();
+        self.emitPageView();
+      }
+
+      // Patch history.pushState / replaceState to catch SPA navigations
+      try {
+        const origPush = history.pushState;
+        history.pushState = function (...args: any[]) {
+          const prev = location.href;
+          const ret = origPush.apply(this, args as any);
+          const next = location.href;
+          if (next !== prev) onRouteChange();
+          return ret;
+        } as typeof history.pushState;
+
+        const origReplace = history.replaceState;
+        history.replaceState = function (...args: any[]) {
+          const prev = location.href;
+          const ret = origReplace.apply(this, args as any);
+          const next = location.href;
+          if (next !== prev) onRouteChange();
+          return ret;
+        } as typeof history.replaceState;
+      } catch {}
+
+      // Back/forward and hash-only navigations
+      window.addEventListener("popstate", onRouteChange);
+      window.addEventListener("hashchange", onRouteChange);
     }
 
     baseTags(eventName: string, elementHash: string | null) {
       return {
         site_id: this.opts.siteId,
-        path: normalizePath(location.pathname),
+        path: (() => {
+          const base = normalizePath(location.pathname);
+          const h = location.hash || "";
+          if (h.startsWith("#/")) {
+            return h.slice(1).split("?")[0];
+          }
+          return base;
+        })(),
         page_variant: this.opts.pageVariant || "default",
         event_name: eventName,
         element_hash: elementHash || null,
@@ -569,6 +631,7 @@
         {
           click_x: absX,
           click_y: absY,
+          scroll_pct: this.maxScrollSeen,
           extra_json: JSON.stringify({
             rel_x: sig.relX,
             rel_y: sig.relY,
