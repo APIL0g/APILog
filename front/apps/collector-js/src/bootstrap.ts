@@ -463,6 +463,7 @@
         "click",
         (ev: MouseEvent) => {
           const docEl = document.documentElement;
+          const bodyEl = document.body;
           const scrollX = window.pageXOffset || docEl.scrollLeft || 0;
           const scrollY = window.pageYOffset || docEl.scrollTop || 0;
 
@@ -471,8 +472,20 @@
           const x = (ev.pageX || (ev.clientX + scrollX) || 0);
           const y = (ev.pageY || (ev.clientY + scrollY) || 0);
 
+          const maxH = Math.max(
+          bodyEl.scrollHeight, bodyEl.offsetHeight,
+          docEl.clientHeight, docEl.scrollHeight, docEl.offsetHeight
+          );
+          const maxW = Math.max(
+          bodyEl.scrollWidth, bodyEl.offsetWidth,
+          docEl.clientWidth, docEl.scrollWidth, docEl.offsetWidth
+          );
+
+          const x_pct = (maxW > 0) ? (x / maxW) : 0;
+          const y_pct = (maxH > 0) ? (y / maxH) : 0;
+
           const targetEl = (ev.target as Element) || document.body;
-          this.emitClick(targetEl, x, y);
+          this.emitClick(targetEl, x_pct, y_pct);
         },
         true // capture
       );
@@ -618,6 +631,7 @@
         {
           click_x: absX,
           click_y: absY,
+          scroll_pct: this.maxScrollSeen,
           extra_json: JSON.stringify({
             rel_x: sig.relX,
             rel_y: sig.relY,

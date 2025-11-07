@@ -60,14 +60,14 @@ def get_click_data_from_influx(path: str, device_type: str) -> List[Dict[str, An
     # (예: "siteId", "pageUrl", "deviceType", "x", "y")
     query = f'''
         SELECT 
-            "click_x" as x, 
-            "click_y" as y, 
+            click_x as x, 
+            click_y as y, 
             count(*) as value 
         FROM events
         WHERE
             "path" = '{path}' 
             AND "device_type" = '{device_type}'
-        GROUP BY "click_x", "click_y"
+        GROUP BY x, y
     '''
 
     try:
