@@ -82,24 +82,3 @@ def get_click_data_from_influx(path: str, device_type: str) -> List[Dict[str, An
     except Exception as e:
         print(f"Error querying InfluxDB: {e}")
         return []
-    
-def get_available_paths_from_influx() -> List[str]:
-    """
-    InfluxDB 'events' measurement에서 고유한(DISTINCT) 'path' 목록을 조회합니다.
-    """
-    
-    # 1. 사용자가 요청한 SQL 쿼리
-    query = "SELECT DISTINCT path FROM events"
-
-    try:
-        # 2. InfluxDB 3.x 클라이언트로 쿼리 실행
-        result_df = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_BUCKET).query(query)
-
-        if result_df is None:
-            return []
-
-        return result_df['path'].to_pylist()
-
-    except Exception as e:
-        print(f"Error querying InfluxDB for distinct paths: {e}")
-        return []

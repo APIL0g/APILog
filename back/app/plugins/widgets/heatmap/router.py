@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 # 1. (수정) snapshot_bot의 전체 경로를 import합니다.
 from .snapshot_bot import take_snapshot
 # 2. (수정) .service는 현재 디렉토리에 있으므로 상대 경로를 사용합니다.
-from .service import get_snapshot_filepath, get_click_data_from_influx, get_available_paths_from_influx
+from .service import get_snapshot_filepath, get_click_data_from_influx
 
 # 3. (수정) docker-compose 환경에서는 'localhost'가 아닌 서비스 이름으로 접근해야 합니다.
 # (dummy-frontend 서비스가 3000번 포트를 사용한다고 가정)
@@ -79,13 +79,3 @@ async def get_heatmap_data(
         snapshot_url=snapshot_url,
         clicks=clicks_data
     )
-
-@router.get("/heatmap/paths")
-async def get_available_paths() -> List[str]:
-    """
-    히트맵 위젯의 페이지 선택 드롭다운을 채우기 위한 
-    고유한 페이지 경로(path) 목록을 반환합니다.
-    """
-    # 2. service 함수를 호출하여 데이터를 반환합니다.
-    # FastAPI가 자동으로 List[str]를 JSON 배열로 변환해줍니다.
-    return get_available_paths_from_influx()
