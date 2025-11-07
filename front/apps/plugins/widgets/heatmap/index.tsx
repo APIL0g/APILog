@@ -66,17 +66,26 @@ async function generateSnapshot(
   )}&deviceType=${deviceType}`
 
   const response = await fetch(apiUrl, { method: "POST" })
-  if (!response.ok) {
+  if (!response.ok && response.status !== 404) {
     throw new Error(`Failed to generate snapshot: ${response.status}`)
   }
 }
 
-const MOCK_PAGES = ["/", "/cart", "/products", "/checkout"]
+async function fetchPaths(): Promise<string[]> {
+  // 백엔드 라우터에 prefix가 /api/query/heatmap으로 설정되었으므로
+  const apiUrl = `${API_BASE_URL}/api/query/heatmap/paths`
+
+  const response = await fetch(apiUrl, { method: "GET" })
+  if (!response.ok) {
+    throw new Error("Failed to fetch page list")
+  }
+  return response.json() // API는 string[]을 반환
+}
 
 // --- Main Widget Component ---
 
 export default function HeatmapWidget({ timeRange }: WidgetProps) {
-  const [selectedPage, setSelectedPage] = useState<string>(MOCK_PAGES[0])
+  const [selectedPage, setSelectedPage] = useState<string>("")
   const [selectedDevice, setSelectedDevice] = useState<"desktop" | "mobile">(
     "desktop"
   )
@@ -88,6 +97,9 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
     width: number
     height: number
   } | null>(null)
+
+  const [paths, setPaths] = useState<string[]>([])
+  const [pathsLoading, setPathsLoading] = useState(true)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasContainerRef = useRef<HTMLDivElement>(null)
@@ -134,27 +146,73 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
       deckRef.current = null
     }
 
-    fetchHeatmapData(selectedPage, selectedDevice)
-      .then((result) => {
-        if (!result.snapshot_url) {
-          // No snapshot exists, generate it
-          setIsGenerating(true)
-          generateSnapshot(selectedPage, selectedDevice)
-            .then(() => pollForSnapshot())
-            .catch((err) => {
-              setError(err.message || "Failed to generate snapshot")
+  fetchHeatmapData(selectedPage, selectedDevice)
+  .then((result) => {
+    if (!result.snapshot_url) {
+      // No snapshot exists, generate it
+      setIsGenerating(true) // 👈 'isGenerating' 상태 사용 (스피너 및 문구 표시)
+      setError(null) // 이전 오류 상태 초기화
+
+      // 1. 스냅샷 생성 *요청*
+      generateSnapshot(selectedPage, selectedDevice)
+        .then(() => {
+          // 2. 생성 *요청*이 성공하면, 이제 *폴링* 시작
+          let attempts = 0
+
+          const pollForSnapshotInternal = () => {
+            // 3. 타임아웃 체크
+            if (attempts >= 10) {
+              setError("Failed to generate snapshot (Timeout)") // 👈 타임아웃 오류 설정
               setIsLoading(false)
               setIsGenerating(false)
-            })
-        } else {
-          setData(result)
+              return // 폴링 중단
+            }
+            
+            attempts++
+
+            // 4. 스냅샷 데이터를 다시 가져오기 시도
+            fetchHeatmapData(selectedPage, selectedDevice)
+              .then((pollResult) => {
+                if (pollResult.snapshot_url) {
+                  // 5. [성공] 스냅샷 URL이 존재하면, 데이터 설정 및 로딩 종료
+                  setData(pollResult)
+                  setIsLoading(false)
+                  setIsGenerating(false)
+                  // 폴링 자연 종료
+                } else {
+                  // 6. [폴링 중] 아직 URL이 없음 (404). 다음 폴링 예약
+                  setTimeout(pollForSnapshotInternal, 1000)
+                }
+              })
+              .catch((pollErr) => {
+                // 7. [실패] 폴링 중 (404 이외의) 실제 네트워크 오류 발생
+                setError(pollErr.message || "Error while polling for snapshot")
+                setIsLoading(false)
+                setIsGenerating(false)
+                // 폴링 중단
+              })
+          }
+
+          // 8. 최초의 폴링 시작 (인터벌 후)
+          setTimeout(pollForSnapshotInternal, 1000)
+        })
+        .catch((genErr) => {
+          // 1단계(generateSnapshot) 자체에서 오류가 난 경우
+          setError(genErr.message || "Failed to start snapshot generation")
           setIsLoading(false)
-        }
-      })
-      .catch((err: any) => {
-        setError(err.message || "Failed to fetch data")
-        setIsLoading(false)
-      })
+          setIsGenerating(false)
+        })
+    } else {
+      // 스냅샷이 이미 존재함
+      setData(result)
+      setIsLoading(false)
+    }
+  })
+  .catch((err: any) => {
+    // 맨 처음 fetchHeatmapData가 실패한 경우
+    setError(err.message || "Failed to fetch data")
+    setIsLoading(false)
+  })
   }, [selectedPage, selectedDevice, pollForSnapshot])
 
   // Handle image load and set dimensions
@@ -257,6 +315,28 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
     deck.redraw(true)
   }, [])
 
+  // Initialize paths
+  useEffect(() => {
+    setPathsLoading(true)
+    fetchPaths()
+      .then((arrays) => {
+        setPaths(arrays)
+        // 페이지 목록을 성공적으로 가져오면, 첫 번째 페이지를 기본값으로 설정
+        if (arrays.length > 0) {
+          setSelectedPage(arrays[0]) 
+        } else {
+          // 조회 가능한 페이지가 없음
+          setError("No page data found.")
+        }
+      })
+      .catch((err) => {
+        setError(err.message || "Failed to load page list")
+      })
+      .finally(() => {
+        setPathsLoading(false)
+      })
+  }, [])
+
   // Initialize deck.gl after dimensions are set and canvas container is available
   useEffect(() => {
     if (!imageDimensions || !data?.clicks || !canvasContainerRef.current) {
@@ -298,7 +378,7 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {MOCK_PAGES.map((page) => (
+              {paths.map((page) => (
                 <DropdownMenuItem
                   key={page}
                   onSelect={() => setSelectedPage(page)}
@@ -355,21 +435,6 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
             </div>
           )}
 
-          {/* No Click Data */}
-          {data &&
-            data.snapshot_url &&
-            (!data.clicks || data.clicks.length === 0) &&
-            !isLoading &&
-            !isGenerating && (
-              <div className="absolute inset-0 flex items-center justify-center z-10 p-4">
-                <Alert>
-                  <AlertDescription>
-                    No click data available for this page.
-                  </AlertDescription>
-                </Alert>
-              </div>
-            )}
-
           {/* Background Image + Heatmap Overlay */}
           {data?.snapshot_url && !isLoading && !isGenerating && (
             <div className="relative" style={{ width: "100%" }}>
@@ -411,7 +476,7 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
 
 export const widgetMeta: WidgetMeta = {
   id: "heatmap",
-  name: "Page Heatmap",
+  name: "Heatmap",
   description: "Displays click heatmap overlayed on page snapshots using deck.gl",
   defaultWidth: 600,
   defaultHeight: 700,
