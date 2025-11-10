@@ -4,6 +4,7 @@
 
 from typing import Any, Dict, List, Optional
 import os
+import math
 
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
@@ -21,11 +22,17 @@ _query = _client.query_api()
 
 def _safe_str(value: Any, default: str = "") -> str:
     """Convert a value to string while honouring a default fallback.
-    기본값을 유지하면서 입력 값을 문자열로 변환합니다.
+    개행(\r, \n)은 Influx line protocol에서 라인을 깨뜨리므로 이스케이프합니다.
     """
     if value is None:
-        return default
-    return str(value)
+        text = default
+    else:
+        text = str(value)
+
+    # 라인 프로토콜에서 허용되지 않는 실제 개행 문자를 이스케이프
+    text = text.replace("\r", "\\r").replace("\n", "\\n")
+    return text
+
 
 
 def _safe_int(value: Any, default: Optional[int] = None) -> Optional[int]:
@@ -42,12 +49,15 @@ def _safe_int(value: Any, default: Optional[int] = None) -> Optional[int]:
 
 def _safe_float(value: Any, default: Optional[float] = None) -> Optional[float]:
     """Convert a value to float if possible, otherwise use the default.
-    값을 부동소수점으로 변환할 수 없을 때는 기본값을 반환합니다.
+    NaN/Infinity 값은 InfluxDB가 거부하므로 기본값으로 대체합니다.
     """
     if value is None:
         return default
     try:
-        return float(value)
+        v = float(value)
+        if math.isnan(v) or math.isinf(v):
+            return default
+        return v
     except (TypeError, ValueError):
         return default
 
@@ -116,8 +126,8 @@ def write_events(events: List[Dict[str, Any]]) -> None:
             .field("user_hash", _safe_str(event.get("user_hash")))
             .field("dwell_ms", _safe_int(event.get("dwell_ms"), 0) or 0)
             .field("scroll_pct", _safe_float(event.get("scroll_pct"), 0.0) or 0.0)
-            .field("click_x", _safe_float(event.get("click_x"), 0.0) or 0)
-            .field("click_y", _safe_float(event.get("click_y"), 0.0) or 0)
+            .field("click_x", _safe_float(event.get("click_x"), 0.0) or 0.0)
+            .field("click_y", _safe_float(event.get("click_y"), 0.0) or 0.0)
             .field("viewport_w", _safe_int(event.get("viewport_w"), 0) or 0)
             .field("viewport_h", _safe_int(event.get("viewport_h"), 0) or 0)
             .field("funnel_step", _safe_str(event.get("funnel_step")))
@@ -143,36 +153,6 @@ def write_events(events: List[Dict[str, Any]]) -> None:
             write_precision="ms",
         )
 
-
-def query_top_pages() -> List[Dict[str, Any]]:
-    """Query for the ten most-viewed paths in the past hour.
-    지난 한 시간 동안 조회 수가 가장 많은 경로 열 개를 조회합니다.
-    """
-    flux = f"""
-from(bucket: "{INFLUX_BUCKET}")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r._measurement == "events")
-  |> filter(fn: (r) => r.event_name == "page_view")
-  |> filter(fn: (r) => r._field == "count")
-  |> group(columns: ["path"])
-  |> sum()
-  |> sort(columns: ["_value"], desc: true)
-  |> limit(n: 10)
-"""
-
-    tables = _query.query(flux)
-    rows: List[Dict[str, Any]] = []
-
-    for table in tables:
-        for record in table.records:
-            rows.append(
-                {
-                    "path": record["path"],
-                    "cnt": record["_value"],
-                }
-            )
-
-    return rows
 def _safe_tag_str(value: Any) -> str:
     """Ensure tag values always exist to keep tag sets consistent."""
     text = _safe_str(value, DEFAULT_TAG_VALUE).strip()

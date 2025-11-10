@@ -1,19 +1,22 @@
 """Service logic for the Country Share widget.
 Aggregates session counts per country within a lookback range.
+
+Country Share 위젯 서비스 로직.
+지정된 조회 기간 동안 국가별 세션 수를 집계합니다.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
+import os
 
-try:  # pragma: no cover
-    from influxdb_client_3 import InfluxDBClient3  # type: ignore
-except Exception:  # pragma: no cover
-    InfluxDBClient3 = None  # type: ignore
-
-from influxdb_client import InfluxDBClient
+from influxdb_client_3 import InfluxDBClient3  # InfluxDB 3 전용 클라이언트
 
 from config import INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET
+
+# InfluxDB 3 Core 기준: bucket ≒ database
+INFLUX_DATABASE = os.getenv("INFLUX_DATABASE", INFLUX_BUCKET)
+INFLUX_AUTH_SCHEME = os.getenv("INFLUX_AUTH_SCHEME", "Bearer")  # without-auth면 아무 문자열이어도 무시됨
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -42,11 +45,8 @@ def _parse_range(range_str: str) -> Tuple[int, str]:
 
 
 def _interval_for_sql(value: int, unit: str) -> str:
+    # '7 day' or '24 hour' 형태로 반환
     return f"{value} {'day' if unit == 'd' else 'hour'}"
-
-
-def _interval_for_flux(value: int, unit: str) -> str:
-    return f"{value}{unit}"
 
 
 def _normalise_code(raw: Any) -> Tuple[str, str]:
@@ -57,86 +57,56 @@ def _normalise_code(raw: Any) -> Tuple[str, str]:
 
 
 def query_country_share(range_str: str = "7d", top: int = 5) -> Dict[str, Any]:
+    """Return top-N countries by distinct session count in the given range."""
     top = max(1, int(top))
     value, unit = _parse_range(range_str)
     sql_interval = _interval_for_sql(value, unit)
-    flux_interval = _interval_for_flux(value, unit)
+    # 상위 N개 외에 tail 을 OTHERS로 묶기 위해 여유 있게 가져오기
     limit_fetch = max(top + 10, top * 3)
 
+    sql = f"""
+    SELECT
+      CASE
+        WHEN country_code IS NULL OR CAST(country_code AS STRING) = '' THEN 'UNKNOWN'
+        ELSE CAST(country_code AS STRING)
+      END AS country,
+      COUNT(DISTINCT session_id) AS sessions
+    FROM events
+    WHERE
+      time >= NOW() - INTERVAL '{sql_interval}'
+      AND session_id IS NOT NULL
+      AND session_id <> ''
+    GROUP BY
+      CASE
+        WHEN country_code IS NULL OR CAST(country_code AS STRING) = '' THEN 'UNKNOWN'
+        ELSE CAST(country_code AS STRING)
+      END
+    ORDER BY sessions DESC
+    LIMIT {limit_fetch}
+    """
+
+    client = InfluxDBClient3(
+        host=INFLUX_URL,            # 예: "http://influxdb3-core:8181"
+        token=INFLUX_TOKEN or "",   # without-auth면 그냥 dummy 값
+        org=INFLUX_ORG or "",
+        database=INFLUX_DATABASE,
+        auth_scheme=INFLUX_AUTH_SCHEME,
+    )
+
+    try:
+        # pandas DataFrame 으로 받기
+        table = client.query(query=sql, language="sql", mode="pandas")
+    finally:
+        client.close()
+
     rows: List[Dict[str, Any]] = []
-
-    if InfluxDBClient3 is not None:
-        try:
-            with InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_BUCKET) as c3:  # type: ignore
-                sql = f"""
-SELECT
-  COALESCE(NULLIF(country_code, ''), 'none') AS country,
-  COUNT(DISTINCT session_id) AS sessions
-FROM "events"
-WHERE time >= now() - INTERVAL '{sql_interval}'
-  AND session_id IS NOT NULL AND session_id <> ''
-GROUP BY country
-ORDER BY sessions DESC
-LIMIT {limit_fetch}
-"""
-                res = c3.query(sql)
-
-            if hasattr(res, "iterrows"):
-                for _, r in res.iterrows():  # type: ignore[attr-defined]
-                    rows.append({
-                        "country": r.get("country"),
-                        "sessions": _safe_int(r.get("sessions"), 0),
-                    })
-                return _shape_results(rows, top)
-
-            pyrows: List[Dict[str, Any]] = []
-            if hasattr(res, "to_pylist"):
-                pyrows = res.to_pylist()  # type: ignore[attr-defined]
-            elif hasattr(res, "read_all"):
-                try:
-                    table = res.read_all()  # type: ignore[attr-defined]
-                    if hasattr(table, "to_pylist"):
-                        pyrows = table.to_pylist()  # type: ignore[attr-defined]
-                except Exception:  # pragma: no cover
-                    pyrows = []
-            elif isinstance(res, list):
-                pyrows = res  # type: ignore[assignment]
-
-            for r in pyrows:
-                country = r.get("country") if isinstance(r, dict) else None
-                sessions = r.get("sessions") if isinstance(r, dict) else None
-                rows.append({
-                    "country": country,
-                    "sessions": _safe_int(sessions, 0),
-                })
-            return _shape_results(rows, top)
-        except Exception:
-            rows.clear()
-
-    flux = f"""
-from(bucket: "{INFLUX_BUCKET}")
-  |> range(start: -{flux_interval})
-  |> filter(fn: (r) => r._measurement == "events")
-  |> filter(fn: (r) => r._field == "session_id")
-  |> filter(fn: (r) => exists r._value and r._value != "")
-  |> group(columns: ["country_code"])
-  |> distinct(column: "_value")
-  |> count()
-  |> rename(columns: {{_value: "sessions"}})
-  |> keep(columns: ["country_code", "sessions"])
-  |> group()
-  |> sort(columns: ["sessions"], desc: true)
-  |> limit(n: {limit_fetch})
-"""
-    with InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG) as client:
-        tables = client.query_api().query(flux)
-
-    for table in tables:
-        for record in table.records:
-            rows.append({
-                "country": record.get("country_code"),
-                "sessions": _safe_int(record.get("sessions", 0), 0),
-            })
+    for _, r in table.iterrows():
+        rows.append(
+            {
+                "country": r.get("country"),
+                "sessions": _safe_int(r.get("sessions"), 0),
+            }
+        )
 
     return _shape_results(rows, top)
 
@@ -159,6 +129,7 @@ def _shape_results(raw_rows: List[Dict[str, Any]], top: int) -> Dict[str, Any]:
 
     top_rows = normalised[:top]
     others_value = sum(r["sessions"] for r in normalised[top:])
+
     if others_value > 0:
         top_rows.append({"code": "OTHERS", "label": "Others", "sessions": others_value})
 
