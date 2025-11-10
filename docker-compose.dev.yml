@@ -188,6 +188,13 @@ services:
 
     restart: unless-stopped
 
+    # GPU 환경이면 아래 주석 해제해서 GPU 사용 가능
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - capabilities: ["gpu"]
+
 ##############################################################
 # Named Volumes
 # (영구 데이터 저장소)
