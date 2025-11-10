@@ -9,8 +9,6 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
-from ingest.influx import query_top_pages
-
 
 router = APIRouter(prefix="/api/query", tags=["plugins"])
 
