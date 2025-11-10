@@ -1,102 +1,117 @@
-﻿version: "3.9"
+﻿############################################################
+# Docker Compose for APILog Dev Environment
+# APILog 개발 환경용 Docker Compose
+############################################################
 
 services:
   ############################################################
   # 1) InfluxDB 3 Core
-  # 시계열 DB. 8181 포트로 API 노출
+  #    Time-series DB (HTTP API on port 8181)
+  #    시계열 데이터베이스 (8181 포트에서 API 제공)
   ############################################################
   influxdb3-core:
-    image: quay.io/influxdb/influxdb3:latest
+    image: influxdb:3-core
     container_name: influxdb3-core
 
-    # 퍼미션 지옥 방지: 루트로 실행해서 volume 권한 문제 안 나게 함.
-    # (로컬 개발/온보딩용. 프로덕션에서는 보안 정책 따라 조정 가능)
-    user: "0:0"
-
     environment:
-      # 컨테이너 최초 기동 시 자동으로 DB/토큰을 생성한다.
-      INFLUXDB_INIT_MODE: setup
-      INFLUXDB_INIT_USERNAME: ${INFLUX_USERNAME}
-      INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD}
-      INFLUXDB_INIT_ORG: ${INFLUX_ORG}
-      INFLUXDB_INIT_DATABASE: ${INFLUX_DATABASE}
-      INFLUXDB_INIT_RETENTION: autogen
-      INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN}
+      # Required configuration parameters --------------------
+      # 반드시 필요한 환경 변수 설정 --------------------------
+      #
+      # Storage type: local filesystem
+      # 스토리지 타입: 로컬 파일 시스템
+      INFLUXDB3_OBJECT_STORE: file
+
+      # Data directory (persisted to volume)
+      # 데이터 디렉터리 (볼륨에 영구 저장)
+      INFLUXDB3_DB_DIR: /var/lib/influxdb3
+
+      # Node ID (required argument)
+      # 노드 ID (필수 인자)
+      INFLUXDB3_NODE_ID: influx-node0
+
+      # Log level
+      # 로그 레벨
+      LOG_FILTER: info
+
+      # Disable authentication for development convenience
+      # 개발 환경에서는 인증을 끄고 편하게 사용
+      INFLUXDB3_START_WITHOUT_AUTH: "true"
 
     command:
+      # Explicitly provide --node-id because image entrypoint needs it
+      # 이미지의 entrypoint가 --node-id를 필수로 요구하므로 명시적으로 지정
+      - influxdb3
       - serve
-      - --host-id=influx-node0
-      - --object-store=file
-      - --data-dir=/var/lib/influxdb3/data
-      - --plugin-dir=/var/lib/influxdb3/plugins
-      # 기본 HTTP 바인딩은 0.0.0.0:8181
+      - --log-filter
+      - info
+      - --without-auth
+      - --object-store
+      - file
+      - --plugin-dir
+      - /plugins
+      - --node-id
+      - influx-node0
 
     ports:
-      - "8181:8181"   # 호스트 → 컨테이너 (API/ingest/query)
+      - "8181:8181"   # Host 8181 → Container 8181 (HTTP API)
+                      # 호스트 8181 포트를 InfluxDB API에 매핑
 
     volumes:
-      # named volume을 사용해서 권한 이슈 없이 영구 저장
-      - influx-data:/var/lib/influxdb3/data
-      - influx-plugins:/var/lib/influxdb3/plugins
+      # Database / catalog / parquet storage
+      # 데이터베이스, 카탈로그, 파케 저장 볼륨
+      - influx-data:/var/lib/influxdb3
+
+      # Home metadata for influxdb3 user
+      # influxdb3 유저 홈 메타데이터
+      - influx-meta:/home/influxdb3/.influxdb3
+
+      # Plugins directory (rollups, custom scripts)
+      # 플러그인 저장소 (롤업, 커스텀 스크립트)
+      - influx-plugins:/plugins
 
     restart: unless-stopped
 
+
   ############################################################
+  # 2) InfluxDB 3 Explorer (Web UI)
+  #    Manage DBs, tokens, and run queries (port 8888)
+  #    데이터베이스, 토큰 관리 및 쿼리 실행용 UI (8888 포트)
+  ############################################################
+    ############################################################
   # 2) InfluxDB 3 Explorer (웹 UI)
-  # DB 연결, 토큰/DB 관리, 쿼리 테스트용
-  # http://localhost:8888
   ############################################################
   influxdb3-explorer:
     image: influxdata/influxdb3-ui:1.3.0
     container_name: influxdb3-explorer
-
-    # admin 모드: 브라우저에서 Core를 등록하고 다룰 수 있게 함
     command: ["--mode=admin"]
-
     ports:
-      - "8888:80"     # 호스트 8888 → 웹 UI
-
+      - "8888:80"
     environment:
-      # 세션 키 (로컬 개발용 값. 배포 시 바꿔도 됨)
       SESSION_SECRET_KEY: "dev-secret-change-me"
 
     volumes:
       - explorer-data:/db
       - ./examples/influxdb3-explorer/config:/app-root/config:ro
-
     depends_on:
       - influxdb3-core
-
     restart: unless-stopped
 
+
   ############################################################
-  # 3) apilog-api (FastAPI)
-  # 수집 엔드포인트 /api/ingest/events 등
-  # 내부적으로 InfluxDB에 line protocol로 write
+  # 3) apilog-api (FastAPI backend)
+  #    Event ingestion & query API for APILog
+  #    APILog의 이벤트 수집 및 조회용 백엔드 API
   ############################################################
   apilog-api:
     container_name: apilog-api
     build: ./back/app
 
     environment:
-      # InfluxDB Core, 도커 네트워크 내부 주소
       INFLUX_URL: http://influxdb3-core:8181
-
-      # InfluxDB 3에서 자동으로 생성된 관리자/쓰기 토큰 (Authorization 헤더에 사용)
       INFLUX_TOKEN: apilog-dev-token
-
-      # InfluxDB 3에는 org 개념이 없어도 상관 없지만,
-      # 호환 레이어(/api/v2/write)에서는 org=... 값이 필요하므로
-      # 임의 문자열을 유지하면 된다.
       INFLUX_ORG: ${INFLUX_ORG}
-
-      # InfluxDB 3 Core 호환 API에서는 bucket이 데이터베이스 이름에 대응한다.
       INFLUX_BUCKET: ${INFLUX_DATABASE}
-
-      # 개발 단계: CORS 전부 허용
       CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN}
-
-      #llama 관련 환경변수
       LLM_PROVIDER: ${LLM_PROVIDER}
       LLM_ENDPOINT: ${LLM_ENDPOINT}
       LLM_MODEL: ${LLM_MODEL}
@@ -115,30 +130,26 @@ services:
 
     restart: unless-stopped
 
+
   ############################################################
-  # 4) apilog-nginx
-  # 프론트엔드 + 리버스 프록시 (예: /api -> apilog-api:8000)
-  # 외부 유저는 http://localhost:8080 으로 접속
+  # 4) apilog-nginx (Frontend + Reverse Proxy)
+  #    프론트엔드 정적파일 서빙 및 API 프록시
   ############################################################
   apilog-nginx:
     container_name: apilog-nginx
     build:
       context: .
       dockerfile: infra/nginx/Dockerfile
-
     ports:
-      - "8080:80"    # 호스트 8080 -> nginx 80
-                     # 예: http://localhost:8080
-
+      - "8080:80"
     depends_on:
       - apilog-api
-
     restart: unless-stopped
 
-  
+
   ############################################################
-  # 5) dummy-frontend
-  # 내부 개발용 테스트 더미 프론트엔드 사이트
+  # 5) dummy-frontend (Test site)
+  #    개발 중 이벤트 수집 테스트용 웹사이트
   ############################################################
   dummy-frontend:
     build:
@@ -152,40 +163,39 @@ services:
     restart: unless-stopped
 
   ############################################################
-  # 6) LLM-llama
-  # LLM 모델 서버 (Ollama 기반)
+  # 7) ollama (Local LLM Server)
+  #    AI 모델 로컬 인퍼런스 서버 (포트 11434)
   ############################################################
   ollama:
-      image: ollama/ollama:latest
-      container_name: ollama
-      environment:
-        - OLLAMA_HOST=0.0.0.0
-        - OLLAMA_KEEP_ALIVE=1h
-      ports:
-        - "11434:11434"             # 선택: 외부에서 직접 접근 필요 없으면 주석처리 가능
-      volumes:
-        - ollama-data:/root/.ollama # 모델 캐시 보존
-      healthcheck:
-        test: ["CMD", "curl", "-fsS", "http://localhost:11434/api/tags"]
-        interval: 10s
-        timeout: 5s
-        retries: 20
-      restart: unless-stopped
-      # GPU가 가능하면 주석 해제(WSL2 + NVIDIA 셋업 필요)
-      # deploy:
-      #   resources:
-      #     reservations:
-      #       devices:
-      #         - capabilities: ["gpu"]
+    image: ollama/ollama:latest
+    container_name: ollama
+
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_KEEP_ALIVE=1h
+
+    ports:
+      - "11434:11434"
+
+    volumes:
+      - ollama-data:/root/.ollama
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+    restart: unless-stopped
 
 ##############################################################
 # Named Volumes
-# (권한 충돌 없이 영구 데이터 저장)
+# (영구 데이터 저장소)
 ##############################################################
 volumes:
   influx-data:
+  influx-meta:
   influx-plugins:
   explorer-data:
-  explorer-config:
   snapshots:
   ollama-data:
