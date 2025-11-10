@@ -1,21 +1,42 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { DndContext, type DragEndEvent, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
-import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable"
+import { useEffect, useMemo, useState } from "react"
+import RGL, { WidthProvider, type Layout } from "react-grid-layout"
+import "react-grid-layout/css/styles.css"
+import "react-resizable/css/styles.css"
 import { WidgetHost } from "@/core/WidgetHost"
 import { widgetMetadata } from "@/core/registry"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Settings, LayoutGrid } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
+
+const ReactGridLayout = WidthProvider(RGL)
+
+const GRID_COLS = 12
+const GRID_ROW_HEIGHT = 30
+const GRID_MARGIN: [number, number] = [24, 24]
+const MIN_WIDGET_W = 2
+const MIN_WIDGET_H = 4
+const DEFAULT_WIDGET_W = 4
+const DEFAULT_WIDGET_H = 8
+const APPROX_COL_WIDTH_PX = 120
+const RESIZE_HANDLES: NonNullable<Layout["resizeHandles"]> = ["s", "n", "e", "w", "se", "sw", "ne", "nw"]
+
+interface WidgetLayoutState {
+  x: number
+  y: number
+  w: number
+  h: number
+}
 
 interface Widget {
   id: string
   type: string
   position: number
   config?: Record<string, any>
+  layout?: WidgetLayoutState
   width?: number
   height?: number
 }
@@ -26,22 +47,55 @@ interface DashboardConfig {
   widgets: Widget[]
 }
 
+type StoredWidget = Partial<Widget> & {
+  layout?: Partial<WidgetLayoutState>
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function pxToGridWidth(width?: number) {
+  if (typeof width !== "number" || !Number.isFinite(width)) return DEFAULT_WIDGET_W
+  return clamp(Math.round(width / APPROX_COL_WIDTH_PX) || DEFAULT_WIDGET_W, MIN_WIDGET_W, GRID_COLS)
+}
+
+function pxToGridHeight(height?: number) {
+  if (typeof height !== "number" || !Number.isFinite(height)) return DEFAULT_WIDGET_H
+  return Math.max(Math.round(height / GRID_ROW_HEIGHT) || DEFAULT_WIDGET_H, MIN_WIDGET_H)
+}
+
+function createFallbackLayout(index: number, width?: number, height?: number): WidgetLayoutState {
+  const perRow = Math.max(1, Math.floor(GRID_COLS / DEFAULT_WIDGET_W))
+  const w = pxToGridWidth(width)
+  const h = pxToGridHeight(height)
+  const tentativeX = (index % perRow) * DEFAULT_WIDGET_W
+  const x = clamp(tentativeX, 0, GRID_COLS - w)
+  const y = Math.floor(index / perRow) * DEFAULT_WIDGET_H
+  return { x, y, w, h }
+}
+
+function sanitizeLayout(layout: Partial<WidgetLayoutState> | undefined, fallback: WidgetLayoutState): WidgetLayoutState {
+  const candidate = layout ?? {}
+  const rawW = Number.isFinite(candidate.w) ? (candidate.w as number) : fallback.w
+  const w = clamp(Math.round(rawW), MIN_WIDGET_W, GRID_COLS)
+  const rawH = Number.isFinite(candidate.h) ? (candidate.h as number) : fallback.h
+  const h = Math.max(MIN_WIDGET_H, Math.round(rawH))
+  const rawX = Number.isFinite(candidate.x) ? (candidate.x as number) : fallback.x
+  const x = clamp(Math.round(rawX), 0, GRID_COLS - w)
+  const rawY = Number.isFinite(candidate.y) ? (candidate.y as number) : fallback.y
+  const y = Math.max(0, Math.round(rawY))
+  return { x, y, w, h }
+}
+
 export default function DashboardPage() {
   const dashboardId = "default"
   const [dashboard, setDashboard] = useState<DashboardConfig | null>(null)
   const [isHydrated, setIsHydrated] = useState(false)
   const [isAddingWidget, setIsAddingWidget] = useState(false)
   const [selectedWidgetType, setSelectedWidgetType] = useState<string>("")
-  const [timeRange, setTimeRange] = useState("12h")
+  const timeRange = "12h"
   const [isEditMode, setIsEditMode] = useState(false)
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-  )
 
   const widgetMetadataKey = Object.keys(widgetMetadata).join(",")
   const availableWidgets = Object.values(widgetMetadata)
@@ -71,18 +125,27 @@ export default function DashboardPage() {
     if (storedValue) {
       try {
         const parsed = JSON.parse(storedValue) as Partial<DashboardConfig>
-        const storedWidgets = Array.isArray(parsed.widgets) ? parsed.widgets : []
+        const storedWidgets = Array.isArray(parsed.widgets) ? (parsed.widgets as StoredWidget[]) : []
 
         const validWidgets = storedWidgets
-          .filter((widget): widget is Widget => Boolean(widget?.type))
+          .filter((widget): widget is StoredWidget & { type: string } => typeof widget?.type === "string")
           .map((widget, index) => {
             const meta = widgetMetadata[widget.type]
+            const rawLayout =
+              widget.layout && typeof widget.layout === "object" ? (widget.layout as Partial<WidgetLayoutState>) : undefined
+            const fallbackLayout = createFallbackLayout(
+              index,
+              (typeof widget.width === "number" && Number.isFinite(widget.width) ? widget.width : undefined) ??
+                meta?.defaultWidth,
+              (typeof widget.height === "number" && Number.isFinite(widget.height) ? widget.height : undefined) ??
+                meta?.defaultHeight,
+            )
+
             return {
               ...widget,
               id: widget.id ?? `widget-${index + 1}`,
               position: index,
-              width: widget.width ?? meta?.defaultWidth ?? 400,
-              height: widget.height ?? meta?.defaultHeight ?? 300,
+              layout: sanitizeLayout(rawLayout, fallbackLayout),
               config: widget.config ?? meta?.defaultConfig,
             }
           })
@@ -119,36 +182,33 @@ export default function DashboardPage() {
     }
   }, [selectedWidgetType, widgetMetadataKey])
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-
-    if (over && active.id !== over.id && dashboard) {
-      const oldIndex = dashboard.widgets.findIndex((w) => w.id === active.id)
-      const newIndex = dashboard.widgets.findIndex((w) => w.id === over.id)
-
-      const newWidgets = arrayMove(dashboard.widgets, oldIndex, newIndex).map((widget, index) => ({
-        ...widget,
-        position: index,
-      }))
-
-      setDashboard({
-        ...dashboard,
-        widgets: newWidgets,
-      })
+  useEffect(() => {
+    if (!isEditMode && isAddingWidget) {
+      setIsAddingWidget(false)
+      setSelectedWidgetType("")
     }
-  }
+  }, [isEditMode, isAddingWidget])
 
   const handleAddWidget = () => {
     if (!selectedWidgetType || !dashboard) return
 
     const meta = widgetMetadata[selectedWidgetType]
+    const fallbackLayout = createFallbackLayout(
+      dashboard.widgets.length,
+      meta?.defaultWidth ?? 400,
+      meta?.defaultHeight ?? 300,
+    )
+    const nextY = dashboard.widgets.reduce(
+      (max, widget) => Math.max(max, (widget.layout?.y ?? 0) + (widget.layout?.h ?? DEFAULT_WIDGET_H)),
+      0,
+    )
+    const layout = sanitizeLayout({ ...fallbackLayout, y: nextY }, fallbackLayout)
 
     const newWidget: Widget = {
       id: `widget-${Date.now()}`,
       type: selectedWidgetType,
       position: dashboard.widgets.length,
-      width: meta?.defaultWidth ?? 400,
-      height: meta?.defaultHeight ?? 300,
+      layout,
       config: meta?.defaultConfig,
     }
 
@@ -177,12 +237,61 @@ export default function DashboardPage() {
     })
   }
 
-  const handleResize = (widgetId: string, width: number, height: number) => {
-    if (!dashboard) return
+  const gridLayout = useMemo(() => {
+    if (!dashboard) return []
+    return dashboard.widgets.map((widget, index) => {
+      const meta = widgetMetadata[widget.type]
+      const fallback = createFallbackLayout(index, widget.width ?? meta?.defaultWidth, widget.height ?? meta?.defaultHeight)
+      const layout = sanitizeLayout(widget.layout, fallback)
+      return {
+        i: widget.id,
+        x: layout.x,
+        y: layout.y,
+        w: layout.w,
+        h: layout.h,
+        minW: MIN_WIDGET_W,
+        minH: MIN_WIDGET_H,
+      }
+    })
+  }, [dashboard, widgetMetadataKey])
+
+  const handleLayoutChange = (updatedLayout: Layout[]) => {
+    if (!dashboard || !isEditMode || updatedLayout.length === 0) return
+
+    const layoutMap = updatedLayout.reduce<Record<string, Layout>>((acc, item) => {
+      acc[item.i] = item
+      return acc
+    }, {})
 
     setDashboard({
       ...dashboard,
-      widgets: dashboard.widgets.map((w) => (w.id === widgetId ? { ...w, width, height } : w)),
+      widgets: dashboard.widgets
+        .map((widget) => {
+          const layout = layoutMap[widget.id]
+          if (!layout) return widget
+
+          return {
+            ...widget,
+            layout: {
+              x: layout.x,
+              y: layout.y,
+              w: layout.w,
+              h: layout.h,
+            },
+            position: layout.y * GRID_COLS + layout.x,
+          }
+        })
+        .sort((a, b) => {
+          const layoutA = a.layout
+          const layoutB = b.layout
+
+          if (layoutA && layoutB) {
+            if (layoutA.y !== layoutB.y) return layoutA.y - layoutB.y
+            if (layoutA.x !== layoutB.x) return layoutA.x - layoutB.x
+          }
+
+          return a.position - b.position
+        }),
     })
   }
 
@@ -209,20 +318,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1h">Last 1 hour</SelectItem>
-                <SelectItem value="6h">Last 6 hours</SelectItem>
-                <SelectItem value="12h">Last 12 hours</SelectItem>
-                <SelectItem value="24h">Last 24 hours</SelectItem>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-              </SelectContent>
-            </Select>
-
             {/* Theme Toggle Button */}
             <ThemeToggle />
 
@@ -240,74 +335,35 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="p-6">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={dashboard.widgets.map((w) => w.id)} strategy={rectSortingStrategy}>
-            <div className="flex flex-wrap gap-6">
-              {dashboard.widgets.map((widget) => (
+        <div className="space-y-6">
+          <ReactGridLayout
+            className="layout"
+            layout={gridLayout}
+            cols={GRID_COLS}
+            rowHeight={GRID_ROW_HEIGHT}
+            margin={GRID_MARGIN}
+            isDraggable={isEditMode}
+            isResizable={isEditMode}
+            resizeHandles={RESIZE_HANDLES}
+            compactType="vertical"
+            draggableHandle=".widget-drag-handle"
+            preventCollision={!isEditMode}
+            onLayoutChange={handleLayoutChange}
+          >
+            {dashboard.widgets.map((widget) => (
+              <div key={widget.id} className="h-full">
                 <WidgetHost
-                  key={widget.id}
-                  id={widget.id}
                   type={widget.type}
                   config={widget.config}
                   timeRange={timeRange}
                   isEditMode={isEditMode}
                   onRemove={() => handleRemoveWidget(widget.id)}
-                  width={widget.width}
-                  height={widget.height}
-                  onResize={(width, height) => handleResize(widget.id, width, height)}
                 />
-              ))}
+              </div>
+            ))}
+          </ReactGridLayout>
 
-              {/* Add Widget Card */}
-              {isEditMode && (
-                <Card
-                  className="border-2 border-dashed border-border bg-card/50 hover:bg-card/80 transition-colors"
-                  style={{ width: 400, minHeight: 300 }}
-                >
-                  <div className="flex flex-col items-center justify-center p-8 min-h-[300px]">
-                    {!isAddingWidget ? (
-                      <Button onClick={() => setIsAddingWidget(true)} variant="outline" size="lg">
-                        <Plus className="h-5 w-5 mr-2" />
-                        Add Widget
-                      </Button>
-                    ) : (
-                      <div className="w-full max-w-sm space-y-4">
-                        <h3 className="text-lg font-semibold text-center">Select Widget Type</h3>
-                        <Select value={selectedWidgetType} onValueChange={setSelectedWidgetType}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Choose a widget..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {sortedAvailableWidgets.map((meta) => (
-                              <SelectItem key={meta.id} value={meta.id}>
-                                {meta.name ?? meta.id}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <div className="flex gap-2">
-                          <Button onClick={handleAddWidget} disabled={!selectedWidgetType} className="flex-1">
-                            Add
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              setIsAddingWidget(false)
-                              setSelectedWidgetType("")
-                            }}
-                            variant="outline"
-                            className="flex-1"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              )}
-            </div>
-          </SortableContext>
-        </DndContext>
+        </div>
 
         {/* Empty State */}
         {dashboard.widgets.length === 0 && !isEditMode && (
@@ -326,6 +382,69 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+
+      {isEditMode && (
+        <>
+          <div className="fixed bottom-6 right-6 z-40 flex items-center gap-3">
+            <span className="rounded-full bg-background/90 px-4 py-2 text-sm font-medium text-foreground shadow-lg shadow-primary/20">
+              Add Widget
+            </span>
+            <Button
+              size="icon"
+              className="h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:bg-primary/90"
+              onClick={() => setIsAddingWidget(true)}
+              aria-label="Add widget"
+            >
+              <Plus className="h-6 w-6" />
+            </Button>
+          </div>
+          <Dialog
+            open={isAddingWidget}
+            onOpenChange={(open) => {
+              setIsAddingWidget(open)
+              if (!open) {
+                setSelectedWidgetType("")
+              }
+            }}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add Widget</DialogTitle>
+                <DialogDescription>Select a widget type to place on your dashboard.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <Select value={selectedWidgetType} onValueChange={setSelectedWidgetType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a widget..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sortedAvailableWidgets.map((meta) => (
+                      <SelectItem key={meta.id} value={meta.id}>
+                        {meta.name ?? meta.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex gap-2">
+                  <Button onClick={handleAddWidget} disabled={!selectedWidgetType} className="flex-1">
+                    Add
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setIsAddingWidget(false)
+                      setSelectedWidgetType("")
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
     </div>
   )
 }
