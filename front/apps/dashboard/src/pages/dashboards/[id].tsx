@@ -7,9 +7,35 @@ import "react-resizable/css/styles.css"
 import { WidgetHost } from "@/core/WidgetHost"
 import { widgetMetadata } from "@/core/registry"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Settings, LayoutGrid } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { CopyPlus, LayoutGrid, PenLine, Plus, Save, Trash2, ChevronsUpDown, Check } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 const ReactGridLayout = WidthProvider(RGL)
@@ -49,6 +75,85 @@ interface DashboardConfig {
 
 type StoredWidget = Partial<Widget> & {
   layout?: Partial<WidgetLayoutState>
+}
+
+interface PresetStorageState {
+  activePresetId?: string
+  presets?: Partial<DashboardConfig>[]
+}
+
+function generatePresetId() {
+  const cryptoApi = typeof globalThis !== "undefined" ? (globalThis.crypto as Crypto | undefined) : undefined
+  if (cryptoApi?.randomUUID) {
+    return cryptoApi.randomUUID()
+  }
+  return `preset-${Math.random().toString(36).slice(2, 11)}`
+}
+
+function cloneDashboardConfig(config: DashboardConfig): DashboardConfig {
+  return {
+    ...config,
+    widgets: config.widgets.map((widget) => ({
+      ...widget,
+      layout: widget.layout ? { ...widget.layout } : undefined,
+      config: widget.config ? { ...widget.config } : undefined,
+    })),
+  }
+}
+
+function restoreWidgetsFromStorage(storedWidgets: StoredWidget[]): Widget[] {
+  return storedWidgets
+    .filter((widget): widget is StoredWidget & { type: string } => typeof widget?.type === "string")
+    .map((widget, index) => {
+      const meta = widgetMetadata[widget.type]
+      const fallbackLayout = createFallbackLayout(
+        index,
+        (typeof widget.width === "number" && Number.isFinite(widget.width) ? widget.width : undefined) ?? meta?.defaultWidth,
+        (typeof widget.height === "number" && Number.isFinite(widget.height) ? widget.height : undefined) ?? meta?.defaultHeight,
+      )
+      const layout = sanitizeLayout(
+        widget.layout && typeof widget.layout === "object" ? (widget.layout as Partial<WidgetLayoutState>) : undefined,
+        fallbackLayout,
+      )
+
+      return {
+        ...widget,
+        id: widget.id ?? `widget-${index + 1}`,
+        position: index,
+        layout,
+        config: widget.config ?? meta?.defaultConfig,
+      } as Widget
+    })
+}
+
+function normalizeDashboardPreset(
+  preset: Partial<DashboardConfig> | null | undefined,
+  fallbackName: string,
+  fallbackId?: string,
+): DashboardConfig {
+  const storedWidgets = Array.isArray(preset?.widgets) ? (preset?.widgets as StoredWidget[]) : []
+
+  return {
+    id: preset?.id ?? fallbackId ?? generatePresetId(),
+    name: typeof preset?.name === "string" && preset.name.trim().length > 0 ? preset.name.trim() : fallbackName,
+    widgets: restoreWidgetsFromStorage(storedWidgets),
+  }
+}
+
+function createDefaultPreset(dashboardId: string): DashboardConfig {
+  return {
+    id: `${dashboardId}-default`,
+    name: "Analytics Overview",
+    widgets: [],
+  }
+}
+
+function createBlankDashboardPreset(name: string): DashboardConfig {
+  return {
+    id: generatePresetId(),
+    name,
+    widgets: [],
+  }
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -96,6 +201,17 @@ export default function DashboardPage() {
   const [selectedWidgetType, setSelectedWidgetType] = useState<string>("")
   const timeRange = "12h"
   const [isEditMode, setIsEditMode] = useState(false)
+  const [presets, setPresets] = useState<DashboardConfig[]>([])
+  const [activePresetId, setActivePresetId] = useState<string | null>(null)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [isSaveAsDialogOpen, setIsSaveAsDialogOpen] = useState(false)
+  const [savePresetName, setSavePresetName] = useState("")
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
+  const [renamePresetName, setRenamePresetName] = useState("")
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isFinishPresetDialogOpen, setIsFinishPresetDialogOpen] = useState(false)
+  const [finishPresetName, setFinishPresetName] = useState("")
+  const [isNewPresetDraft, setIsNewPresetDraft] = useState(false)
 
   const widgetMetadataKey = Object.keys(widgetMetadata).join(",")
   const availableWidgets = Object.values(widgetMetadata)
@@ -104,75 +220,84 @@ export default function DashboardPage() {
     if (b.id === "example") return -1
     return 0
   })
-  const storageKey = `dashboard-config-${dashboardId}`
+  const presetStorageKey = `dashboard-presets-${dashboardId}`
+  const legacyStorageKey = `dashboard-config-${dashboardId}`
+  const activePreset = presets.find((preset) => preset.id === activePresetId) ?? presets[0]
 
-  // Load dashboard configuration
+  // Load dashboard configuration & presets
   useEffect(() => {
-    const baseDashboard: DashboardConfig = {
-      id: dashboardId,
-      name: "Analytics Overview",
-      widgets: [],
+    const defaultPreset = createDefaultPreset(dashboardId)
+
+    const applyState = (candidatePresets: DashboardConfig[], requestedActiveId?: string) => {
+      const ensuredPresets = candidatePresets.length === 0 ? [defaultPreset] : candidatePresets
+      const resolvedActiveId =
+        requestedActiveId && ensuredPresets.some((preset) => preset.id === requestedActiveId)
+          ? requestedActiveId
+          : ensuredPresets[0].id
+      const activePresetEntry =
+        ensuredPresets.find((preset) => preset.id === resolvedActiveId) ?? ensuredPresets[0] ?? defaultPreset
+
+      setPresets(ensuredPresets)
+      setActivePresetId(resolvedActiveId)
+      setDashboard(cloneDashboardConfig(activePresetEntry))
+      setHasUnsavedChanges(false)
+      setIsNewPresetDraft(false)
+      setIsHydrated(true)
     }
 
     if (typeof window === "undefined") {
-      setDashboard(baseDashboard)
-      setIsHydrated(true)
+      applyState([defaultPreset], defaultPreset.id)
       return
     }
 
-    const storedValue = localStorage.getItem(storageKey)
+    const storedValue = localStorage.getItem(presetStorageKey)
 
     if (storedValue) {
       try {
-        const parsed = JSON.parse(storedValue) as Partial<DashboardConfig>
-        const storedWidgets = Array.isArray(parsed.widgets) ? (parsed.widgets as StoredWidget[]) : []
+        const parsed = JSON.parse(storedValue) as PresetStorageState
+        const candidatePresets = Array.isArray(parsed.presets) ? parsed.presets : []
+        const normalizedPresets = candidatePresets.map((preset, index) =>
+          normalizeDashboardPreset(preset, `${defaultPreset.name} ${index + 1}`),
+        )
 
-        const validWidgets = storedWidgets
-          .filter((widget): widget is StoredWidget & { type: string } => typeof widget?.type === "string")
-          .map((widget, index) => {
-            const meta = widgetMetadata[widget.type]
-            const rawLayout =
-              widget.layout && typeof widget.layout === "object" ? (widget.layout as Partial<WidgetLayoutState>) : undefined
-            const fallbackLayout = createFallbackLayout(
-              index,
-              (typeof widget.width === "number" && Number.isFinite(widget.width) ? widget.width : undefined) ??
-                meta?.defaultWidth,
-              (typeof widget.height === "number" && Number.isFinite(widget.height) ? widget.height : undefined) ??
-                meta?.defaultHeight,
-            )
-
-            return {
-              ...widget,
-              id: widget.id ?? `widget-${index + 1}`,
-              position: index,
-              layout: sanitizeLayout(rawLayout, fallbackLayout),
-              config: widget.config ?? meta?.defaultConfig,
-            }
-          })
-
-        setDashboard({
-          ...baseDashboard,
-          ...parsed,
-          widgets: validWidgets,
-        })
-        setIsHydrated(true)
-        return
+        if (normalizedPresets.length > 0) {
+          applyState(normalizedPresets, parsed.activePresetId)
+          return
+        }
       } catch (error) {
-        console.warn("[dashboard] Failed to restore widgets from localStorage.", error)
+        console.warn("[dashboard] Failed to restore preset layouts from localStorage.", error)
       }
     }
 
-    setDashboard(baseDashboard)
-    setIsHydrated(true)
-  }, [dashboardId, storageKey, widgetMetadataKey])
+    const legacyValue = localStorage.getItem(legacyStorageKey)
+
+    if (legacyValue) {
+      try {
+        const parsedLegacy = JSON.parse(legacyValue) as Partial<DashboardConfig>
+        const normalized = normalizeDashboardPreset(parsedLegacy, defaultPreset.name, defaultPreset.id)
+        applyState([normalized], normalized.id)
+        return
+      } catch (error) {
+        console.warn("[dashboard] Failed to restore legacy dashboard layout.", error)
+      }
+    }
+
+    applyState([defaultPreset], defaultPreset.id)
+  }, [dashboardId, legacyStorageKey, presetStorageKey, widgetMetadataKey])
 
   useEffect(() => {
-    if (!dashboard) return
     if (!isHydrated) return
     if (typeof window === "undefined") return
+    if (presets.length === 0) return
 
-    localStorage.setItem(storageKey, JSON.stringify(dashboard))
-  }, [dashboard, isHydrated, storageKey])
+    const payload: PresetStorageState = {
+      activePresetId: activePresetId ?? undefined,
+      presets,
+    }
+
+    localStorage.setItem(presetStorageKey, JSON.stringify(payload))
+    localStorage.removeItem(legacyStorageKey)
+  }, [activePresetId, isHydrated, legacyStorageKey, presetStorageKey, presets])
 
   useEffect(() => {
     if (!selectedWidgetType) {
@@ -188,6 +313,173 @@ export default function DashboardPage() {
       setSelectedWidgetType("")
     }
   }, [isEditMode, isAddingWidget])
+
+  const saveDashboardAsNewPreset = (source: DashboardConfig, nameOverride?: string) => {
+    const fallbackName =
+      nameOverride?.trim() && nameOverride.trim().length > 0
+        ? nameOverride.trim()
+        : source.name?.trim() && source.name.trim().length > 0
+          ? source.name.trim()
+          : `Preset ${presets.length + 1}`
+
+    const newPresetId = generatePresetId()
+    const presetClone = cloneDashboardConfig({
+      ...source,
+      id: newPresetId,
+      name: fallbackName,
+    })
+
+    setPresets((prev) => [...prev, presetClone])
+    setActivePresetId(newPresetId)
+    setDashboard(cloneDashboardConfig(presetClone))
+    setHasUnsavedChanges(false)
+    setIsNewPresetDraft(false)
+    setFinishPresetName(fallbackName)
+  }
+
+  const handlePresetSelect = (value: string) => {
+    if (value === activePresetId) return
+
+    if (hasUnsavedChanges && typeof window !== "undefined") {
+      const shouldProceed = window.confirm("You have unsaved changes. Switch presets anyway?")
+      if (!shouldProceed) return
+    }
+
+    const nextPreset = presets.find((preset) => preset.id === value)
+    if (!nextPreset) return
+
+    setActivePresetId(value)
+    setDashboard(cloneDashboardConfig(nextPreset))
+    setHasUnsavedChanges(false)
+    setIsNewPresetDraft(false)
+    setFinishPresetName(nextPreset.name)
+  }
+
+  const handleSavePresetChanges = (overrideDashboard?: DashboardConfig) => {
+    const targetDashboard = overrideDashboard ?? dashboard
+    if (!targetDashboard) return
+
+    if (!activePresetId || isNewPresetDraft) {
+      saveDashboardAsNewPreset(targetDashboard)
+      return
+    }
+
+    const presetClone = cloneDashboardConfig({
+      ...targetDashboard,
+      id: activePresetId,
+    })
+
+    setPresets((prev) => prev.map((preset) => (preset.id === activePresetId ? presetClone : preset)))
+    setDashboard(cloneDashboardConfig(presetClone))
+    setHasUnsavedChanges(false)
+    setIsNewPresetDraft(false)
+    setFinishPresetName(presetClone.name)
+  }
+
+  const openSaveAsDialog = () => {
+    const fallbackName =
+      dashboard?.name && dashboard.name.trim().length > 0
+        ? `${dashboard.name.trim()} Copy`
+        : `Preset ${presets.length + 1}`
+    setSavePresetName(fallbackName)
+    setIsSaveAsDialogOpen(true)
+  }
+
+  const handleSavePresetAs = () => {
+    if (!dashboard) return
+
+    const trimmedName = savePresetName.trim().length > 0 ? savePresetName.trim() : `Preset ${presets.length + 1}`
+    saveDashboardAsNewPreset(dashboard, trimmedName)
+    setSavePresetName("")
+    setIsSaveAsDialogOpen(false)
+  }
+
+  const openRenameDialog = () => {
+    setRenamePresetName(dashboard?.name ?? "")
+    setIsRenameDialogOpen(true)
+  }
+
+  const handleRenamePreset = () => {
+    if (!activePresetId) return
+    const trimmedName = renamePresetName.trim()
+    if (!trimmedName) return
+
+    setPresets((prev) => prev.map((preset) => (preset.id === activePresetId ? { ...preset, name: trimmedName } : preset)))
+    setDashboard((prev) => (prev ? { ...prev, name: trimmedName } : prev))
+    setIsRenameDialogOpen(false)
+  }
+
+  const handleDeletePreset = () => {
+    if (!activePresetId) return
+
+    setPresets((prev) => {
+      const nextPresets = prev.filter((preset) => preset.id !== activePresetId)
+      if (nextPresets.length === 0) {
+        const fallbackPreset = createDefaultPreset(dashboardId)
+        setActivePresetId(fallbackPreset.id)
+        setDashboard(cloneDashboardConfig(fallbackPreset))
+        setHasUnsavedChanges(false)
+        setIsNewPresetDraft(false)
+        return [fallbackPreset]
+      }
+
+      const nextActivePreset = nextPresets[0]
+      setActivePresetId(nextActivePreset.id)
+      setDashboard(cloneDashboardConfig(nextActivePreset))
+      setHasUnsavedChanges(false)
+      setIsNewPresetDraft(false)
+      return nextPresets
+    })
+    setIsDeleteDialogOpen(false)
+  }
+
+  const handleStartNewLayout = () => {
+    if (hasUnsavedChanges && typeof window !== "undefined") {
+      const shouldProceed = window.confirm("You have unsaved changes. Start a new layout anyway?")
+      if (!shouldProceed) return
+    }
+
+    const defaultName = `New Layout ${presets.length + 1}`
+    const blankPreset = createBlankDashboardPreset(defaultName)
+
+    setDashboard(cloneDashboardConfig(blankPreset))
+    setActivePresetId(null)
+    setIsEditMode(true)
+    setHasUnsavedChanges(true)
+    setIsNewPresetDraft(true)
+    setFinishPresetName(defaultName)
+  }
+
+  const handleToggleEditMode = () => {
+    if (!dashboard) return
+
+    if (!isEditMode) {
+      setIsEditMode(true)
+      setFinishPresetName(dashboard.name)
+      return
+    }
+
+    setFinishPresetName(dashboard.name)
+    setIsFinishPresetDialogOpen(true)
+  }
+
+  const handleConfirmFinishEditing = () => {
+    if (!dashboard) return
+
+    const trimmedName = finishPresetName.trim() || dashboard.name || `Preset ${presets.length + 1}`
+    const nextDashboard: DashboardConfig = {
+      ...dashboard,
+      name: trimmedName,
+    }
+
+    if (!activePresetId || isNewPresetDraft) {
+      saveDashboardAsNewPreset(nextDashboard, trimmedName)
+    } else {
+      handleSavePresetChanges(nextDashboard)
+    }
+    setIsEditMode(false)
+    setIsFinishPresetDialogOpen(false)
+  }
 
   const handleAddWidget = () => {
     if (!selectedWidgetType || !dashboard) return
@@ -219,6 +511,7 @@ export default function DashboardPage() {
 
     setIsAddingWidget(false)
     setSelectedWidgetType("")
+    setHasUnsavedChanges(true)
   }
 
   const handleRemoveWidget = (widgetId: string) => {
@@ -235,6 +528,7 @@ export default function DashboardPage() {
       ...dashboard,
       widgets: updatedWidgets,
     })
+    setHasUnsavedChanges(true)
   }
 
   const gridLayout = useMemo(() => {
@@ -293,6 +587,7 @@ export default function DashboardPage() {
           return a.position - b.position
         }),
     })
+    setHasUnsavedChanges(true)
   }
 
   if (!dashboard) {
@@ -310,25 +605,91 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-4">
-            <img src="/dashboard-logo.png" alt="ApiLog" className="h-8" />
-            <div className="h-6 w-px bg-border" />
-            <h1 className="text-xl font-semibold text-foreground">{dashboard.name}</h1>
-          </div>
+        <div className="px-6 py-4 space-y-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-4">
+              <img src="/dashboard-logo.png" alt="ApiLog" className="h-8" />
+              <div className="h-6 w-px bg-border" />
+              <div>
+                <h1 className="text-xl font-semibold text-foreground">{dashboard.name}</h1>
+                <p className="text-sm text-muted-foreground">Save and reuse layouts with presets.</p>
+              </div>
+            </div>
 
-          <div className="flex items-center gap-3">
-            {/* Theme Toggle Button */}
-            <ThemeToggle />
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {/* Theme Toggle Button */}
+              <ThemeToggle />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="min-w-[220px] justify-between">
+                    <span className="truncate">{activePreset?.name ?? dashboard?.name ?? "Select preset"}</span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-64">
+                  <DropdownMenuLabel>Presets</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {presets.length === 0 ? (
+                    <DropdownMenuItem disabled>No presets yet</DropdownMenuItem>
+                  ) : (
+                    presets.map((preset) => (
+                      <DropdownMenuItem key={preset.id} onSelect={() => handlePresetSelect(preset.id)}>
+                        <div className="flex w-full items-center justify-between gap-2">
+                          <span className="truncate">{preset.name}</span>
+                          {preset.id === activePresetId && <Check className="h-4 w-4 text-primary" />}
+                        </div>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                  {(hasUnsavedChanges || dashboard) && <DropdownMenuSeparator />}
+                  {hasUnsavedChanges && (
+                    <DropdownMenuItem
+                      disabled={!activePresetId && !isNewPresetDraft}
+                      onSelect={() => handleSavePresetChanges()}
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      Save changes
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onSelect={() => openSaveAsDialog()} disabled={!dashboard}>
+                    <CopyPlus className="mr-2 h-4 w-4" />
+                    Save as preset
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={() => openRenameDialog()} disabled={!activePresetId}>
+                    <PenLine className="mr-2 h-4 w-4" />
+                    Rename preset
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    disabled={presets.length <= 1}
+                    onSelect={() => setIsDeleteDialogOpen(true)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete preset
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-            <Button variant={isEditMode ? "default" : "outline"} size="sm" onClick={() => setIsEditMode(!isEditMode)}>
-              <LayoutGrid className="h-4 w-4 mr-2" />
-              {isEditMode ? "Done" : "Edit Layout"}
-            </Button>
+              {hasUnsavedChanges && (
+                <Badge variant="secondary" className="uppercase tracking-wide">
+                  Unsaved
+                </Badge>
+              )}
 
-            <Button variant="outline" size="sm">
-              <Settings className="h-4 w-4" />
-            </Button>
+              {!isNewPresetDraft && (
+                <Button variant="outline" size="sm" onClick={handleStartNewLayout}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Layout
+                </Button>
+              )}
+
+              <Button variant={isEditMode ? "default" : "outline"} size="sm" onClick={handleToggleEditMode}>
+                <LayoutGrid className="h-4 w-4 mr-2" />
+                {isEditMode ? "Save" : "Edit Layout"}
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -445,6 +806,94 @@ export default function DashboardPage() {
           </Dialog>
         </>
       )}
+
+      <Dialog open={isFinishPresetDialogOpen} onOpenChange={setIsFinishPresetDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save layout as preset</DialogTitle>
+            <DialogDescription>Give this preset a name and we&apos;ll save your latest changes.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              value={finishPresetName}
+              onChange={(event) => setFinishPresetName(event.target.value)}
+              placeholder="Preset name"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsFinishPresetDialogOpen(false)}>
+                Continue editing
+              </Button>
+              <Button onClick={handleConfirmFinishEditing}>Save &amp; exit</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSaveAsDialogOpen} onOpenChange={setIsSaveAsDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save as Preset</DialogTitle>
+            <DialogDescription>Store the current layout under a new preset.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              value={savePresetName}
+              onChange={(event) => setSavePresetName(event.target.value)}
+              placeholder="Preset name"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsSaveAsDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSavePresetAs}>Save Preset</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename Preset</DialogTitle>
+            <DialogDescription>Update the display name for this preset.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              value={renamePresetName}
+              onChange={(event) => setRenamePresetName(event.target.value)}
+              placeholder="Preset name"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsRenameDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleRenamePreset} disabled={!renamePresetName.trim()}>
+                Save Name
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete preset?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the preset and its layout. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={handleDeletePreset}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
