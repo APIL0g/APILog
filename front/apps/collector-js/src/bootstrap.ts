@@ -83,6 +83,67 @@
     }
   }
 
+  const USER_ID_STORAGE_KEY = "_apilog_user";
+  const USER_ID_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+  function readCookie(name: string): string | null {
+    try {
+      const pattern = new RegExp(
+        "(?:^|; )" + name.replace(/([.*+?^${}()|[\]\\])/g, "\\$1") + "=([^;]*)"
+      );
+      const match = document.cookie.match(pattern);
+      return match ? decodeURIComponent(match[1]) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeCookie(name: string, value: string, maxAgeSeconds: number): void {
+    try {
+      document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(
+        value
+      )}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`;
+    } catch {
+      // Ignore cookie write failures.
+    }
+  }
+
+  function persistUserHash(value: string): void {
+    try {
+      window.localStorage.setItem(USER_ID_STORAGE_KEY, value);
+    } catch {
+      // Ignore storage quota/denied errors.
+    }
+    writeCookie(USER_ID_STORAGE_KEY, value, USER_ID_COOKIE_MAX_AGE);
+    win.__apilog_user = value;
+  }
+
+  function getOrCreateUserHash(): string {
+    try {
+      const existing = window.localStorage.getItem(USER_ID_STORAGE_KEY);
+      if (existing) {
+        win.__apilog_user = existing;
+        return existing;
+      }
+    } catch {
+      // localStorage unavailable (private mode, etc.)
+    }
+
+    const cookieValue = readCookie(USER_ID_STORAGE_KEY);
+    if (cookieValue) {
+      persistUserHash(cookieValue);
+      return cookieValue;
+    }
+
+    if (typeof win.__apilog_user === "string" && win.__apilog_user) {
+      return win.__apilog_user;
+    }
+
+    const fresh = uuid();
+    persistUserHash(fresh);
+    return fresh;
+  }
+
   function detectDeviceType(): "mobile" | "desktop" {
     const ua = navigator.userAgent.toLowerCase();
     if (/mobi|android|iphone|ipad/.test(ua)) return "mobile";
@@ -435,6 +496,7 @@
     maxScrollSeen: number;
     q: BatchQueue;
     countryCode: string;
+    userHash: string;
 
     constructor(opts: CollectorOpts) {
       this.opts = opts;
@@ -444,6 +506,7 @@
       this.maxScrollSeen = getMaxScrollPct();
       this.q = new BatchQueue(opts.ingestUrl);
       this.countryCode = COUNTRY_DEFAULT;
+      this.userHash = getOrCreateUserHash();
 
       const pendingCountry = requestCountryCode();
       if (pendingCountry) {
@@ -583,7 +646,7 @@
       return {
         count: 1,
         session_id: this.sessionId,
-        user_hash: null as string | null,
+        user_hash: this.userHash,
         dwell_ms: null as number | null,
         scroll_pct: null as number | null,
         click_x: null as number | null,
