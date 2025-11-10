@@ -9,3 +9,4 @@ pyarrow
 
 httpx
 cachetools
+pandas
