@@ -67,6 +67,7 @@ def get_click_data_from_influx(path: str, device_type: str) -> List[Dict[str, An
         WHERE
             "path" = '{path}' 
             AND "device_type" = '{device_type}'
+            AND "event_name" = 'click'
         GROUP BY x, y
     '''
 
