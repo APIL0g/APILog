@@ -3,6 +3,7 @@ uvicorn[standard]
 influxdb-client
 influxdb3-python
 playwright
+pillow
 
 pydantic>=2
 pyarrow 

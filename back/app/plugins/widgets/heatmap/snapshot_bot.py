@@ -1,5 +1,7 @@
 import os
+import io
 from playwright.async_api import async_playwright
+from PIL import Image
 
 async def take_snapshot(target_url: str, device_type: str, output_path: str):
     """
@@ -27,13 +29,15 @@ async def take_snapshot(target_url: str, device_type: str, output_path: str):
             
             # 스냅샷 저장 디렉토리 생성 (최초 1회)
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            
-            # 페이지 전체를 webp 형식으로 스크린샷
-            await page.screenshot(
-                path=output_path, 
-                type="jpeg",
+
+            screenshot_bytes = await page.screenshot(
+                type="png",
                 full_page=True 
             )
+    
+            with Image.open(io.BytesIO(screenshot_bytes)) as img:
+                img.save(output_path, "webp", quality=25)
+            
             print(f"[Snapshot Bot] Successfully saved snapshot to {output_path}")
             
         except Exception as e:
