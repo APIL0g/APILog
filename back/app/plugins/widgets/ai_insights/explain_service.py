@@ -3,7 +3,6 @@ Robust Ollama/OpenAI calls, safe JSON parsing, and configurable caching.
 """
 from __future__ import annotations
 
-import os
 import json
 import hashlib
 import logging
@@ -14,31 +13,22 @@ import httpx
 from cachetools import TTLCache
 from fastapi import HTTPException
 
+from config import (
+    AI_INSIGHTS_EXPLAIN_CACHE_TTL,
+    LLM_API_KEY,
+    LLM_ENDPOINT,
+    LLM_MAX_TOKENS,
+    LLM_MODEL,
+    LLM_PROVIDER,
+    LLM_TEMPERATURE,
+    LLM_TIMEOUT_S,
+    is_running_in_docker,
+)
+
 log = logging.getLogger("ai_insights")
 
-# ---- Env ----
-def _int_env(name: str, default: int) -> int:
-    try:
-        return int((os.getenv(name) or str(default)).strip())
-    except Exception:
-        return default
-
-def _float_env(name: str, default: float) -> float:
-    try:
-        return float((os.getenv(name) or str(default)).strip())
-    except Exception:
-        return default
-
-LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "none") or "none").strip()  # vllm|openai_compat|ollama|none
-LLM_ENDPOINT = (os.getenv("LLM_ENDPOINT", "") or "").strip()
-LLM_MODEL    = (os.getenv("LLM_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct") or "").strip()
-LLM_API_KEY  = (os.getenv("LLM_API_KEY", "") or "").strip()
-LLM_MAX_TOKENS  = _int_env("LLM_MAX_TOKENS", 512)
-LLM_TEMPERATURE = _float_env("LLM_TEMPERATURE", 0.2)
-LLM_TIMEOUT_S   = _float_env("LLM_TIMEOUT_S", _float_env("LLM_TIMEOUT", 12.0))
-
 # Cache TTL for explain results (seconds). Set to 0 to disable caching.
-EXPLAIN_CACHE_TTL_S = _int_env("AI_INSIGHTS_EXPLAIN_CACHE_TTL", 300)
+EXPLAIN_CACHE_TTL_S = AI_INSIGHTS_EXPLAIN_CACHE_TTL
 _cache = TTLCache(maxsize=256, ttl=max(0, EXPLAIN_CACHE_TTL_S))
 
 
@@ -94,10 +84,7 @@ def _extract_json(text: str) -> Dict[str, Any]:
     return {"generated_at": _now_iso(), "insights": [], "meta": {"fallback": "parse_failed"}}
 
 def _is_docker() -> bool:
-    try:
-        return os.path.exists("/.dockerenv") or (os.getenv("RUNNING_IN_DOCKER") == "1")
-    except Exception:
-        return False
+    return is_running_in_docker()
 # ---- Error-to-status mapping (Ollama) ----
 def _ollama_status_from_exception(exc: Exception) -> Tuple[Optional[str], Optional[str]]:
     """Map exceptions from Ollama calls to user-friendly status messages.

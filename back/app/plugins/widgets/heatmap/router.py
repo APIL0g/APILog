@@ -1,17 +1,16 @@
-import os
+﻿import os
 from fastapi import APIRouter, BackgroundTasks, Request, Query
 from pydantic import BaseModel
 
 from typing import Any, Dict, List
+from config import TARGET_SITE_BASE_URL
 
 # 1. (수정) snapshot_bot의 전체 경로를 import합니다.
 from .snapshot_bot import take_snapshot
 # 2. (수정) .service는 현재 디렉토리에 있으므로 상대 경로를 사용합니다.
 from .service import get_snapshot_filepath, get_click_data_from_influx, get_available_paths_from_influx
 
-# 3. (수정) docker-compose 환경에서는 'localhost'가 아닌 서비스 이름으로 접근해야 합니다.
-# (dummy-frontend 서비스가 3000번 포트를 사용한다고 가정)
-TARGET_SITE_BASE_URL = "http://dummy-frontend:3000"
+
 
 # --- API 라우터 및 모델 정의 ---
 

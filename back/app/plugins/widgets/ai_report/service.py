@@ -2,11 +2,22 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
+
+from config import (
+    AI_REPORT_FETCH_BASE,
+    LLM_API_KEY,
+    LLM_ENDPOINT,
+    LLM_MAX_TOKENS,
+    LLM_MODEL,
+    LLM_PROVIDER,
+    LLM_TEMPERATURE,
+    LLM_TIMEOUT_S,
+    is_running_in_docker,
+)
 
 log = logging.getLogger("ai_report")
 
@@ -16,37 +27,12 @@ def _now_iso() -> str:
 
 
 # ---- LLM/env ----
-def _int_env(name: str, default: int) -> int:
-    try:
-        return int((os.getenv(name) or str(default)).strip())
-    except Exception:
-        return default
-
-
-def _float_env(name: str, default: float) -> float:
-    try:
-        return float((os.getenv(name) or str(default)).strip())
-    except Exception:
-        return default
-
-
-LLM_PROVIDER = (os.getenv("LLM_PROVIDER", "ollama") or "ollama").strip()  # ollama|openai_compat|none
-LLM_ENDPOINT = (os.getenv("LLM_ENDPOINT", "") or "").strip()
-LLM_MODEL = (os.getenv("LLM_MODEL", "llama3.1:8b-instruct") or "").strip()
-LLM_API_KEY = (os.getenv("LLM_API_KEY", "") or "").strip()
-LLM_MAX_TOKENS = _int_env("LLM_MAX_TOKENS", 1024)
-LLM_TEMPERATURE = _float_env("LLM_TEMPERATURE", 0.2)
-LLM_TIMEOUT_S = _float_env("LLM_TIMEOUT_S", _float_env("LLM_TIMEOUT", 25.0))
-
 # Base URL to call this server's own query endpoints
-FETCH_BASE = (os.getenv("AI_REPORT_FETCH_BASE", "http://127.0.0.1:8000") or "").rstrip("/")
+FETCH_BASE = AI_REPORT_FETCH_BASE
 
 
 def _is_docker() -> bool:
-    try:
-        return os.path.exists("/.dockerenv") or (os.getenv("RUNNING_IN_DOCKER") == "1")
-    except Exception:
-        return False
+    return is_running_in_docker()
 
 
 def _call_openai_compatible(messages: List[Dict[str, str]]) -> str:

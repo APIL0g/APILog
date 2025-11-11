@@ -1,17 +1,107 @@
-"""Application-wide configuration values.
-환경 변수에서 읽어 공통으로 사용하는 설정을 정의합니다.
-"""
-
 from __future__ import annotations
 
 import os
+from typing import Optional
+
+
+def _clean_str(value: Optional[str], default: str = "", *, strip: bool = True) -> str:
+    if value is None:
+        return default
+    if strip:
+        value = value.strip()
+    return value or default
+
+
+def _as_int(value: Optional[str], default: int) -> int:
+    if value is None:
+        return default
+    value = value.strip()
+    if not value:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def _as_float(value: Optional[str], default: float) -> float:
+    if value is None:
+        return default
+    value = value.strip()
+    if not value:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
+def is_running_in_docker() -> bool:
+    """Detect container runtime via well-known markers."""
+    try:
+        return os.path.exists("/.dockerenv") or os.getenv("RUNNING_IN_DOCKER") == "1"
+    except Exception:
+        return False
+
 
 # InfluxDB settings (shared by ingest/plugins)
-INFLUX_URL: str = os.getenv("INFLUX_URL", "http://localhost:8086")
-INFLUX_TOKEN: str = os.getenv("INFLUX_TOKEN", "dev-token")
-INFLUX_ORG: str = os.getenv("INFLUX_ORG", "apilog")
-INFLUX_BUCKET: str = os.getenv("INFLUX_BUCKET", "apilog_raw")
+_raw_influx_url = os.getenv("INFLUX_URL")
+INFLUX_URL: str = _clean_str(_raw_influx_url, "http://influxdb3-core:8181")
+
+_raw_influx_token = os.getenv("INFLUX_TOKEN")
+INFLUX_TOKEN: str = _clean_str(_raw_influx_token, "dev-token")
+
+_raw_influx_database = os.getenv("INFLUX_DATABASE")
+INFLUX_DATABASE: str = _clean_str(_raw_influx_database, "apilog_db")
+
 
 # CORS
-CORS_ALLOW_ORIGIN: str = os.getenv("CORS_ALLOW_ORIGIN", "*")
+_raw_cors = os.getenv("CORS_ALLOW_ORIGIN")
+CORS_ALLOW_ORIGIN: str = _clean_str(_raw_cors, "*")
 
+
+# LLM & AI defaults
+_raw_llm_provider = os.getenv("LLM_PROVIDER")
+LLM_PROVIDER: str = _clean_str(_raw_llm_provider, "ollama")
+
+_raw_llm_endpoint = os.getenv("LLM_ENDPOINT")
+LLM_ENDPOINT: str = _clean_str(_raw_llm_endpoint, "http://ollama:11434").rstrip("/")
+
+_raw_llm_model = os.getenv("LLM_MODEL")
+LLM_MODEL: str = _clean_str(_raw_llm_model, "llama3:8b")
+
+_raw_llm_api_key = os.getenv("LLM_API_KEY")
+LLM_API_KEY: str = _clean_str(_raw_llm_api_key, "")
+
+_raw_llm_max_tokens = os.getenv("LLM_MAX_TOKENS")
+LLM_MAX_TOKENS: int = _as_int(_raw_llm_max_tokens, 1024)
+
+_raw_llm_temperature = os.getenv("LLM_TEMPERATURE")
+LLM_TEMPERATURE: float = _as_float(_raw_llm_temperature, 0.2)
+
+_raw_llm_timeout_s = os.getenv("LLM_TIMEOUT_S")
+LLM_TIMEOUT_S: float = _as_float(_raw_llm_timeout_s, 60.0)
+
+
+# AI cache knobs
+_raw_ai_insights_cache_ttl = os.getenv("AI_INSIGHTS_CACHE_TTL")
+AI_INSIGHTS_CACHE_TTL: float = _as_float(_raw_ai_insights_cache_ttl, 60.0)
+
+_raw_ai_insights_explain_cache_ttl = os.getenv("AI_INSIGHTS_EXPLAIN_CACHE_TTL")
+AI_INSIGHTS_EXPLAIN_CACHE_TTL: int = _as_int(
+    _raw_ai_insights_explain_cache_ttl, 300
+)
+
+
+# AI report internal fetch endpoint
+_raw_ai_report_fetch_base = os.getenv("AI_REPORT_FETCH_BASE")
+AI_REPORT_FETCH_BASE: str = _clean_str(
+    _raw_ai_report_fetch_base, "http://127.0.0.1:8000"
+).rstrip("/")
+
+
+# Misc
+_raw_target_site_base_url = os.getenv("TARGET_SITE_BASE_URL")
+TARGET_SITE_BASE_URL: str = _clean_str(
+    _raw_target_site_base_url, "your-website-url"
+)

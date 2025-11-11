@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 from datetime import datetime, timedelta, timezone
 
 from influxdb_client_3 import InfluxDBClient3
-from config import INFLUX_URL, INFLUX_TOKEN, INFLUX_BUCKET
+from config import INFLUX_DATABASE, INFLUX_URL, INFLUX_TOKEN
 
 
 def get_page_exit_rate(days: int = 7) -> List[Dict[str, Any]]:
@@ -73,7 +73,7 @@ def get_page_exit_rate(days: int = 7) -> List[Dict[str, Any]]:
     ORDER BY exit_rate DESC, views DESC
     """
 
-    client = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_BUCKET)
+    client = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_DATABASE)
     try:
         table = client.query(query=sql_query, language="sql")
         data = table.to_pydict() if table is not None else {}

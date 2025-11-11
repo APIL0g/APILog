@@ -1,20 +1,14 @@
 """Service logic for the By-Page Top Buttons widget.
-Aggregates click counts for a specific page path and time range,
-and provides a helper to list popular page paths for the filter.
+InfluxDB 3(SQL) 기반으로 특정 페이지 경로의 버튼 클릭 상위를 집계합니다.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict, List
 
-try:
-    from influxdb_client_3 import InfluxDBClient3  # type: ignore
-except Exception:  # pragma: no cover
-    InfluxDBClient3 = None  # type: ignore
+from influxdb_client_3 import InfluxDBClient3
 
-from influxdb_client import InfluxDBClient
-
-from config import INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET
+from config import INFLUX_DATABASE, INFLUX_TOKEN, INFLUX_URL
 
 
 def _sanitize_range(range_str: str) -> str:
@@ -23,31 +17,45 @@ def _sanitize_range(range_str: str) -> str:
         return "7d"
     return s
 
+
 def _sanitize_path(path: str) -> str:
     s = (path or "/").strip()
-    # allow slash, underscore, hyphen, alnum; drop others
     safe = "".join(ch for ch in s if ch.isalnum() or ch in {"_", "-", "/"})
     if not safe.startswith("/"):
         safe = "/" + safe
     return safe or "/"
 
-def _is_asset_path(path: str) -> bool:
-    lower = (path or "").lower()
-    # Heuristic: ignore obvious static assets
-    for ext in (".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".map", ".json", ".txt"):
-        if lower.endswith(ext):
-            return True
-    return False
+
+def _result_rows(result: Any) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    if hasattr(result, "iterrows"):
+        for _, series in result.iterrows():  # type: ignore[attr-defined]
+            rows.append(dict(series))
+        return rows
+
+    data: List[Dict[str, Any]] = []
+    if hasattr(result, "to_pylist"):
+        data = result.to_pylist()  # type: ignore[attr-defined]
+    elif hasattr(result, "read_all"):
+        try:
+            table = result.read_all()  # type: ignore[attr-defined]
+            if hasattr(table, "to_pylist"):
+                data = table.to_pylist()  # type: ignore[attr-defined]
+        except Exception:
+            data = []
+    elif isinstance(result, list):
+        data = result
+
+    for entry in data:
+        if isinstance(entry, dict):
+            rows.append(entry)
+    return rows
 
 
 def query_top_buttons_by_path(path: str, range_str: str = "7d", limit: int = 10) -> List[Dict[str, Any]]:
     rng = _sanitize_range(range_str)
     pth = _sanitize_path(path)
-
-    if InfluxDBClient3 is not None:
-        try:
-            with InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_BUCKET) as c3:  # type: ignore
-                sql = f"""
+    sql = f"""
 SELECT element_hash,
        SUM("count")::BIGINT AS cnt
 FROM "events"
@@ -58,78 +66,29 @@ GROUP BY element_hash
 ORDER BY cnt DESC
 LIMIT {int(limit)}
 """
-                res = c3.query(sql)
-
-            rows: List[Dict[str, Any]] = []
-            if hasattr(res, "iterrows"):
-                for _, r in res.iterrows():  # type: ignore[attr-defined]
-                    rows.append({
-                        "path": pth,
-                        "element_text": r.get("element_hash") or "unknown",
-                        "count": int(r.get("cnt") or 0),
-                    })
-            else:
-                data: List[Dict[str, Any]] = []
-                if hasattr(res, "to_pylist"):
-                    data = res.to_pylist()  # type: ignore[attr-defined]
-                elif hasattr(res, "read_all"):
-                    try:
-                        table = res.read_all()  # type: ignore[attr-defined]
-                        if hasattr(table, "to_pylist"):
-                            data = table.to_pylist()  # type: ignore[attr-defined]
-                    except Exception:
-                        data = []
-                elif isinstance(res, list):
-                    data = res
-
-                for r in data:
-                    rows.append({
-                        "path": pth,
-                        "element_text": (r.get("element_hash") if isinstance(r, dict) else None) or "unknown",  # type: ignore
-                        "count": int((r.get("cnt") if isinstance(r, dict) else 0) or 0),  # type: ignore
-                    })
-            return rows
-        except Exception:
-            pass
-
-    # Flux fallback
-    flux = f"""
-from(bucket: "{INFLUX_BUCKET}")
-  |> range(start: -{rng})
-  |> filter(fn: (r) => r._measurement == "events")
-  |> filter(fn: (r) => r.event_name == "click")
-  |> filter(fn: (r) => r.path == "{pth}")
-  |> filter(fn: (r) => r._field == "count")
-  |> group(columns: ["element_hash"])
-  |> sum()
-  |> sort(columns: ["_value"], desc: true)
-  |> limit(n: {int(limit)})
-"""
-    with InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG) as c2:
-        tables = c2.query_api().query(flux)
-
-    rows2: List[Dict[str, Any]] = []
-    for table in tables:
-        for rec in table.records:
-            rows2.append({
+    try:
+        with InfluxDBClient3(
+            host=INFLUX_URL,
+            token=INFLUX_TOKEN,
+            database=INFLUX_DATABASE,
+        ) as client:
+            res = client.query(sql)
+        rows = []
+        for entry in _result_rows(res):
+            rows.append({
                 "path": pth,
-                "element_text": rec.get("element_hash") or "unknown",
-                "count": int(rec.get("_value", 0) or 0),
+                "element_text": entry.get("element_hash") or "unknown",
+                "count": int(entry.get("cnt") or 0),
             })
-    return rows2
+        return rows
+    except Exception:
+        return []
 
 
 def list_page_paths(range_str: str = "7d", limit: int = 50) -> List[Dict[str, Any]]:
-    """Return popular page paths within the time range (based on page_view counts).
-    Filters out obvious asset-like paths.
-    """
+    """Return popular page paths within the time range (based on page_view/click counts)."""
     rng = _sanitize_range(range_str)
-
-    # 1) SQL path (consider both page_view and click so pages with clicks only still appear)
-    if InfluxDBClient3 is not None:
-        try:
-            with InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_BUCKET) as c3:  # type: ignore
-                sql = f"""
+    sql = f"""
 SELECT path,
        SUM("count")::BIGINT AS cnt
 FROM "events"
@@ -139,52 +98,18 @@ GROUP BY path
 ORDER BY cnt DESC
 LIMIT {int(limit)}
 """
-                res = c3.query(sql)
+    try:
+        with InfluxDBClient3(
+            host=INFLUX_URL,
+            token=INFLUX_TOKEN,
+            database=INFLUX_DATABASE,
+        ) as client:
+            res = client.query(sql)
 
-            items: List[Dict[str, Any]] = []
-            if hasattr(res, "iterrows"):
-                for _, r in res.iterrows():  # type: ignore[attr-defined]
-                    p = r.get("path") or "/"
-                    items.append({"path": str(p), "count": int(r.get("cnt") or 0)})
-            else:
-                data: List[Dict[str, Any]] = []
-                if hasattr(res, "to_pylist"):
-                    data = res.to_pylist()  # type: ignore[attr-defined]
-                elif hasattr(res, "read_all"):
-                    try:
-                        table = res.read_all()  # type: ignore[attr-defined]
-                        if hasattr(table, "to_pylist"):
-                            data = table.to_pylist()  # type: ignore[attr-defined]
-                    except Exception:
-                        data = []
-                elif isinstance(res, list):
-                    data = res
-
-                for r in data:
-                    p = (r.get("path") if isinstance(r, dict) else "/") or "/"  # type: ignore
-                    items.append({"path": str(p), "count": int((r.get("cnt") if isinstance(r, dict) else 0) or 0)})  # type: ignore
-            return items
-        except Exception:
-            pass
-
-    # 2) Flux fallback (page_view or click)
-    flux = f"""
-from(bucket: "{INFLUX_BUCKET}")
-  |> range(start: -{rng})
-  |> filter(fn: (r) => r._measurement == "events")
-  |> filter(fn: (r) => r.event_name == "page_view" or r.event_name == "click")
-  |> filter(fn: (r) => r._field == "count")
-  |> group(columns: ["path"]) 
-  |> sum()
-  |> sort(columns: ["_value"], desc: true)
-  |> limit(n: {int(limit)})
-"""
-    with InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG) as c2:
-        tables = c2.query_api().query(flux)
-
-    items2: List[Dict[str, Any]] = []
-    for table in tables:
-        for rec in table.records:
-            p = rec.get("path") or "/"
-            items2.append({"path": str(p), "count": int(rec.get("_value", 0) or 0)})
-    return items2
+        items: List[Dict[str, Any]] = []
+        for entry in _result_rows(res):
+            path_value = entry.get("path") or "/"
+            items.append({"path": str(path_value), "count": int(entry.get("cnt") or 0)})
+        return items
+    except Exception:
+        return []
