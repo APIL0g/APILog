@@ -8,16 +8,14 @@ Country Share 위젯 서비스 로직.
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
-import os
 
-from influxdb_client_3 import InfluxDBClient3  # InfluxDB 3 전용 클라이언트
+from influxdb_client_3 import InfluxDBClient3  # InfluxDB 3 코어 SQL 클라이언트
 
-from config import INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET
-
-# InfluxDB 3 Core 기준: bucket ≒ database
-INFLUX_DATABASE = os.getenv("INFLUX_DATABASE", INFLUX_BUCKET)
-INFLUX_AUTH_SCHEME = os.getenv("INFLUX_AUTH_SCHEME", "Bearer")  # without-auth면 아무 문자열이어도 무시됨
-
+from config import (
+    INFLUX_TOKEN,
+    INFLUX_URL,
+    INFLUX_DATABASE,
+)
 
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
@@ -88,9 +86,7 @@ def query_country_share(range_str: str = "7d", top: int = 5) -> Dict[str, Any]:
     client = InfluxDBClient3(
         host=INFLUX_URL,            # 예: "http://influxdb3-core:8181"
         token=INFLUX_TOKEN or "",   # without-auth면 그냥 dummy 값
-        org=INFLUX_ORG or "",
         database=INFLUX_DATABASE,
-        auth_scheme=INFLUX_AUTH_SCHEME,
     )
 
     try:

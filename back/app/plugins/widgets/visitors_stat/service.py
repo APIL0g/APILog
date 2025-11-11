@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from influxdb_client_3 import InfluxDBClient3  # type: ignore
 
-from config import INFLUX_URL, INFLUX_TOKEN, INFLUX_BUCKET
+from config import INFLUX_DATABASE, INFLUX_URL, INFLUX_TOKEN
 
 # Module level cache. Keyed by (date_iso, site_id or "").
 _CACHE: Dict[Tuple[str, str], Dict[str, Any]] = {}
@@ -121,7 +121,7 @@ def _query_influx(target_date: date, site_id: Optional[str]) -> Dict[str, Any]:
     start_iso = _iso_utc(start)
     end_iso = _iso_utc(end)
 
-    client = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_BUCKET)
+    client = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_DATABASE)
 
     where_clause = _build_where(site_id)
 

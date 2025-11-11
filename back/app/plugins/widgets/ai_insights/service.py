@@ -4,35 +4,23 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 import re
 
-import os
 import math
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 환경설정
-# ──────────────────────────────────────────────────────────────────────────────
-try:
-    from back.app.config import (
-        INFLUX_URL,
-        INFLUX_ADMIN_TOKEN,
-        INFLUX_ORG,
-        INFLUX_DATABASE,
-    )
-except Exception:
-    INFLUX_URL = os.getenv("INFLUX_URL", "http://localhost:8181")
-    INFLUX_ADMIN_TOKEN = os.getenv("INFLUX_ADMIN_TOKEN") or os.getenv("INFLUX_TOKEN", "")
-    INFLUX_ORG = os.getenv("INFLUX_ORG", "apilog")
-    INFLUX_DATABASE = os.getenv("INFLUX_DATABASE", "apilog_db")
+from config import (
+    AI_INSIGHTS_CACHE_TTL,
+    INFLUX_TOKEN,
+    INFLUX_URL,
+    INFLUX_DATABASE,
+)
 
-log = logging.getLogger("ai_insights")
-
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------
 # 간단 캐시 (in-proc)
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------
 _cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
-_TTL = float(os.getenv("AI_INSIGHTS_CACHE_TTL", "60"))
+_TTL = AI_INSIGHTS_CACHE_TTL
 
 def _cache_get(key: str):
     v = _cache.get(key)
@@ -59,8 +47,7 @@ def _get_sql_client():
     from influxdb_client_3 import InfluxDBClient3
     _sql_client = InfluxDBClient3(
         host=INFLUX_URL,
-        token=INFLUX_ADMIN_TOKEN,
-        org=INFLUX_ORG,
+        token=INFLUX_TOKEN,
         database=INFLUX_DATABASE,
     )
     return _sql_client

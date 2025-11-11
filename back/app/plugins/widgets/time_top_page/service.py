@@ -11,7 +11,7 @@ from datetime import datetime
 
 from influxdb_client_3 import InfluxDBClient3  # type: ignore
 
-from config import INFLUX_URL, INFLUX_TOKEN, INFLUX_BUCKET
+from config import INFLUX_DATABASE, INFLUX_URL, INFLUX_TOKEN
 
 
 def get_time_top_pages(
@@ -47,7 +47,7 @@ def get_time_top_pages(
     hours = max(1, int(hours))
     limit = max(1, int(limit))
 
-    client = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_BUCKET)
+    client = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_DATABASE)
 
     sql_query = f"""
     SELECT
