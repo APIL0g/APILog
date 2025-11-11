@@ -672,6 +672,10 @@ export default function DashboardPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              <Button variant="default" size="sm" onClick={() => (globalThis.location.hash = '#/ai-report')}>
+                AI Report
+              </Button>
+
               {hasUnsavedChanges && (
                 <Badge variant="secondary" className="uppercase tracking-wide">
                   Unsaved
