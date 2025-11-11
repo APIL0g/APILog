@@ -32,7 +32,7 @@ def _encode_key_to_filename(key: str) -> str:
     # 패딩(=)을 제거한 문자열 반환
     b64_string = b64_bytes.decode('utf-8').rstrip('=')
     
-    return f"{b64_string}.jpg" # 예: bWFpbjo6L2NhcnQ6OmRlc2t0b3A.webp
+    return f"{b64_string}.webp" # 예: bWFpbjo6L2NhcnQ6OmRlc2t0b3A.webp
 
 def get_snapshot_filepath(site_id: str, page_url: str, device_type: str) -> str:
     """
