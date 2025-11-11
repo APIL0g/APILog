@@ -1,61 +1,135 @@
-﻿# ApiLog 분석 플랫폼
+<p align="center">
+  <img src="./public/media/apilog-logo-ko.png" alt="ApiLog 로고">
+</p>
 
-![Static Badge](https://img.shields.io/badge/license-MIT-green)
+<h1 align="center">ApiLog</h1>
 
+<p align="center">
+  <i>ApiLog 하나로 인사이트를 직접 소유하세요—드롭인 트래킹, 드래그앤드롭 대시보드, 프라이버시 우선 분석을 제품 옆에서 바로 돌릴 수 있습니다.</i>
+</p>
 
-## 개요
-- FastAPI로 이벤트를 수집하고 InfluxDB에 저장하는 경량 분석 파이프라인입니다.
-- Rollup + TypeScript 기반의 수집기 SDK가 브라우저 행동을 기록하고 임베드 가능한 로더를 제공합니다.
-- React + Vite 대시보드는 집계된 지표를 시각화하기 위한 시작점을 제공합니다.
+<p align="center">
+  <a href="README.md">English</a> |
+  <a href="README.ko.md"><strong>한국어</strong></a>
+</p>
 
-## 아키텍처
-- **백엔드**: back/apps/api가 수집(/api/ingest/events)과 리포트(/api/query/top-pages) 엔드포인트를 노출합니다.
-- **수집기**: front/apps/collector-js는 ESM SDK, 임베드 로더, IIFE 런타임을 번들링합니다.
-- **대시보드**: front/apps/dashboard는 API 데이터를 소비하는 Vite 기반 React 앱입니다.
-- **엣지**: infra/nginx가 대시보드와 수집기 번들을 제공하고 API 호출을 역프록시합니다.
+<p align="center">
+  <a href="https://apilog.kr" target="_blank" rel="noopener">apilog.kr</a> — 프로젝트 소개 마이크로사이트 &nbsp;•&nbsp;
+  <a href="https://demo.apilog.kr" target="_blank" rel="noopener">demo.apilog.kr</a> — 대시보드 데모
+</p>
 
-## 시작하기
-1. 의존성 설치
-   ```bash
-   git clone https://github.com/APIL0g/APILog.git
-   cd APILog
-   npm install
-   pip install -r back/apps/api/requirements.txt
-   ```
-2. 스택 실행
-   ```bash
-   docker compose up --build
-   ```
-3. <http://localhost:8080>에서 대시보드를 확인하고 <http://localhost:8080/api/health>로 API 상태를 점검합니다.
+---
 
-## 개발 워크플로
-- front/apps/collector-js: 
-pm run dev로 Rollup 감시 모드를, 
-pm run build로 배포 번들을 실행합니다.
-- front/apps/dashboard: 
-pm run dev로 UI를 개발하고 
-pm run build로 nginx용 정적 자산을 만듭니다.
-- back/apps/api: uvicorn app.main:app --reload --port 8000으로 로컬 FastAPI 서버를 실행합니다.
+## 🧭 프로덕트 둘러보기
 
-## 테스트와 품질
-- 백엔드: back/apps/api/tests 아래에 pytest 스위트를 추가하고 pytest를 실행합니다.
-- 수집기 & 대시보드: 
-pm run lint(구성된 경우) 등으로 린트하고 선호하는 러너로 컴포넌트 테스트를 추가합니다.
-- 인프라: docker compose up --build로 배포 이미지를 로컬에서 검증합니다.
+<p align="center">
+  <img src="./public/media/apilog-dashboard.gif" alt="ApiLog 대시보드 미리보기" width="820">
+</p>
 
-## 프로젝트 구조
-```
-back/
-  apps/api/            # FastAPI 서비스 및 Influx 헬퍼
-front/
-  apps/collector-js/   # 브라우저 수집기 SDK
-  apps/dashboard/      # React 대시보드 스캐폴드
-infra/
-  nginx/               # 멀티 스테이지 nginx 빌드와 설정
+- [apilog.kr](https://apilog.kr)에서는 프로젝트 철학, 아키텍처, 온보딩 절차를 한눈에 볼 수 있습니다.
+- [demo.apilog.kr](https://demo.apilog.kr)은 샘플 워크스페이스와 연결되어 있어 별도 설정 없이 포틀릿과 프리셋을 체험할 수 있습니다.
+
+---
+
+## 🚀 시작하기
+
+시작에 대한 자세한 내용은 [apilog.kr/docs](https://apilog.kr/docs)를 방문하세요.
+
+---
+
+## 🛠 소스에서 설치
+
+### 요구 사항
+
+- Docker & Docker Compose (전체 스택 실행 권장)
+
+### 1. 소스 코드 받기
+
+```bash
+git clone https://github.com/APIL0g/APILog.git
+cd APILog
 ```
 
-## 라이선스
-- ApiLog는 MIT 라이선스에 따라 배포됩니다. [LICENSE](LICENSE)를 참조하세요.
+### 2. ApiLog 환경 설정
 
-## 기여를 하고 싶다면
-- ApiLog는 적극적인 기여를 환영합니다. [기여 방법](CONTRIBUTING.ko.md) 문서에 따라서 기여해주시기 바랍니다.
+리포지터리 루트에서 `.env.example`을 `.env`로 복사한 뒤 값을 원하는 대로 조정하세요.
+
+```bash
+cp .env.example .env
+```
+
+아래 내용은 `.env.example` 파일을 그대로 가져온 것입니다. 기본값이 바뀌면 `.env.example`만 수정하고 다시 복사하면 문서와 환경이 함께 업데이트됩니다.
+
+```ini
+# 이 파일을 .env로 이름을 바꾸고 환경에 맞게 변수를 수정하세요.
+
+# InfluxDB 설정
+INFLUX_USERNAME=username
+INFLUX_PASSWORD=password
+INFLUX_ORG=your_organization
+INFLUX_DATABASE=your-database-name
+INFLUX_ADMIN_TOKEN=replace-it-with-a-complicated-random-string
+
+# CORS 허용 목록(쉼표로 구분하거나 * 사용)
+CORS_ALLOW_ORIGIN=*
+
+# apilog-api가 InfluxDB에 접속할 내부 URL
+INFLUX_URL=http://influxdb3-core:8181
+
+# LLM (Ollama) 설정
+LLM_PROVIDER=ollama
+# apilog-api가 Ollama 컨테이너에 접근할 수 있도록 Docker 서비스 이름 사용
+LLM_ENDPOINT=http://ollama:11434
+# 공백 없는 모델 태그
+LLM_MODEL=llama3:8b
+LLM_TEMPERATURE=0.2
+LLM_TIMEOUT_S=60
+# 테스트 중에는 인사이트 캐시를 비활성화 (0 = 끔)
+AI_INSIGHTS_EXPLAIN_CACHE_TTL=0
+```
+
+### 3. 애플리케이션 시작
+
+```bash
+docker compose up -d --build
+```
+
+_기본값으로 `http://<Public IP 주소>:8080`(또는 개발 환경에서는 `localhost`)에서 대시보드에 접속할 수 있습니다._
+
+> ⚠️ **외부 접속 주의**  
+> 대시보드를 인터넷에 연 경우 `CORS_ALLOW_ORIGIN`과 보안 그룹(방화벽)에서 허용할 IP/도메인만 열어 두세요. 신뢰하지 않는 주소를 모두 허용하면 데이터가 노출될 수 있습니다.
+
+### 4. 추적 스니펫 삽입
+
+`index.html`의 `<head>` 영역에 아래 로더를 추가하면 ApiLog가 즉시 이벤트를 수집할 수 있습니다.
+
+```html
+<!-- Add this to your website's <head> section -->
+<script
+  src="http://<Public IP or Domain>:8080/apilog/embed.js"
+  data-site-id="main"
+  data-ingest-url="http://<Public IP or Domain>:8080/api/ingest/events"
+  strategy="beforeInteractive"
+></script>
+```
+
+---
+
+## 🔄 업데이트하기
+
+소스 코드를 최신화하고 다시 빌드하려면:
+
+```bash
+git pull
+docker compose up --force-recreate -d --build
+```
+
+---
+
+## 📚 참고 자료
+
+- **문서** — 자세한 설정과 FAQ는 [apilog.kr/docs](https://apilog.kr/docs)에서 확인하세요.
+- **데모 초기화** — `docker compose down -v`로 Influx 볼륨을 지우고 언제든 새로 시작할 수 있습니다.
+- **기여 안내** — PR 전에 [CONTRIBUTING.md](CONTRIBUTING.md)를 꼭 읽어 주세요.
+- **라이선스** — 프로젝트는 [MIT](LICENSE)로 배포되며 상업적 활용도 허용됩니다.
+---
