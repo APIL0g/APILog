@@ -7,11 +7,12 @@ import os
 import json
 import hashlib
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 
 import httpx
 from cachetools import TTLCache
+from fastapi import HTTPException
 
 log = logging.getLogger("ai_insights")
 
@@ -97,7 +98,87 @@ def _is_docker() -> bool:
         return os.path.exists("/.dockerenv") or (os.getenv("RUNNING_IN_DOCKER") == "1")
     except Exception:
         return False
-
+# ---- Error-to-status mapping (Ollama) ----
+def _ollama_status_from_exception(exc: Exception) -> Tuple[Optional[str], Optional[str]]:
+    """Map exceptions from Ollama calls to user-friendly status messages.
+    Returns (code, message) or (None, None) if not a recognized Ollama status.
+    """
+    try:
+        msg = (str(exc) or "").lower()
+    except Exception:
+        msg = ""
+    # Connection issues
+    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout)):
+        # Some transient disconnects happen while models are being prepared
+        if "disconnect" in msg or "disconnected" in msg:
+            return (
+                "model_downloading",
+                "모델을 다운로드 중입니다. 잠시 후 다시 시도해주세요.",
+            )
+        return (
+            "ollama_unreachable",
+            "AI 백엔드(Ollama)에 연결할 수 없습니다. Docker/Ollama 상태를 확인해주세요.",
+        )
+    # HTTP status specific handling
+    if isinstance(exc, httpx.HTTPStatusError):
+        try:
+            status = exc.response.status_code
+            body = (exc.response.text or "").lower()
+        except Exception:
+            status = None
+            body = msg
+        # 404: model not found
+        if status == 404 or "model not found" in body or "no such model" in body or "unknown model" in body:
+            return (
+                "model_not_found",
+                f"모델을 찾을 수 없습니다: {LLM_MODEL}. 먼저 모델을 다운로드 해주세요.",
+            )
+        # 503/5xx with pulling/downloading indicators
+        if (status == 503 or (status and 500 <= status < 600)) or (
+            "pull" in body or "downloading" in body or "waiting for model" in body or "model is downloading" in body
+        ):
+            return (
+                "model_downloading",
+                "모델을 다운로드 중입니다. 잠시 후 다시 시도해주세요.",
+            )
+    # Heuristic fallback by message
+    if "model not found" in msg or "no such model" in msg or "unknown model" in msg:
+        return (
+            "model_not_found",
+            f"모델을 찾을 수 없습니다: {LLM_MODEL}. 먼저 모델을 다운로드 해주세요.",
+        )
+    if (
+        "pull" in msg
+        or "downloading" in msg
+        or "waiting for model" in msg
+        or "model is downloading" in msg
+        or "disconnect" in msg
+        or "disconnected" in msg
+    ):
+        return (
+            "model_downloading",
+            "모델을 다운로드 중입니다. 잠시 후 다시 시도해주세요.",
+        )
+    return (None, None)
+def _status_insight(message: str, code: str) -> Dict[str, Any]:
+    """Build a response that surfaces status to the UI as an insight item.
+    The front-end renders items under `insights`, so we place a single, low-severity
+    item with the message in `explanation` to ensure the user sees it.
+    """
+    return {
+        "generated_at": _now_iso(),
+        "insights": [
+            {
+                "title": "AI 모델 상태",
+                "severity": "low",
+                "explanation": message,
+                "action": "모델 준비 완료 후 다시 시도해주세요.",
+                "metric_refs": [],
+                "evidence": {},
+            }
+        ],
+        "meta": {"fallback": code, "provider": LLM_PROVIDER, "model": LLM_MODEL},
+    }
 
 # ---- Rule fallback (minimal insights) ----
 def _rule_based_insights(digest: Dict[str, Any]) -> Dict[str, Any]:
@@ -301,6 +382,38 @@ def generate_insights(digest: Dict[str, Any], language: str, word_limit: int, au
             log.exception("[ai] LLM insights generation failed")
         except Exception:
             pass
+        # For Ollama, return HTTP error codes to the client
+        if LLM_PROVIDER == "ollama":
+            code, user_msg = _ollama_status_from_exception(e)
+            if code and user_msg:
+                status_map = {
+                    "model_not_found": 404,
+                    "model_downloading": 503,
+                    "ollama_unreachable": 503,
+                }
+                status_code = status_map.get(code, 502)
+                detail = {
+                    "code": code,
+                    "message": user_msg,
+                    "provider": LLM_PROVIDER,
+                    "model": LLM_MODEL,
+                }
+                try:
+                    detail["error"] = str(e)[:500]
+                except Exception:
+                    pass
+                raise HTTPException(status_code=status_code, detail=detail)
+            # Unknown Ollama error: propagate as 502 Bad Gateway
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "Loading",
+                    "message": "The ollama service is now loading. Please try again later.",
+                    "provider": LLM_PROVIDER,
+                    "model": LLM_MODEL,
+                },
+            )
+        # Fallback: keep previous minimal rule-based insights
         result = _rule_based_insights(digest)
         result["meta"]["fallback"] = "llm_error"
         try:
