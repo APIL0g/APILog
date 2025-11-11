@@ -1,5 +1,7 @@
 import type { Digest, InsightsResp } from "./types";
 
+export type ApiError = Error & { status: number; code?: string; info?: any };
+
 const API_BASE = ""; // 동일 오리진 프록시(/api/*) 경유
 
 function rangeToParams(r?: string) {
@@ -44,6 +46,19 @@ export async function explain(body: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    let detail: any = undefined;
+    try {
+      const data = await res.json();
+      detail = data?.detail ?? data;
+    } catch {}
+    const msg = (detail && (detail.message || detail.detail)) || `HTTP ${res.status}`;
+    const err: ApiError = Object.assign(new Error(msg), {
+      status: res.status,
+      code: detail?.code,
+      info: detail,
+    });
+    throw err;
+  }
   return await res.json();
 }
