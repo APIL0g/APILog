@@ -86,7 +86,7 @@ services:
 
       # AI widgets' knobs (cache/internal API/snapshot target)
       # AI 위젯 설정 (캐시/내부 API/스냅샷 대상)
-      LAI_INSIGHTS_CACHE_TTL: ${AI_INSIGHTS_CACHE_TTL}
+      AI_INSIGHTS_CACHE_TTL: ${AI_INSIGHTS_CACHE_TTL}
       AI_INSIGHTS_EXPLAIN_CACHE_TTL: ${AI_INSIGHTS_EXPLAIN_CACHE_TTL}
       AI_REPORT_FETCH_BASE: ${AI_REPORT_FETCH_BASE}
       TARGET_SITE_BASE_URL: ${TARGET_SITE_BASE_URL}
