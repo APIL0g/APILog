@@ -497,6 +497,7 @@
     q: BatchQueue;
     countryCode: string;
     userHash: string;
+    activePath: string;
 
     constructor(opts: CollectorOpts) {
       this.opts = opts;
@@ -507,6 +508,7 @@
       this.q = new BatchQueue(opts.ingestUrl);
       this.countryCode = COUNTRY_DEFAULT;
       this.userHash = getOrCreateUserHash();
+      this.activePath = this.currentPath();
 
       const pendingCountry = requestCountryCode();
       if (pendingCountry) {
@@ -565,8 +567,9 @@
 
       // BEFOREUNLOAD
       window.addEventListener("beforeunload", () => {
-        this.emitScrollDepth();
-        this.emitDwell();
+        const path = this.activePath || this.currentPath();
+        this.emitScrollDepth(path);
+        this.emitDwell(path);
 
         this.q.flush(true);
         this.destroyed = true;
@@ -578,9 +581,10 @@
       const self = this;
 
       function onRouteChange() {
+        const prevPath = self.activePath || self.currentPath();
         try {
-          self.emitScrollDepth();
-          self.emitDwell();
+          self.emitScrollDepth(prevPath);
+          self.emitDwell(prevPath);
           self.q.flush(false);
         } catch {}
 
@@ -615,17 +619,20 @@
       window.addEventListener("hashchange", onRouteChange);
     }
 
-    baseTags(eventName: string, elementHash: string | null) {
+    currentPath(): string {
+      const base = normalizePath(location.pathname);
+      const hash = location.hash || "";
+      if (hash.startsWith("#/")) {
+        return hash.slice(1).split("?")[0];
+      }
+      return base;
+    }
+
+    baseTags(eventName: string, elementHash: string | null, overridePath?: string) {
+      const path = overridePath ?? this.activePath ?? this.currentPath();
       return {
         site_id: this.opts.siteId,
-        path: (() => {
-          const base = normalizePath(location.pathname);
-          const h = location.hash || "";
-          if (h.startsWith("#/")) {
-            return h.slice(1).split("?")[0];
-          }
-          return base;
-        })(),
+        path,
         page_variant: this.opts.pageVariant || "default",
         event_name: eventName,
         element_hash: elementHash || null,
@@ -671,9 +678,12 @@
     }
 
     emitPageView() {
+      const path = this.currentPath();
+      this.activePath = path;
+
       const rec = Object.assign(
         {},
-        this.baseTags("page_view", null),
+        this.baseTags("page_view", null, path),
         this.baseFields(),
         {
           dwell_ms: 0,
@@ -707,12 +717,12 @@
       this.pushRecord(rec);
     }
 
-    emitScrollDepth() {
+    emitScrollDepth(pathOverride?: string) {
       const pct = this.maxScrollSeen;
 
       const rec = Object.assign(
         {},
-        this.baseTags("scroll", null),
+        this.baseTags("scroll", null, pathOverride),
         this.baseFields(),
         {
           scroll_pct: pct,
@@ -723,12 +733,12 @@
       this.pushRecord(rec);
     }
 
-    emitDwell() {
+    emitDwell(pathOverride?: string) {
       const dur = now() - this.startTime;
 
       const rec = Object.assign(
         {},
-        this.baseTags("page_view_dwell", null),
+        this.baseTags("page_view_dwell", null, pathOverride),
         this.baseFields(),
         {
           dwell_ms: dur,
