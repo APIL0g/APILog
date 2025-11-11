@@ -152,10 +152,12 @@
 
   function detectBrowserFamily(): string {
     const ua = navigator.userAgent;
-    if (ua.indexOf("Chrome") !== -1) return "Chrome";
-    if (ua.indexOf("Safari") !== -1) return "Safari";
-    if (ua.indexOf("Firefox") !== -1) return "Firefox";
-    if (ua.indexOf("Edg") !== -1 || ua.indexOf("Edge") !== -1) return "Edge";
+    if (/Edg|Edge/i.test(ua)) return "Edge";
+    if (/OPR|Opera/i.test(ua)) return "Opera";
+    if (/Whale/i.test(ua)) return "Whale";
+    if (/Firefox/i.test(ua)) return "Firefox";
+    if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) return "Safari";
+    if (/Chrome/i.test(ua)) return "Chrome";
     return "Other";
   }
 
