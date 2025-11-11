@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
+import { getCommonWidgetCopy } from "../i18n"
+import { getDwellTimeCopy } from "./locales"
 
 type Row = { path: string; avgSeconds: number; sessions?: number }
 
@@ -41,9 +43,11 @@ function formatDuration(totalSeconds: number) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
 }
 
-export default function DwellTimeWidget({ timeRange }: WidgetProps) {
+export default function DwellTimeWidget({ timeRange, language }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const common = getCommonWidgetCopy(language)
+  const copy = getDwellTimeCopy(language)
 
   useEffect(() => {
     let active = true
@@ -74,17 +78,17 @@ export default function DwellTimeWidget({ timeRange }: WidgetProps) {
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
-        <CardTitle>Top Pages by Average Dwell Time</CardTitle>
+        <CardTitle>{copy.title}</CardTitle>
       </CardHeader>
       <CardContent className="pt-2">
         <div className="mb-2 flex items-center justify-between text-sm font-semibold text-foreground">
-          <span>Page</span>
-          <span>Avg Time</span>
+          <span>{copy.pageColumn}</span>
+          <span>{copy.avgTimeColumn}</span>
         </div>
 
-        {error && <div className="text-sm text-red-500">Error: {error}</div>}
-        {!error && rows === null && <div className="text-sm text-muted-foreground">Loading...</div>}
-        {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">No data</div>}
+        {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
+        {!error && rows === null && <div className="text-sm text-muted-foreground">{common.loading}</div>}
+        {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">{common.noData}</div>}
         {!error && rows && rows.length > 0 && (
           <div className="divide-y">
             {topSorted.map((r, idx) => (

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
+import { getCommonWidgetCopy } from "../i18n"
+import { getTimeTopPagesCopy } from "./locales"
 
 type Row = { path: string; total_views: number }
 type Bucket = { bucket: string; rows: Row[] }
@@ -27,12 +29,14 @@ function formatBucketLabel(b: string): string {
   return t.slice(0, 16)
 }
 
-export default function TimeTopPagesWidget({}: WidgetProps) {
+export default function TimeTopPagesWidget({ language }: WidgetProps) {
   const [bucket, setBucket] = useState<"6h" | "12h">("6h")
   const [hours, setHours] = useState<number>(24)
   const [limit] = useState<number>(5)
   const [buckets, setBuckets] = useState<Bucket[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const common = getCommonWidgetCopy(language)
+  const copy = getTimeTopPagesCopy(language)
 
   useEffect(() => {
     let alive = true
@@ -50,7 +54,7 @@ export default function TimeTopPagesWidget({}: WidgetProps) {
     <>
       <CardHeader className="mb-2 md:mb-3">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle>Time Top Pages</CardTitle>
+          <CardTitle>{copy.title}</CardTitle>
           <div className="flex items-center gap-2">
             <div className="inline-flex rounded border overflow-hidden">
               <button
@@ -66,7 +70,7 @@ export default function TimeTopPagesWidget({}: WidgetProps) {
               className="px-2 py-1 text-sm rounded border bg-background"
               value={hours}
               onChange={(e) => setHours(parseInt(e.target.value) || 24)}
-              title="Lookback Hours"
+              title={copy.lookbackLabel}
             >
               <option value={24}>24h</option>
               <option value={48}>48h</option>
@@ -76,17 +80,17 @@ export default function TimeTopPagesWidget({}: WidgetProps) {
         </div>
       </CardHeader>
       <CardContent className="pt-3 md:pt-4 space-y-4" style={{ maxHeight: 360, overflowY: 'auto' }}>
-        {error && <div className="text-sm text-red-500">Error: {error}</div>}
-        {!buckets && !error && <div className="text-sm text-muted-foreground">Loading...</div>}
+        {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
+        {!buckets && !error && <div className="text-sm text-muted-foreground">{common.loading}</div>}
         {buckets && !hasData && (
-          <div className="text-sm text-muted-foreground">No data</div>
+          <div className="text-sm text-muted-foreground">{common.noData}</div>
         )}
         {buckets && hasData && (
           <div className="space-y-4">
             {buckets.map((bk, i) => (
               <div key={`${bk.bucket}-${i}`} className="rounded-md border">
                 <div className="px-3 py-2 text-xs text-muted-foreground border-b">
-                  Bucket: {formatBucketLabel(bk.bucket)}
+                  {copy.bucketLabelPrefix}: {formatBucketLabel(bk.bucket)}
                 </div>
                 <div className="divide-y">
                   {bk.rows.slice(0, limit).map((r, idx) => (
