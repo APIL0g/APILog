@@ -63,7 +63,7 @@ function AiInsightsWidget({ timeRange }: WidgetProps) {
             onClick={onExplain}
             disabled={!digest || loading}
           >
-            설명 생성
+            Generate
           </button>
         </div>
 
