@@ -10,6 +10,8 @@ import {
   CartesianGrid,
   LabelList,
 } from "@/lib/recharts"
+import { getCommonWidgetCopy } from "../i18n"
+import { getTopPagesCopy } from "./locales"
 
 type Row = { path: string; total_views: number }
 
@@ -43,10 +45,12 @@ async function fetchTopPages(limit = 5): Promise<Row[]> {
 }
 
 // 메인 컴포넌트
-export default function TopPagesWidget({ timeRange }: WidgetProps) {
+export default function TopPagesWidget({ timeRange, language }: WidgetProps) {
   // API 응답 데이터
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const common = getCommonWidgetCopy(language)
+  const copy = getTopPagesCopy(language)
   
   // timeRange 변경될 때마다 데이터 재조회
   useEffect(() => {
@@ -90,16 +94,16 @@ export default function TopPagesWidget({ timeRange }: WidgetProps) {
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
-        <CardTitle>Top Pages (Top 5)</CardTitle>
+        <CardTitle>{copy.title}</CardTitle>
       </CardHeader>
       <CardContent className="pt-3 md:pt-4" style={{ height: 320 }}>
         {/* 에러 상태 */}
-        {error && <div className="text-sm text-red-500">Error: {error}</div>}
+        {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
         {/* 로딩 상태 */}
-        {!rows && !error && <div className="text-sm text-muted-foreground">Loading...</div>}
+        {!rows && !error && <div className="text-sm text-muted-foreground">{common.loading}</div>}
         {/* 데이터 없음 */}
         {rows && rows.length === 0 && (
-          <div className="text-sm text-muted-foreground">No data</div>
+          <div className="text-sm text-muted-foreground">{common.noData}</div>
         )}
         {/* 차트 렌더링 */}
         {rows && rows.length > 0 && (

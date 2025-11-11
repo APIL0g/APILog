@@ -11,6 +11,8 @@ import {
   Tooltip as RechartsTooltip,
 } from "@/lib/recharts"
 import type { TooltipProps } from "recharts"
+import { getCommonWidgetCopy } from "../i18n"
+import { getVisitorsStatCopy } from "./locales"
 
 interface VisitorHistoryEntry {
   date: string
@@ -127,9 +129,11 @@ function formatDisplayDate(value?: string): string | undefined {
   }).format(parsed)
 }
 
-export default function VisitorStatWidget({ timeRange, config }: WidgetProps) {
+export default function VisitorStatWidget({ timeRange, config, language }: WidgetProps) {
   const [data, setData] = useState<VisitorStatResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const common = getCommonWidgetCopy(language)
+  const copy = getVisitorsStatCopy(language)
 
   const typedConfig = config as { date?: string; siteId?: string; site_id?: string } | undefined
   const configuredDate = typedConfig?.date
@@ -175,7 +179,7 @@ export default function VisitorStatWidget({ timeRange, config }: WidgetProps) {
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
-        <CardTitle>Visitor Overview</CardTitle>
+        <CardTitle>{copy.title}</CardTitle>
         {data?.date && (
           <div className="text-xs text-muted-foreground md:text-sm">
             {displayDate ?? data.date}
@@ -183,22 +187,22 @@ export default function VisitorStatWidget({ timeRange, config }: WidgetProps) {
         )}
       </CardHeader>
       <CardContent className="pt-3 md:pt-4">
-        {error && <div className="text-sm text-red-500">Error: {error}</div>}
-        {!data && !error && <div className="text-sm text-muted-foreground">Loading...</div>}
+        {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
+        {!data && !error && <div className="text-sm text-muted-foreground">{common.loading}</div>}
         {data && (
           <>
             <div className="grid gap-3 sm:grid-cols-3">
-              <Metric label="Total Visitors" value={formatNumber(data.total_visitors)} helper="" />
+              <Metric label={copy.metrics.total} value={formatNumber(data.total_visitors)} helper="" />
               <Metric
-                label="Returning Visitors"
+                label={copy.metrics.returning}
                 value={formatNumber(returningVisitors)}
                 helper=""
               />
-              <Metric label="New Visitors" value={formatNumber(data.new_visitors)} helper="" />
+              <Metric label={copy.metrics.new} value={formatNumber(data.new_visitors)} helper="" />
             </div>
             <div className="mt-6 h-64">
               {chartData.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No historical data</div>
+                <div className="text-sm text-muted-foreground">{copy.noHistory}</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
@@ -220,9 +224,9 @@ export default function VisitorStatWidget({ timeRange, config }: WidgetProps) {
                       allowDecimals={false}
                     />
                     <RechartsTooltip content={<HistoryTooltip />} />
-                    <Line type="monotone" dataKey="total" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 3 }} name="Total Visitors" />
-                    <Line type="monotone" dataKey="returning" stroke="var(--chart-2)" strokeWidth={2} dot={{ r: 3 }} name="Returning Visitors" />
-                    <Line type="monotone" dataKey="new" stroke="var(--chart-3)" strokeWidth={2} dot={{ r: 3 }} name="New Visitors" />
+                    <Line type="monotone" dataKey="total" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 3 }} name={copy.metrics.total} />
+                    <Line type="monotone" dataKey="returning" stroke="var(--chart-2)" strokeWidth={2} dot={{ r: 3 }} name={copy.metrics.returning} />
+                    <Line type="monotone" dataKey="new" stroke="var(--chart-3)" strokeWidth={2} dot={{ r: 3 }} name={copy.metrics.new} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -263,12 +267,6 @@ function HistoryTooltip({ active, payload }: TooltipProps<number, string>) {
     })
     .filter((item) => item.key)
 
-  const labelMap: Record<string, string> = {
-    "Total Visitors": "Total Visitors",
-    "Returning Visitors": "Returning Visitors",
-    "New Visitors": "New Visitors",
-  }
-
   return (
     <div className="rounded-md border bg-background/90 p-3 text-xs shadow-sm backdrop-blur">
       <div className="font-medium text-muted-foreground">{formatDisplayDate(datum.date) ?? datum.date}</div>
@@ -277,7 +275,7 @@ function HistoryTooltip({ active, payload }: TooltipProps<number, string>) {
           <div key={entry.key} className="flex items-center justify-between gap-4">
             <span className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: entry.color ?? "currentColor" }} />
-              {labelMap[entry.key] ?? entry.key}
+              {entry.key}
             </span>
             <span className="tabular-nums font-semibold">{formatNumber(entry.value)}</span>
           </div>

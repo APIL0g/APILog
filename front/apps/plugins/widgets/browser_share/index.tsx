@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react"
 import { CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "@/lib/recharts"
+import { getCommonWidgetCopy } from "../i18n"
+import { getBrowserShareCopy } from "./locales"
 
 type Row = { browser: string; sessions: number }
 
@@ -14,9 +16,11 @@ async function fetchBrowserShare(range: string, top = 10): Promise<Row[]> {
   return data?.rows ?? []
 }
 
-export default function BrowserShareWidget({ timeRange }: WidgetProps) {
+export default function BrowserShareWidget({ timeRange, language }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const common = getCommonWidgetCopy(language)
+  const copy = getBrowserShareCopy(language)
 
   useEffect(() => {
     let alive = true
@@ -38,10 +42,10 @@ export default function BrowserShareWidget({ timeRange }: WidgetProps) {
   const chartData = useMemo(
     () =>
       (rows ?? []).map((r, i) => ({
-        name: r.browser || `Unknown ${i + 1}`,
+        name: r.browser || copy.unknownLabel(i + 1),
         value: r.sessions || 0,
       })),
-    [rows],
+    [rows, copy],
   )
 
   // Use theme chart colors
@@ -56,13 +60,13 @@ export default function BrowserShareWidget({ timeRange }: WidgetProps) {
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
-        <CardTitle>Sessions by Browser</CardTitle>
+        <CardTitle>{copy.title}</CardTitle>
       </CardHeader>
       <CardContent className="pt-3 md:pt-4" style={{ height: 270 }}>
-        {error && <div className="text-sm md:text-base text-red-500">Error: {error}</div>}
-        {!rows && !error && <div className="text-sm md:text-base text-muted-foreground">Loading...</div>}
+        {error && <div className="text-sm md:text-base text-red-500">{common.errorPrefix}: {error}</div>}
+        {!rows && !error && <div className="text-sm md:text-base text-muted-foreground">{common.loading}</div>}
         {rows && rows.length === 0 && (
-          <div className="text-sm md:text-base text-muted-foreground">No data</div>
+          <div className="text-sm md:text-base text-muted-foreground">{common.noData}</div>
         )}
 
         {rows && rows.length > 0 && (

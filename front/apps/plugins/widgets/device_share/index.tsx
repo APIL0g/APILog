@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react"
 import { CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "@/lib/recharts"
+import { getCommonWidgetCopy } from "../i18n"
+import { getDeviceShareCopy } from "./locales"
 
 type Row = { device: string; sessions: number; pct?: number }
 
@@ -23,9 +25,11 @@ async function fetchDeviceShare(days: number, limit: number): Promise<Row[]> {
   return data?.rows ?? []
 }
 
-export default function DeviceShareWidget({ timeRange }: WidgetProps) {
+export default function DeviceShareWidget({ timeRange, language }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const common = getCommonWidgetCopy(language)
+  const copy = getDeviceShareCopy(language)
 
   const days = useMemo(() => parseDays(timeRange), [timeRange])
   const limit = 3
@@ -54,11 +58,11 @@ export default function DeviceShareWidget({ timeRange }: WidgetProps) {
   const chartData = useMemo(
     () =>
       (rows ?? []).map((r, i) => ({
-        name: r.device || `Unknown ${i + 1}`,
+        name: r.device || copy.unknownLabel(i + 1),
         value: r.sessions || 0,
         pct: typeof r.pct === 'number' ? r.pct : 0,
       })),
-    [rows],
+    [rows, copy],
   )
 
   // Theme chart colors
@@ -73,13 +77,13 @@ export default function DeviceShareWidget({ timeRange }: WidgetProps) {
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
-        <CardTitle>Users by Device</CardTitle>
+        <CardTitle>{copy.title}</CardTitle>
       </CardHeader>
       <CardContent className="pt-3 md:pt-4" style={{ height: 360 }}>
-        {error && <div className="text-sm md:text-base text-red-500">Error: {error}</div>}
-        {!rows && !error && <div className="text-sm md:text-base text-muted-foreground">Loading...</div>}
+        {error && <div className="text-sm md:text-base text-red-500">{common.errorPrefix}: {error}</div>}
+        {!rows && !error && <div className="text-sm md:text-base text-muted-foreground">{common.loading}</div>}
         {rows && rows.length === 0 && (
-          <div className="text-sm md:text-base text-muted-foreground">No data</div>
+          <div className="text-sm md:text-base text-muted-foreground">{common.noData}</div>
         )}
 
         {rows && rows.length > 0 && (
