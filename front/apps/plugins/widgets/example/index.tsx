@@ -2,29 +2,16 @@ import { CardContent, CardHeader, CardTitle, CardDescription } from "@/component
 import { Sparkles } from "@/components/icons"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
 import dayjs from "dayjs"
+import { exampleCopy, resolveExampleLanguage } from "./locales"
 
 // Example widget showcasing how to build custom plugin widgets
-export default function ExampleWidget({ timeRange }: WidgetProps) {
+export default function ExampleWidget({ timeRange, language }: WidgetProps) {
   const renderedAt = dayjs().format("YYYY-MM-DD HH:mm:ss")
-
-  const highlights = [
-    {
-      title: "Getting Started",
-      description: "This widget lives in front/apps/plugins and is registered through initializeWidgets().",
-    },
-    {
-      title: "Time Range",
-      description: `The dashboard requested data for ${timeRange}. Replace this with real analytics data.`,
-    },
-    {
-      title: "Next Steps",
-      description: "Clone this component to add more widgets or fetch data from your API.",
-    },
-    {
-      title: "Rendered At",
-      description: `The widget rendered at ${renderedAt} using dayjs formatting.`,
-    },
-  ]
+  const copy = exampleCopy[resolveExampleLanguage(language)]
+  const highlights = copy.highlights.map((item) => ({
+    title: item.title,
+    description: item.description({ timeRange, renderedAt }),
+  }))
 
   return (
     <>
@@ -33,8 +20,8 @@ export default function ExampleWidget({ timeRange }: WidgetProps) {
           <Sparkles className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <CardTitle>Example Widget</CardTitle>
-          <CardDescription>Use this as a template for building real widgets.</CardDescription>
+          <CardTitle>{copy.headerTitle}</CardTitle>
+          <CardDescription>{copy.headerDescription}</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

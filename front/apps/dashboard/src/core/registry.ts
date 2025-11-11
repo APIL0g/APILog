@@ -3,6 +3,7 @@ import type { ComponentType } from "react"
 export interface WidgetProps {
   config?: Record<string, any>
   timeRange: string
+  language?: string
 }
 
 export type WidgetComponent = ComponentType<WidgetProps>
