@@ -6,6 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart"
+import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
 type Report = {
   generated_at: string
@@ -136,6 +142,9 @@ export default function AIReportPage() {
                 </CardContent>
               </Card>
 
+              {/* 예상 영향(지수) 그래프 */}
+              <ImpactChart report={report} />
+
               <Card>
                 <CardHeader>
                   <CardTitle>진단 및 패턴 분석</CardTitle>
@@ -222,3 +231,68 @@ export default function AIReportPage() {
   )
 }
 
+// --- Helpers ---
+function parseTargetPercent(target?: any): number | null {
+  if (typeof target === "number" && Number.isFinite(target)) return target
+  if (typeof target === "string") {
+    const m = target.trim().match(/-?\d+(?:\.\d+)?%?/)
+    if (m) {
+      const num = parseFloat(m[0].replace("%", ""))
+      return num
+    }
+  }
+  return null
+}
+
+function buildImpactSeries(report: Report | null) {
+  // 기본 지수 100을 기준으로, 목표 변화(target %)만큼 2주 내 선형 변화 가정
+  // target이 없으면 5% 개선 가정
+  let targetPct: number | null = null
+  let metricLabel = "Impact Index"
+  const p = (report?.priorities || []).find((x) => x?.expected_metric_change)
+  if (p?.expected_metric_change) {
+    metricLabel = p.expected_metric_change.metric || metricLabel
+    targetPct = parseTargetPercent(p.expected_metric_change.target)
+  }
+  if (targetPct === null || !isFinite(targetPct)) targetPct = 5
+
+  const steps = ["현재", "+1주", "+2주"]
+  const baseline = 100
+  const improved2w = baseline * (1 + targetPct / 100)
+  const improved1w = baseline + (improved2w - baseline) * 0.5
+  const data = [
+    { name: steps[0], baseline, improved: baseline },
+    { name: steps[1], baseline, improved: Math.round(improved1w * 10) / 10 },
+    { name: steps[2], baseline, improved: Math.round(improved2w * 10) / 10 },
+  ]
+  return { data, metricLabel, targetPct }
+}
+
+function ImpactChart({ report }: { report: Report | null }) {
+  const { data, metricLabel, targetPct } = useMemo(() => buildImpactSeries(report), [report])
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>예상 영향 (지수, 기준=100)</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-2 text-xs text-muted-foreground">
+          {metricLabel} 기준으로 {targetPct}% 변화 가정 (2주)
+        </div>
+        <ChartContainer
+          config={{ baseline: { label: "현재 추세", color: "hsl(var(--muted-foreground))" }, improved: { label: "개선 적용", color: "hsl(var(--primary))" } }}
+          className="w-full"
+        >
+          <LineChart data={data} margin={{ left: 12, right: 12 }}>
+            <CartesianGrid vertical={false} strokeDasharray="3 3" />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} />
+            <YAxis tickLine={false} axisLine={false} domain={[0, "auto"]} />
+            <ChartTooltip cursor={true} content={<ChartTooltipContent />} />
+            <Line type="monotone" dataKey="baseline" stroke="var(--color-baseline)" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="improved" stroke="var(--color-improved)" strokeWidth={2} dot />
+          </LineChart>
+        </ChartContainer>
+      </CardContent>
+    </Card>
+  )
+}
