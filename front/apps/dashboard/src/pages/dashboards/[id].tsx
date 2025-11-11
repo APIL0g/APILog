@@ -35,7 +35,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { CopyPlus, LayoutGrid, PenLine, Plus, Save, Trash2, ChevronsUpDown, Check } from "lucide-react"
+import { CopyPlus, LayoutGrid, PenLine, Plus, Save, Trash2, ChevronsUpDown, Check, X } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 const ReactGridLayout = WidthProvider(RGL)
@@ -104,6 +104,13 @@ interface DashboardCopy {
   editLayout: string
   saveLayout: string
   aiReport: string
+  cancelEdit: string
+}
+
+interface EditSnapshot {
+  dashboard: DashboardConfig | null
+  activePresetId: string | null
+  isNewPresetDraft: boolean
 }
 
 const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
@@ -127,6 +134,7 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     editLayout: "Edit Layout",
     saveLayout: "Save",
     aiReport: "AI Report",
+    cancelEdit: "Cancel",
   },
   ko: {
     tagline: "프리셋으로 레이아웃을 저장하고 다시 불러올 수 있어요.",
@@ -148,6 +156,7 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     editLayout: "레이아웃 편집",
     saveLayout: "저장",
     aiReport: "AI 리포트",
+    cancelEdit: "취소",
   },
 }
 
@@ -328,6 +337,15 @@ export default function DashboardPage() {
   const [finishPresetName, setFinishPresetName] = useState("")
   const [isNewPresetDraft, setIsNewPresetDraft] = useState(false)
   const [language, setLanguage] = useState<LanguageCode>("en")
+  const [editSnapshot, setEditSnapshot] = useState<EditSnapshot | null>(null)
+
+  const captureEditSnapshot = () => {
+    setEditSnapshot({
+      dashboard: dashboard ? cloneDashboardConfig(dashboard) : null,
+      activePresetId,
+      isNewPresetDraft,
+    })
+  }
 
   const widgetMetadataKey = Object.keys(widgetMetadata).join(",")
   const availableWidgets = Object.values(widgetMetadata)
@@ -571,6 +589,8 @@ export default function DashboardPage() {
       if (!shouldProceed) return
     }
 
+    captureEditSnapshot()
+
     const defaultName = `New Layout ${presets.length + 1}`
     const blankPreset = createBlankDashboardPreset(defaultName)
 
@@ -586,6 +606,7 @@ export default function DashboardPage() {
     if (!dashboard) return
 
     if (!isEditMode) {
+      captureEditSnapshot()
       setIsEditMode(true)
       setFinishPresetName(dashboard.name)
       return
@@ -593,6 +614,20 @@ export default function DashboardPage() {
 
     setFinishPresetName(dashboard.name)
     setIsFinishPresetDialogOpen(true)
+  }
+
+  const handleCancelEditing = () => {
+    if (editSnapshot) {
+      setDashboard(editSnapshot.dashboard ? cloneDashboardConfig(editSnapshot.dashboard) : null)
+      setActivePresetId(editSnapshot.activePresetId ?? null)
+      setIsNewPresetDraft(editSnapshot.isNewPresetDraft)
+      setFinishPresetName(editSnapshot.dashboard?.name ?? "")
+    }
+
+    setHasUnsavedChanges(false)
+    setIsEditMode(false)
+    setIsFinishPresetDialogOpen(false)
+    setEditSnapshot(null)
   }
 
   const handleConfirmFinishEditing = () => {
@@ -611,6 +646,7 @@ export default function DashboardPage() {
     }
     setIsEditMode(false)
     setIsFinishPresetDialogOpen(false)
+    setEditSnapshot(null)
   }
 
   const handleAddWidget = () => {
@@ -818,10 +854,22 @@ export default function DashboardPage() {
                 </Badge>
               )}
 
-              {!isNewPresetDraft && (
+              {!isEditMode && !isNewPresetDraft && (
                 <Button variant="outline" size="sm" onClick={handleStartNewLayout}>
                   <Plus className="h-4 w-4 mr-2" />
                   {copy.newLayout}
+                </Button>
+              )}
+
+              {isEditMode && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancelEditing}
+                  className="text-destructive hover:text-destructive focus:text-destructive"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  {copy.cancelEdit}
                 </Button>
               )}
 
