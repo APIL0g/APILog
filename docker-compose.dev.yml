@@ -191,6 +191,7 @@ services:
 
         # 1) ollama 서버를 백그라운드로 먼저 띄움
         ollama serve &
+        PID=$!
 
         # 2) 서버가 뜰 시간을 조금 준다
         sleep 10
@@ -201,7 +202,7 @@ services:
         fi
 
         # 4) 백그라운드의 serve 프로세스를 따라가며 컨테이너 유지
-        wait -n
+        wait $PID
 
     restart: unless-stopped
     gpus: all

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import type { WidgetMeta, WidgetProps } from "@/core/registry";
 import type { Digest, InsightsResp } from "./types";
-import { fetchDigest, explain } from "./api";
+import { fetchDigest, explain, type ApiError } from "./api";
 
 function sevClass(s?: string) {
   switch (s) {
@@ -17,14 +17,14 @@ function AiInsightsWidget({ timeRange }: WidgetProps) {
   const [digest, setDigest] = useState<Digest | null>(null);
   const [insights, setInsights] = useState<InsightsResp | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
 
   useEffect(() => {
     let alive = true;
     setLoading(true); setError(null); setInsights(null);
     fetchDigest({ timeRange, site_id: "main" })
       .then(d => { if (alive) setDigest(d); })
-      .catch(e => { if (alive) setError(String(e)); })
+      .catch(e => { if (alive) setError(e as ApiError); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [timeRange]);
@@ -36,10 +36,26 @@ function AiInsightsWidget({ timeRange }: WidgetProps) {
       const resp = await explain({ digest, language: "ko", word_limit: 300, audience: "dev" });
       setInsights(resp);
     } catch (e: any) {
-      setError(String(e));
+      setError(e as ApiError);
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderError = (e: ApiError) => {
+    const code = e?.code;
+    if (code === "model_downloading") {
+      return "모델을 다운로드 중입니다. 잠시 후 다시 시도해주세요.";
+    }
+    if (code === "model_not_found") {
+      return "모델을 찾을 수 없습니다. Ollama에서 해당 모델을 먼저 다운로드 해주세요.";
+    }
+    if (code === "ollama_unreachable") {
+      return "AI 백엔드(Ollama)에 연결할 수 없습니다. Docker/Ollama 상태를 확인해주세요.";
+    }
+    if ((e as any)?.status === 404) return "요청한 리소스를 찾을 수 없습니다.";
+    if ((e as any)?.status === 503) return "서비스를 일시적으로 이용할 수 없습니다. 잠시 후 다시 시도해주세요.";
+    return e?.message || String(e);
   };
 
   return (
@@ -49,7 +65,7 @@ function AiInsightsWidget({ timeRange }: WidgetProps) {
       </CardHeader>
       <CardContent className="space-y-3">
         {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
-        {error && <div className="text-sm text-red-500">Error: {error}</div>}
+        {error && <div className="text-sm text-red-500">Error: {renderError(error)}</div>}
 
         {digest && (
           <div className="text-sm text-muted-foreground">
