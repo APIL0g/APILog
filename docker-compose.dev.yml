@@ -161,7 +161,7 @@ services:
     environment:
       NODE_ENV: production
     restart: unless-stopped
-
+    
   ############################################################
   # 7) ollama (Local LLM Server)
   #    AI 모델 로컬 인퍼런스 서버 (포트 11434)
@@ -171,10 +171,10 @@ services:
     container_name: ollama
 
     environment:
-      - OLLAMA_HOST=0.0.0.0
-      - OLLAMA_KEEP_ALIVE=1h
-
-    gpus: all
+      OLLAMA_HOST: 0.0.0.0
+      OLLAMA_KEEP_ALIVE: 1h
+      # .env에 LLM_MODEL이 없으면 기본값 llama3:8b 사용
+      LLM_MODEL: ${LLM_MODEL:-llama3:8b}
 
     ports:
       - "11434:11434"
@@ -182,21 +182,31 @@ services:
     volumes:
       - ollama-data:/root/.ollama
 
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:11434/api/tags"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
+    # 기본 entrypoint(ollama)를 sh 스크립트로 완전히 덮어씀
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "Bootstrapping Ollama model: $LLM_MODEL"
+
+        # 1) ollama 서버를 백그라운드로 먼저 띄움
+        ollama serve &
+
+        # 2) 서버가 뜰 시간을 조금 준다
+        sleep 10
+
+        # 3) 모델을 미리 받아둔다 (이미 있으면 빠르게 통과)
+        if [ -n "$LLM_MODEL" ]; then
+          ollama pull "$LLM_MODEL" || echo "Warning: failed to pull $LLM_MODEL"
+        fi
+
+        # 4) 백그라운드의 serve 프로세스를 따라가며 컨테이너 유지
+        wait -n
 
     restart: unless-stopped
+    gpus: all
 
-    # GPU 환경이면 아래 주석 해제해서 GPU 사용 가능
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - capabilities: ["gpu"]
-
+    
 ##############################################################
 # Named Volumes
 # (영구 데이터 저장소)
