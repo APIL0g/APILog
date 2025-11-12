@@ -3,10 +3,10 @@ name: CI & SonarQube Analysis
 on:
   push:
     branches:
-      - [develop, test] 
+      - develop 
   pull_request:
     branches:
-      - [develop, test] 
+      - develop
 
 jobs:
   build-and-analyze:
@@ -27,7 +27,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r back/app/requirements.txt
-          pip install pytest pytest-cov 
+          pip install -r back/app/requirements-test.txt
 
       - name: BE test and coverage creation
         run: |
