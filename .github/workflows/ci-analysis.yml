@@ -3,10 +3,10 @@ name: CI & SonarQube Analysis
 on:
   push:
     branches:
-      - test 
+      - test
   pull_request:
     branches:
-      - test
+      - test 
 
 jobs:
   build-and-analyze:
