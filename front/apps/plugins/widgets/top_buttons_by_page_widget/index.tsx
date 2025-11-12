@@ -5,12 +5,15 @@ import { ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { getIconFor } from "../utils"
 import { getCommonWidgetCopy } from "../i18n"
 import { getTopButtonsByPageCopy } from "./locales"
 
 type Row = { site_id: string; element_text: string; count: number }
 type PathOption = { path: string; count: number }
+
+const looksLikeHtmlSnippet = (value: string): boolean => /<\/?[a-z][\s\S]*>/i.test(value)
+const toPlainText = (value: string): string =>
+  value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
 
 const API_BASE = ""
 async function fetchPaths(range: string): Promise<PathOption[]> {
@@ -215,31 +218,31 @@ export default function TopButtonsByPageWidget({ timeRange, language }: WidgetPr
           </Popover>
         </div>
 
-        <div className="mb-2 flex items-center justify-between text-sm font-semibold text-foreground">
-          <span>{copy.columnButton}</span>
-          <span>{copy.columnClicks}</span>
-        </div>
-
         {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
         {!error && rows === null && <div className="text-sm text-muted-foreground">{common.loading}</div>}
         {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">{common.noData}</div>}
         {!error && rows && rows.length > 0 && (
           <div className="divide-y">
-            {topSorted.map((r, idx) => (
-              <div key={`${pagePath}-${r.element_text || "unknown"}`} className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-8 w-8 rounded-full bg-muted grid place-items-center">
-                    {(() => {
-                      const Icon = getIconFor(r.element_text)
-                      return <Icon className="h-4 w-4 text-muted-foreground" />
-                    })()}
+            {topSorted.map((r, idx) => {
+              const hasMarkup = typeof r.element_text === "string" && looksLikeHtmlSnippet(r.element_text)
+              const previewHtml = hasMarkup ? r.element_text : null
+              return (
+                <div key={`${pagePath}-${idx}`} className="flex flex-col gap-2 py-4">
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span className="text-xs tabular-nums">{copy.columnButton} {idx + 1}.</span>
+                    <span className="text-xs uppercase tracking-wide">{copy.columnClicks}: {fmt(r.count)}</span>
                   </div>
-                  <span className="text-xs tabular-nums text-muted-foreground w-6 text-right">{idx + 1}.</span>
-                  <div className="text-sm truncate">{r.element_text}</div>
+                  <div className="rounded border bg-muted/30 p-2 overflow-visible">
+                    {previewHtml && (
+                      <div
+                        className="pointer-events-none select-none w-full max-w-[50%] scale-75 origin-top-left [&_*]:pointer-events-none [&_*]:select-none [&_a]:text-primary"
+                        dangerouslySetInnerHTML={{ __html: previewHtml }}
+                      />
+                    )}
+                  </div>
                 </div>
-                <div className="text-sm font-medium tabular-nums">{fmt(r.count)}</div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </CardContent>

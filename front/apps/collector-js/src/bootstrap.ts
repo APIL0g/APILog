@@ -47,20 +47,33 @@
   }
 
   const INTERACTIVE_SELECTOR = [
+    "a[href]",
     "button",
+    "details",
+    "summary",
+    'input:not([type="hidden"])',
     'input[type="button"]',
     'input[type="submit"]',
+    'input[type="reset"]',
+    'input[type="image"]',
     "select",
     "textarea",
+    "[contenteditable]",
     '[role="button"]',
     '[role="link"]',
+    '[role="menuitem"]',
+    '[role="option"]',
+    ".btn",
+    ".button",
+    ".link-button",
     "[onclick]",
     "[data-action]",
     "[data-apilog-action]",
     "[data-apilog-interactive]",
-    "summary",
+    "[data-track-click]",
   ].join(", ");
-  const DEAD_CLICK_LABEL = "dead-click";
+
+  const DEAD_CLICK_LABEL = "unknown"
 
   // ===========================================================================
   // 1. Small utility helpers
@@ -333,7 +346,159 @@
   }
 
   function normalizeWhitespace(value?: string): string {
-    return (value ?? "").replace(/\s+/g, " ").trim();
+    if (!value) return "";
+    const lines = value
+      .split(/\n+/)
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    return lines.join("\n");
+  }
+
+  function isCheckLikeControl(el: Element | null): boolean {
+    if (!el) return false;
+    const tag = el.tagName?.toLowerCase();
+    if (tag === "input") {
+      const type = ((el as HTMLInputElement).type || "").toLowerCase();
+      if (type === "checkbox" || type === "radio") {
+        return true;
+      }
+    }
+    const role = el.getAttribute?.("role")?.toLowerCase();
+    return role === "checkbox" || role === "radio";
+  }
+
+  function escapeAttrValue(value: string): string {
+    return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  }
+
+  function cleanLabelNodeText(labelEl: Element | null): string | null {
+    if (!labelEl) return null;
+    try {
+      const clone = labelEl.cloneNode(true) as HTMLElement;
+      const controls = clone.querySelectorAll("input,button,select,textarea");
+      controls.forEach((node) => node.remove());
+      const text = clone.textContent?.trim();
+      const normalized = normalizeWhitespace(text);
+      return normalized || null;
+    } catch {
+      const text = labelEl.textContent?.trim();
+      const normalized = normalizeWhitespace(text);
+      return normalized || null;
+    }
+  }
+
+  function getLabelTextForControl(el: Element | null): string | null {
+    if (!el || !isCheckLikeControl(el)) {
+      return null;
+    }
+
+    const ariaLabelledBy = el.getAttribute?.("aria-labelledby")?.trim();
+    if (ariaLabelledBy) {
+      const ids = ariaLabelledBy.split(/\s+/);
+      for (const id of ids) {
+        const ref = document.getElementById(id);
+        const text = cleanLabelNodeText(ref);
+        if (text) {
+          return text;
+        }
+      }
+    }
+
+    const id = el.getAttribute?.("id");
+    if (id) {
+      try {
+        const selector = `label[for="${escapeAttrValue(id)}"]`;
+        const assoc = document.querySelector(selector);
+        const text = cleanLabelNodeText(assoc);
+        if (text) {
+          return text;
+        }
+      } catch {
+        // ignore selector errors
+      }
+    }
+
+    const wrapping = el.closest?.("label") ?? null;
+    const wrappingText = cleanLabelNodeText(wrapping);
+    if (wrappingText) {
+      return wrappingText;
+    }
+
+    const parent = el.parentElement;
+    if (parent) {
+      const children = parent.children;
+      for (let i = 0; i < children.length; i += 1) {
+        const sibling = children[i];
+        if (sibling === el) {
+          continue;
+        }
+        if (sibling.tagName?.toLowerCase() === "label") {
+          const text = cleanLabelNodeText(sibling);
+          if (text) {
+            return text;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function sanitizeOuterHtml(
+    el: Element | null,
+    labelText?: string | null,
+    maxLength = 4000
+  ): string | null {
+    if (!el) {
+      return null;
+    }
+    try {
+      const clone = el.cloneNode(true) as HTMLElement;
+      const scripts = clone.querySelectorAll("script");
+      scripts.forEach((node) => node.remove());
+
+      const treeWalker = document.createTreeWalker(clone, NodeFilter.SHOW_ELEMENT);
+      while (treeWalker.nextNode()) {
+        const node = treeWalker.currentNode as Element;
+        if (!node.hasAttributes()) continue;
+        const attrs = node.attributes;
+        for (let i = attrs.length - 1; i >= 0; i--) {
+          const attrName = attrs[i].name.toLowerCase();
+          if (attrName.startsWith("on")) {
+            node.removeAttribute(attrs[i].name);
+          }
+        }
+      }
+
+      let outer = clone.outerHTML || "";
+
+      const trimmedLabel = labelText?.trim();
+      const shouldAppendLabel =
+        !!trimmedLabel &&
+        trimmedLabel.toLowerCase() !== "unknown" &&
+        isCheckLikeControl(el);
+      if (shouldAppendLabel) {
+        const wrapper = document.createElement("div");
+        wrapper.appendChild(clone);
+        const labelEl = document.createElement("span");
+        labelEl.setAttribute("data-apilog-label-preview", "true");
+        labelEl.style.display = "inline-block";
+        labelEl.style.marginLeft = "0.5rem";
+        labelEl.textContent = trimmedLabel;
+        wrapper.appendChild(labelEl);
+        outer = wrapper.innerHTML;
+      }
+
+      if (!outer) {
+        return null;
+      }
+      if (outer.length > maxLength) {
+        return outer.slice(0, maxLength);
+      }
+      return outer;
+    } catch {
+      return null;
+    }
   }
 
   function findInteractiveFromEvent(ev: Event): Element | null {
@@ -358,11 +523,13 @@
       return DEAD_CLICK_LABEL;
     }
     const heuristics = el.getAttribute?.("data-apilog-label")?.trim();
-    const text = (el as HTMLElement).innerText?.trim();
+    const labelText = getLabelTextForControl(el);
+    const visibleText = (el as HTMLElement).innerText?.trim();
+    const allText = (el as HTMLElement).textContent?.trim();
     const aria = el.getAttribute?.("aria-label")?.trim();
     const alt = (el as HTMLElement).getAttribute?.("alt")?.trim();
     const title = el.getAttribute?.("title")?.trim();
-    const candidate = heuristics || text || aria || alt || title;
+    const candidate = heuristics || labelText || visibleText || allText || aria || alt || title;
     if (!candidate) {
       return DEAD_CLICK_LABEL;
     }
@@ -370,15 +537,7 @@
     if (!cleaned) {
       return DEAD_CLICK_LABEL;
     }
-    const alphaChars = cleaned.replace(/[^a-zA-Z가-힣ㄱ-ㅎㅏ-ㅣ]/g, "").length;
-    const digitChars = cleaned.replace(/[^0-9]/g, "").length;
     const wordCount = cleaned.split(/\s+/).length;
-    if (alphaChars === 0) {
-      return DEAD_CLICK_LABEL;
-    }
-    if (digitChars >= alphaChars || digitChars >= 4) {
-      return DEAD_CLICK_LABEL;
-    }
     if (wordCount > 8) {
       return DEAD_CLICK_LABEL;
     }
@@ -772,20 +931,17 @@
 
     emitClick(targetEl: Element, absX: number, absY: number, labelEl?: Element | null) {
       const sig = getElementSignature(targetEl, absX, absY, labelEl);
+      const outerHtml = sanitizeOuterHtml(labelEl ?? targetEl, sig.elementHash);
+      const elementHashPayload = outerHtml || sig.elementHash;
 
       const rec = Object.assign(
         {},
-        this.baseTags("click", sig.elementHash),
+        this.baseTags("click", elementHashPayload),
         this.baseFields(),
         {
           click_x: absX,
           click_y: absY,
           scroll_pct: this.maxScrollSeen,
-          extra_json: JSON.stringify({
-            rel_x: sig.relX,
-            rel_y: sig.relY,
-            selector: sig.selector,
-          }),
           ts: now(),
         }
       );
