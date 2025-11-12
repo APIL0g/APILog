@@ -33,7 +33,7 @@ jobs:
 
       - name: BE test and coverage creation
         run: |
-          pytest back/app/ --cov=back/app --cov-report=xml:back/app/coverage.xml
+          pytest --cov=back/app --cov-report=xml:back/app/coverage.xml tests/
 
       - name: Node.js 18.x configure
         uses: actions/setup-node@v4
