@@ -7,22 +7,23 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class TimeRange(BaseModel):
     model_config = ConfigDict(populate_by_name=True, ser_json_by_alias=True)
+
     from_ts: Optional[str] = Field(default=None, alias="from", serialization_alias="from")
     to: Optional[str] = None
-    bucket: str = "1h"  # '1h'|'3h'|'6h'|'1d'
+    bucket: str = "1h"
     site_id: Optional[str] = None
 
 
 class ReportRequest(BaseModel):
     time: TimeRange = TimeRange()
     prompt: str = ""
-    language: str = "ko"  # ko|en ...
-    audience: str = "dev"  # dev|pm|ops
+    language: str = "ko"
+    audience: str = "dev"
     word_limit: int = 700
 
 
 class TrafficDiagnosisItem(BaseModel):
-    focus: str  # 예: "모바일 Chrome", "데스크톱 Safari"
+    focus: str
     finding: str
     widget: str
     severity: str = "Medium"
@@ -40,14 +41,14 @@ class PageIssueItem(BaseModel):
 
 
 class InteractionInsightItem(BaseModel):
-    area: str  # 예: "구매 CTA", "히트맵 - Hero"
+    area: str
     insight: str
     widget: str
     action: Optional[str] = None
 
 
 class RecommendationItem(BaseModel):
-    category: str  # UX|기술|성능|콘텐츠|유저 플로우 등
+    category: str
     suggestion: str
     rationale: Optional[str] = None
     validation: Optional[str] = None
@@ -55,7 +56,7 @@ class RecommendationItem(BaseModel):
 
 class PriorityItem(BaseModel):
     title: str
-    priority: str  # High|Medium|Low
+    priority: str
     impact: str
     effort: Optional[str] = None
     expected_metric_change: Optional[Dict[str, Any]] = None
@@ -79,14 +80,14 @@ class PredictionItem(BaseModel):
 
 
 class RadarScoreItem(BaseModel):
-    axis: str  # performance|experience|growth|search|stability
+    axis: str
     score: int
     commentary: Optional[str] = None
 
 
 class ReportResponse(BaseModel):
     generated_at: str
-    title: str = "AI 리포트"
+    title: str = "AI 웹사이트 컨디션 리포트"
     summary: str = ""
     diagnostics: List[TrafficDiagnosisItem] = Field(default_factory=list)
     page_issues: List[PageIssueItem] = Field(default_factory=list)

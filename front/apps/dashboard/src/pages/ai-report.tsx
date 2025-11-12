@@ -86,6 +86,27 @@ type RadarScore = {
   commentary?: string
 }
 
+type ReportTrendMeta = {
+  label?: string
+  change_pct?: number
+  momentum_pct?: number
+  days?: number
+  last?: number
+}
+
+type ReportMeta = {
+  mode?: string
+  provider?: string
+  model?: string
+  time?: { from?: string; to?: string; bucket?: string }
+  site_id?: string | null
+  widgets?: string[]
+  missing_widgets?: string[]
+  trend?: ReportTrendMeta
+  fallback?: boolean
+  [key: string]: any
+}
+
 type Report = {
   generated_at: string
   title: string
@@ -99,7 +120,7 @@ type Report = {
   metrics_to_track?: MetricWatch[]
   predictions?: Prediction[]
   radar_scores?: RadarScore[]
-  meta?: Record<string, any>
+  meta?: ReportMeta
 }
 
 const RADAR_AXIS_LABELS: Record<string, string> = {
@@ -108,6 +129,52 @@ const RADAR_AXIS_LABELS: Record<string, string> = {
   growth: "성장/전환",
   search: "검색 노출",
   stability: "기술 안정성",
+}
+
+type RadarAxisKey = keyof typeof RADAR_AXIS_LABELS
+
+const RADAR_AXIS_KEYS = Object.keys(RADAR_AXIS_LABELS) as RadarAxisKey[]
+
+// Allow LLM responses that localize axis labels to still map onto our canonical axes.
+const RADAR_AXIS_NORMALIZERS: Array<{ key: RadarAxisKey; matches: string[] }> = [
+  {
+    key: "performance",
+    matches: ["performance", "perf", "speed", RADAR_AXIS_LABELS.performance, "성능", "퍼포먼스", "속도"],
+  },
+  {
+    key: "experience",
+    matches: ["experience", "ux", RADAR_AXIS_LABELS.experience, "사용자 경험", "경험", "ux/ui"],
+  },
+  {
+    key: "growth",
+    matches: ["growth", "acquisition", RADAR_AXIS_LABELS.growth, "성장", "확장", "획득"],
+  },
+  {
+    key: "search",
+    matches: ["search", "seo", RADAR_AXIS_LABELS.search, "검색", "검색 노출", "탐색"],
+  },
+  {
+    key: "stability",
+    matches: ["stability", "reliability", RADAR_AXIS_LABELS.stability, "안정성", "안정 운영", "신뢰성"],
+  },
+]
+
+function normalizeRadarAxis(value?: string): RadarAxisKey | null {
+  if (!value) return null
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return null
+  for (const { key, matches } of RADAR_AXIS_NORMALIZERS) {
+    if (
+      matches.some((token) => {
+        const tokenValue = token?.trim().toLowerCase()
+        if (!tokenValue) return false
+        return normalized === tokenValue || normalized.includes(tokenValue)
+      })
+    ) {
+      return key
+    }
+  }
+  return null
 }
 
 const SEVERITY_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -155,8 +222,8 @@ export default function AIReportPage() {
       setError(e?.message || "리포트 생성 중 오류가 발생했습니다.")
       setReport({
         generated_at: nowIso(),
-        title: "AI 리포트",
-        summary: "기본 리포트를 표시합니다. 서버 로그를 확인해 주세요.",
+        title: "AI 컨디션 리포트",
+        summary: "데이터 수집에 실패하여 샘플 진단을 노출합니다. 로그 파이프라인 상태를 확인해 주세요.",
         diagnostics: [],
         page_issues: [],
         interaction_insights: [],
@@ -169,7 +236,14 @@ export default function AIReportPage() {
         ],
         predictions: [],
         radar_scores: [],
-        meta: { fallback: true },
+        meta: {
+          fallback: true,
+          mode: "fallback",
+          provider: "insight-engine",
+          model: "sample",
+          trend: { label: "unknown" },
+          missing_widgets: [],
+        },
       })
     } finally {
       setLoading(false)
@@ -184,8 +258,8 @@ export default function AIReportPage() {
             <img src="/dashboard-logo.png" alt="ApiLog" className="h-8" />
             <div className="h-6 w-px bg-border" />
             <div>
-              <h1 className="text-xl font-semibold text-foreground">AI 리포트</h1>
-              <p className="text-sm text-muted-foreground">위젯 데이터를 기반으로 진단 · 인사이트 · 실행안을 제공합니다.</p>
+              <h1 className="text-xl font-semibold text-foreground">AI 진단 리포트</h1>
+              <p className="text-sm text-muted-foreground">실측 위젯 데이터를 기반으로 문제를 규명하고 실행 계획을 제안합니다.</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -244,6 +318,17 @@ export default function AIReportPage() {
                 <CardContent className="space-y-4">
                   <div className="text-sm text-muted-foreground">생성 시각: {report.generated_at}</div>
                   {report.summary && <p className="whitespace-pre-wrap leading-7">{report.summary}</p>}
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    {formatTimeWindow(report.meta) && <div>{formatTimeWindow(report.meta)}</div>}
+                    {report.meta?.trend && (
+                      <div>
+                        트래픽 추세: {report.meta.trend.label || "-"} ({formatPercentDelta(report.meta.trend.change_pct)})
+                      </div>
+                    )}
+                    {report.meta?.missing_widgets?.length ? (
+                      <div>누락 위젯: {report.meta.missing_widgets.join(", ")}</div>
+                    ) : null}
+                  </div>
                 </CardContent>
               </Card>
 
@@ -439,6 +524,20 @@ function RecommendationColumn({ title, items }: { title: string; items: Recommen
   )
 }
 
+function formatTimeWindow(meta?: ReportMeta) {
+  if (!meta?.time) return null
+  const from = meta.time.from || "-"
+  const to = meta.time.to || "-"
+  const bucket = meta.time.bucket ? ` · Bucket ${meta.time.bucket}` : ""
+  return `분석 구간: ${from} ~ ${to}${bucket}`
+}
+
+function formatPercentDelta(value?: number) {
+  if (typeof value !== "number" || Number.isNaN(value)) return "-"
+  const sign = value > 0 ? "+" : ""
+  return `${sign}${value.toFixed(1)}%`
+}
+
 function severityVariant(level?: string) {
   if (!level) return "secondary"
   return SEVERITY_VARIANT[level.toLowerCase()] || "secondary"
@@ -480,11 +579,11 @@ function ImpactChart({ report }: { report: Report | null }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>데이터 기반 영향 예측</CardTitle>
+        <CardTitle>핵심 KPI 영향도 예측</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="text-xs text-muted-foreground">
-          {metricLabel} 기준으로 2주 내 예상 변화 추세 · Δ {improvement}
+          {metricLabel} 기준 2주 예측 Δ {improvement}
         </div>
         <ChartContainer
           config={{
@@ -508,12 +607,22 @@ function ImpactChart({ report }: { report: Report | null }) {
 }
 
 function RadarPentagon({ scores }: { scores?: RadarScore[] }) {
-  const axes = Object.keys(RADAR_AXIS_LABELS)
-  const data = axes.map((axis) => {
-    const found = (scores || []).find((item) => item.axis?.toLowerCase() === axis)
+  const normalizedScores = useMemo(() => {
+    const map: Partial<Record<RadarAxisKey, RadarScore>> = {}
+    for (const item of scores || []) {
+      const axisKey = normalizeRadarAxis(item.axis)
+      if (axisKey) {
+        map[axisKey] = item
+      }
+    }
+    return map
+  }, [scores])
+
+  const data = RADAR_AXIS_KEYS.map((axis) => {
+    const found = normalizedScores[axis]
     return {
       axis: RADAR_AXIS_LABELS[axis],
-      score: found?.score ?? 50,
+      score: typeof found?.score === "number" ? found.score : 50,
       commentary: found?.commentary || "데이터 부족",
     }
   })
