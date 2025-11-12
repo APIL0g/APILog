@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ChevronDown, Smartphone, Tablet } from "lucide-react"
+import { getCommonWidgetCopy } from "../i18n"
+import { getHeatmapCopy, type HeatmapKnownError } from "./locales"
 
 // deck.gl imports
 import { HeatmapLayer } from "@deck.gl/aggregation-layers"
@@ -84,7 +86,12 @@ async function fetchPaths(): Promise<string[]> {
 
 // --- Main Widget Component ---
 
-export default function HeatmapWidget({ timeRange }: WidgetProps) {
+type HeatmapErrorState =
+  | { code: HeatmapKnownError; details?: string }
+  | { message: string }
+  | null
+
+export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
   const [selectedPage, setSelectedPage] = useState<string>("")
   const [selectedDevice, setSelectedDevice] = useState<"desktop" | "mobile">(
     "desktop"
@@ -92,7 +99,7 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
   const [data, setData] = useState<HeatmapData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<HeatmapErrorState>(null)
   const [imageDimensions, setImageDimensions] = useState<{
     width: number
     height: number
@@ -104,6 +111,17 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const deckRef = useRef<Deck | null>(null)
+  const common = getCommonWidgetCopy(language)
+  const copy = getHeatmapCopy(language)
+  const resolvedErrorMessage = error
+    ? "code" in error
+      ? error.details
+        ? `${copy.errors[error.code]} (${error.details})`
+        : copy.errors[error.code]
+      : "message" in error && error.message
+        ? `${common.errorPrefix}: ${error.message}`
+        : null
+    : null
 
   // Polling for snapshot generation
   const pollForSnapshot = useCallback(async () => {
@@ -127,7 +145,7 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
       attempts++
     }
 
-    setError("Snapshot generation timed out. Please try again.")
+    setError({ code: "SNAPSHOT_TIMEOUT" })
     setIsGenerating(false)
     setIsLoading(false)
   }, [selectedPage, selectedDevice])
@@ -162,7 +180,7 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
           const pollForSnapshotInternal = () => {
             // 3. 타임아웃 체크
             if (attempts >= 10) {
-              setError("Failed to generate snapshot (Timeout)") // 👈 타임아웃 오류 설정
+              setError({ code: "SNAPSHOT_GENERATE_TIMEOUT" }) // 👈 타임아웃 오류 설정
               setIsLoading(false)
               setIsGenerating(false)
               return // 폴링 중단
@@ -186,7 +204,10 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
               })
               .catch((pollErr) => {
                 // 7. [실패] 폴링 중 (404 이외의) 실제 네트워크 오류 발생
-                setError(pollErr.message || "Error while polling for snapshot")
+                setError({
+                  code: "POLLING_ERROR",
+                  details: pollErr instanceof Error ? pollErr.message : String(pollErr),
+                })
                 setIsLoading(false)
                 setIsGenerating(false)
                 // 폴링 중단
@@ -198,7 +219,10 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
         })
         .catch((genErr) => {
           // 1단계(generateSnapshot) 자체에서 오류가 난 경우
-          setError(genErr.message || "Failed to start snapshot generation")
+          setError({
+            code: "GENERATION_START_FAILED",
+            details: genErr instanceof Error ? genErr.message : String(genErr),
+          })
           setIsLoading(false)
           setIsGenerating(false)
         })
@@ -210,7 +234,10 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
   })
   .catch((err: any) => {
     // 맨 처음 fetchHeatmapData가 실패한 경우
-    setError(err.message || "Failed to fetch data")
+    setError({
+      code: "FETCH_DATA_FAILED",
+      details: err instanceof Error ? err.message : String(err),
+    })
     setIsLoading(false)
   })
   }, [selectedPage, selectedDevice, pollForSnapshot])
@@ -326,11 +353,14 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
           setSelectedPage(arrays[0]) 
         } else {
           // 조회 가능한 페이지가 없음
-          setError("No page data found.")
+          setError({ code: "NO_PAGE_DATA" })
         }
       })
       .catch((err) => {
-        setError(err.message || "Failed to load page list")
+        setError({
+          code: "PAGE_LIST_FAILED",
+          details: err instanceof Error ? err.message : String(err),
+        })
       })
       .finally(() => {
         setPathsLoading(false)
@@ -367,25 +397,29 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
   return (
     <>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Page Heatmap</CardTitle>
+        <CardTitle className="text-sm font-medium">{copy.title}</CardTitle>
         <div className="flex items-center space-x-2">
           {/* Page Selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8">
-                <span className="truncate max-w-xs">{selectedPage}</span>
+              <Button variant="outline" size="sm" className="h-8" disabled={pathsLoading || paths.length === 0}>
+                <span className="truncate max-w-xs">{selectedPage || copy.pagePlaceholder}</span>
                 <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {paths.map((page) => (
-                <DropdownMenuItem
-                  key={page}
-                  onSelect={() => setSelectedPage(page)}
-                >
-                  {page}
-                </DropdownMenuItem>
-              ))}
+              {paths.length === 0 ? (
+                <DropdownMenuItem disabled>{common.noData}</DropdownMenuItem>
+              ) : (
+                paths.map((page) => (
+                  <DropdownMenuItem
+                    key={page}
+                    onSelect={() => setSelectedPage(page)}
+                  >
+                    {page}
+                  </DropdownMenuItem>
+                ))
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -398,10 +432,10 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
             }}
             size="sm"
           >
-            <ToggleGroupItem value="desktop" aria-label="Desktop">
+            <ToggleGroupItem value="desktop" aria-label={copy.deviceLabel.desktop}>
               <Tablet className="h-4 w-4" />
             </ToggleGroupItem>
-            <ToggleGroupItem value="mobile" aria-label="Mobile">
+            <ToggleGroupItem value="mobile" aria-label={copy.deviceLabel.mobile}>
               <Smartphone className="h-4 w-4" />
             </ToggleGroupItem>
           </ToggleGroup>
@@ -420,17 +454,17 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
               <Spinner className="h-8 w-8 mb-4" />
               <p className="text-sm text-muted-foreground">
                 {isGenerating
-                  ? "Creating a snapshot... It will refresh after a while."
-                  : "Loading..."}
+                  ? copy.generatingSnapshot
+                  : common.loading}
               </p>
             </div>
           )}
 
           {/* Error State */}
-          {error && !isLoading && !isGenerating && (
+          {resolvedErrorMessage && !isLoading && !isGenerating && (
             <div className="absolute inset-0 flex items-center justify-center z-10 p-4">
               <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{resolvedErrorMessage}</AlertDescription>
               </Alert>
             </div>
           )}
@@ -439,9 +473,9 @@ export default function HeatmapWidget({ timeRange }: WidgetProps) {
           {data?.snapshot_url && !isLoading && !isGenerating && (
             <div className="relative" style={{ width: "100%" }}>
               {/* Background Snapshot */}
-              <img
-                src={`${API_BASE_URL}${data.snapshot_url}`}
-                alt={`Snapshot (${selectedPage} - ${selectedDevice})`}
+                <img
+                  src={`${API_BASE_URL}${data.snapshot_url}`}
+                  alt={`${copy.title} (${selectedPage || copy.pagePlaceholder} - ${copy.deviceLabel[selectedDevice]})`}
                 style={{
                   width: "100%",
                   height: "auto",

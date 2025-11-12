@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react"
 import { CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "@/lib/recharts"
+import { getCommonWidgetCopy } from "../i18n"
+import { getCountryShareCopy } from "./locales"
 
 type Row = { code: string; label: string; sessions: number }
 type ApiResponse = { rows?: Row[]; total?: number }
@@ -19,18 +21,20 @@ async function fetchCountryShare(range: string, top = 5, signal?: AbortSignal): 
   return {
     rows: rows.map((row, idx) => ({
       code: row?.code || `UNKNOWN-${idx}`,
-      label: row?.label || row?.code || "Unknown",
+      label: row?.label || row?.code || "",
       sessions: Number(row?.sessions || 0),
     })),
     total,
   }
 }
 
-export default function CountryShareWidget({ timeRange: _timeRange }: WidgetProps) {
+export default function CountryShareWidget({ timeRange: _timeRange, language }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [total, setTotal] = useState<number>(0)
   const [error, setError] = useState<string | null>(null)
   const effectiveRange = DEFAULT_RANGE
+  const common = getCommonWidgetCopy(language)
+  const copy = getCountryShareCopy(language)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -53,11 +57,11 @@ export default function CountryShareWidget({ timeRange: _timeRange }: WidgetProp
   const chartData = useMemo(
     () =>
       (rows ?? []).map((row) => ({
-        name: row.label || row.code || "Unknown",
+        name: row.label || row.code || copy.unknownLabel,
         code: row.code,
         value: row.sessions || 0,
       })),
-    [rows],
+    [rows, copy],
   )
 
   const totalSessions = useMemo(() => (rows ? total || rows.reduce((sum, r) => sum + r.sessions, 0) : 0), [rows, total])
@@ -74,12 +78,12 @@ export default function CountryShareWidget({ timeRange: _timeRange }: WidgetProp
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
-        <CardTitle>Sessions by Country</CardTitle>
+        <CardTitle>{copy.title}</CardTitle>
       </CardHeader>
       <CardContent className="pt-3 md:pt-4" style={{ height: 270 }}>
-        {error && <div className="text-sm md:text-base text-red-500">Error: {error}</div>}
-        {!rows && !error && <div className="text-sm md:text-base text-muted-foreground">Loading...</div>}
-        {rows && rows.length === 0 && <div className="text-sm md:text-base text-muted-foreground">No data</div>}
+        {error && <div className="text-sm md:text-base text-red-500">{common.errorPrefix}: {error}</div>}
+        {!rows && !error && <div className="text-sm md:text-base text-muted-foreground">{common.loading}</div>}
+        {rows && rows.length === 0 && <div className="text-sm md:text-base text-muted-foreground">{common.noData}</div>}
 
         {rows && rows.length > 0 && (
           <div className="flex h-full gap-3">
@@ -111,7 +115,12 @@ export default function CountryShareWidget({ timeRange: _timeRange }: WidgetProp
                   {chartData.map((d, idx) => {
                     const pct = totalSessions ? Math.round(((d.value as number) / totalSessions) * 100) : 0
                     const code = d.code || ""
-                    const display = code === "OTHERS" ? "Others" : code.startsWith("UNKNOWN") ? "Unknown" : d.name
+                    const display =
+                      code === "OTHERS"
+                        ? copy.othersLabel
+                        : code.startsWith("UNKNOWN")
+                          ? copy.unknownLabel
+                          : d.name || copy.unknownLabel
                     return (
                       <div key={`legend-${idx}`} className="flex items-center justify-between leading-6">
                         <div className="flex items-center gap-2 min-w-0">

@@ -82,6 +82,121 @@ interface PresetStorageState {
   presets?: Partial<DashboardConfig>[]
 }
 
+type LanguageCode = "en" | "ko"
+
+interface DashboardCopy {
+  tagline: string
+  emptyTitle: string
+  emptySubtitle: string
+  emptyCta: string
+  addWidgetHint: string
+  languageLabel: string
+  presetButtonPlaceholder: string
+  presetMenuTitle: string
+  noPresets: string
+  saveChanges: string
+  saveAsPreset: string
+  actionsTitle: string
+  renamePreset: string
+  deletePreset: string
+  unsavedBadge: string
+  newLayout: string
+  editLayout: string
+  saveLayout: string
+  aiReport: string
+}
+
+const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
+  en: {
+    tagline: "Save and reuse layouts with presets.",
+    emptyTitle: "No widgets yet",
+    emptySubtitle: "Start building your custom dashboard by adding widgets that matter to you.",
+    emptyCta: "Add Your First Widget",
+    addWidgetHint: "Add Widget",
+    languageLabel: "Language",
+    presetButtonPlaceholder: "Select preset",
+    presetMenuTitle: "Presets",
+    noPresets: "No presets yet",
+    saveChanges: "Save changes",
+    saveAsPreset: "Save as preset",
+    actionsTitle: "Actions",
+    renamePreset: "Rename preset",
+    deletePreset: "Delete preset",
+    unsavedBadge: "Unsaved",
+    newLayout: "New Layout",
+    editLayout: "Edit Layout",
+    saveLayout: "Save",
+    aiReport: "AI Report",
+  },
+  ko: {
+    tagline: "프리셋으로 레이아웃을 저장하고 다시 불러올 수 있어요.",
+    emptyTitle: "아직 위젯이 없어요",
+    emptySubtitle: "필요한 위젯을 추가하면서 나만의 대시보드를 만들어 보세요.",
+    emptyCta: "첫 번째 위젯 추가하기",
+    addWidgetHint: "위젯 추가",
+    languageLabel: "언어",
+    presetButtonPlaceholder: "프리셋 선택",
+    presetMenuTitle: "프리셋",
+    noPresets: "아직 프리셋이 없어요",
+    saveChanges: "변경사항 저장",
+    saveAsPreset: "프리셋으로 저장",
+    actionsTitle: "작업",
+    renamePreset: "프리셋 이름 변경",
+    deletePreset: "프리셋 삭제",
+    unsavedBadge: "미저장",
+    newLayout: "새 레이아웃",
+    editLayout: "레이아웃 편집",
+    saveLayout: "저장",
+    aiReport: "AI 리포트",
+  },
+}
+
+const LANGUAGE_STORAGE_KEY = "dashboard-language"
+
+function isKoreanLocale(locale: string | null | undefined) {
+  if (!locale) return false
+  const normalized = locale.toLowerCase()
+  return normalized.startsWith("ko") || normalized.endsWith("-kr") || normalized.includes("kr")
+}
+
+function detectPreferredLanguage(): LanguageCode {
+  if (typeof navigator === "undefined") {
+    return "en"
+  }
+
+  const locales: string[] = []
+
+  if (Array.isArray(navigator.languages)) {
+    locales.push(...navigator.languages)
+  }
+
+  if (navigator.language) {
+    locales.push(navigator.language)
+  }
+
+  if (typeof Intl !== "undefined" && typeof Intl.DateTimeFormat === "function") {
+    try {
+      const intlLocale = new Intl.DateTimeFormat().resolvedOptions().locale
+      if (intlLocale) {
+        locales.push(intlLocale)
+      }
+    } catch {
+      // Ignore Intl errors and fall back to navigator data
+    }
+  }
+
+  return locales.some((locale) => isKoreanLocale(locale)) ? "ko" : "en"
+}
+
+function readStoredLanguage(): LanguageCode | null {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  const stored = window.localStorage?.getItem(LANGUAGE_STORAGE_KEY)
+  return stored === "ko" || stored === "en" ? stored : null
+}
+
 function generatePresetId() {
   const cryptoApi = typeof globalThis !== "undefined" ? (globalThis.crypto as Crypto | undefined) : undefined
   if (cryptoApi?.randomUUID) {
@@ -212,6 +327,7 @@ export default function DashboardPage() {
   const [isFinishPresetDialogOpen, setIsFinishPresetDialogOpen] = useState(false)
   const [finishPresetName, setFinishPresetName] = useState("")
   const [isNewPresetDraft, setIsNewPresetDraft] = useState(false)
+  const [language, setLanguage] = useState<LanguageCode>("en")
 
   const widgetMetadataKey = Object.keys(widgetMetadata).join(",")
   const availableWidgets = Object.values(widgetMetadata)
@@ -223,6 +339,8 @@ export default function DashboardPage() {
   const presetStorageKey = `dashboard-presets-${dashboardId}`
   const legacyStorageKey = `dashboard-config-${dashboardId}`
   const activePreset = presets.find((preset) => preset.id === activePresetId) ?? presets[0]
+  const copy = dashboardCopy[language]
+  const presetButtonLabel = activePreset?.name ?? dashboard?.name ?? copy.presetButtonPlaceholder
 
   // Load dashboard configuration & presets
   useEffect(() => {
@@ -313,6 +431,20 @@ export default function DashboardPage() {
       setSelectedWidgetType("")
     }
   }, [isEditMode, isAddingWidget])
+
+  useEffect(() => {
+    const storedLanguage = readStoredLanguage()
+    if (storedLanguage) {
+      setLanguage(storedLanguage)
+      return
+    }
+    setLanguage(detectPreferredLanguage())
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage?.setItem(LANGUAGE_STORAGE_KEY, language)
+  }, [language])
 
   const saveDashboardAsNewPreset = (source: DashboardConfig, nameOverride?: string) => {
     const fallbackName =
@@ -607,30 +739,38 @@ export default function DashboardPage() {
       <header className="border-b border-border bg-card">
         <div className="px-6 py-4 space-y-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4">
-              <img src="/dashboard-logo.png" alt="ApiLog" className="h-8" />
-              <div className="h-6 w-px bg-border" />
-              <div>
-                <h1 className="text-xl font-semibold text-foreground">{dashboard.name}</h1>
-                <p className="text-sm text-muted-foreground">Save and reuse layouts with presets.</p>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
+              <div className="flex items-center gap-4">
+                <img src="/dashboard-logo.png" alt="ApiLog" className="h-8" />
+                <div className="h-6 w-px bg-border" />
+                <div>
+                  <h1 className="text-xl font-semibold text-foreground">{dashboard.name}</h1>
+                  <p className="text-sm text-muted-foreground">{copy.tagline}</p>
+                </div>
               </div>
+              <Button
+                size="lg"
+                className="w-full sm:w-auto font-semibold shadow-sm"
+                onClick={() => (globalThis.location.hash = "#/ai-report")}
+                aria-label={copy.aiReport}
+              >
+                {copy.aiReport}
+              </Button>
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-3">
-              {/* Theme Toggle Button */}
-              <ThemeToggle />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="min-w-[220px] justify-between">
-                    <span className="truncate">{activePreset?.name ?? dashboard?.name ?? "Select preset"}</span>
+                    <span className="truncate">{presetButtonLabel}</span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-64">
-                  <DropdownMenuLabel>Presets</DropdownMenuLabel>
+                  <DropdownMenuLabel>{copy.presetMenuTitle}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {presets.length === 0 ? (
-                    <DropdownMenuItem disabled>No presets yet</DropdownMenuItem>
+                    <DropdownMenuItem disabled>{copy.noPresets}</DropdownMenuItem>
                   ) : (
                     presets.map((preset) => (
                       <DropdownMenuItem key={preset.id} onSelect={() => handlePresetSelect(preset.id)}>
@@ -648,18 +788,18 @@ export default function DashboardPage() {
                       onSelect={() => handleSavePresetChanges()}
                     >
                       <Save className="mr-2 h-4 w-4" />
-                      Save changes
+                      {copy.saveChanges}
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem onSelect={() => openSaveAsDialog()} disabled={!dashboard}>
                     <CopyPlus className="mr-2 h-4 w-4" />
-                    Save as preset
+                    {copy.saveAsPreset}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                  <DropdownMenuLabel>{copy.actionsTitle}</DropdownMenuLabel>
                   <DropdownMenuItem onSelect={() => openRenameDialog()} disabled={!activePresetId}>
                     <PenLine className="mr-2 h-4 w-4" />
-                    Rename preset
+                    {copy.renamePreset}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive"
@@ -667,28 +807,41 @@ export default function DashboardPage() {
                     onSelect={() => setIsDeleteDialogOpen(true)}
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
-                    Delete preset
+                    {copy.deletePreset}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
               {hasUnsavedChanges && (
                 <Badge variant="secondary" className="uppercase tracking-wide">
-                  Unsaved
+                  {copy.unsavedBadge}
                 </Badge>
               )}
 
               {!isNewPresetDraft && (
                 <Button variant="outline" size="sm" onClick={handleStartNewLayout}>
                   <Plus className="h-4 w-4 mr-2" />
-                  New Layout
+                  {copy.newLayout}
                 </Button>
               )}
 
               <Button variant={isEditMode ? "default" : "outline"} size="sm" onClick={handleToggleEditMode}>
                 <LayoutGrid className="h-4 w-4 mr-2" />
-                {isEditMode ? "Save" : "Edit Layout"}
+                {isEditMode ? copy.saveLayout : copy.editLayout}
               </Button>
+
+              <div className="flex items-center gap-2 pl-3 border-l border-border">
+                <Select value={language} onValueChange={(value) => (value === "ko" || value === "en" ? setLanguage(value) : null)}>
+                  <SelectTrigger className="w-[140px]" aria-label={copy.languageLabel}>
+                    <SelectValue placeholder={copy.languageLabel} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="ko">한국어</SelectItem>
+                  </SelectContent>
+                </Select>
+                <ThemeToggle />
+              </div>
             </div>
           </div>
         </div>
@@ -717,6 +870,7 @@ export default function DashboardPage() {
                   type={widget.type}
                   config={widget.config}
                   timeRange={timeRange}
+                  language={language}
                   isEditMode={isEditMode}
                   onRemove={() => handleRemoveWidget(widget.id)}
                 />
@@ -731,13 +885,11 @@ export default function DashboardPage() {
           <div className="flex flex-col items-center justify-center py-20">
             <div className="text-center max-w-md">
               <LayoutGrid className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-              <h2 className="text-2xl font-semibold mb-2">No widgets yet</h2>
-              <p className="text-muted-foreground mb-6">
-                Start building your custom dashboard by adding widgets that matter to you.
-              </p>
+              <h2 className="text-2xl font-semibold mb-2">{copy.emptyTitle}</h2>
+              <p className="text-muted-foreground mb-6">{copy.emptySubtitle}</p>
               <Button onClick={() => setIsEditMode(true)} size="lg">
                 <Plus className="h-5 w-5 mr-2" />
-                Add Your First Widget
+                {copy.emptyCta}
               </Button>
             </div>
           </div>
@@ -748,7 +900,7 @@ export default function DashboardPage() {
         <>
           <div className="fixed bottom-6 right-6 z-40 flex items-center gap-3">
             <span className="rounded-full bg-background/90 px-4 py-2 text-sm font-medium text-foreground shadow-lg shadow-primary/20">
-              Add Widget
+              {copy.addWidgetHint}
             </span>
             <Button
               size="icon"

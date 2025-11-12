@@ -5,6 +5,8 @@ export {
   XAxis,
   YAxis,
   CartesianGrid,
+  LineChart,
+  Line,
   Tooltip,
   LabelList,
   PieChart,

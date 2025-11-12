@@ -1,27 +1,37 @@
 import { useEffect, useMemo, useState } from "react"
 import { CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
+import { getCommonWidgetCopy } from "../i18n"
+import { getDwellTimeCopy } from "./locales"
 
 type Row = { path: string; avgSeconds: number; sessions?: number }
 
-const API_BASE = ""
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "")
+
 async function fetchDwellTime(range: string, top = 10): Promise<Row[]> {
   const url = `${API_BASE}/api/query/dwell-time?range=${encodeURIComponent(range)}&top=${top}`
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(await res.text())
-  const data = await res.json()
-  const rows = (data?.rows ?? []) as Array<any>
-  return rows.map((r) => ({
+  const response = await fetch(url)
+  if (!response.ok) {
+    const message = await response.text()
+    throw new Error(message || `Failed to fetch dwell-time data (${response.status})`)
+  }
+
+  const rows = (await response.json())?.rows ?? []
+  return rows.map((r: any) => ({
     path: r?.path ?? "",
-    avgSeconds: Number(r?.avg_seconds ?? r?.avg_dwell ?? r?.avg ?? 0),
+    avgSeconds: Number(r?.avg_seconds ?? 0),
     sessions: r?.sessions != null ? Number(r.sessions) : undefined,
   }))
 }
 
 function displayPath(p: string) {
-  if (!p) return "/"
-  if (p === "/") return "/"
-  return p.replace(/^\/+/, "")
+  if (!p || p === "/") return "/"
+  try {
+    const parsed = new URL(p, window.location.origin)
+    return parsed.pathname.replace(/^\/+/, "") || "/"
+  } catch {
+    return p.replace(/^\/+/, "")
+  }
 }
 
 function formatDuration(totalSeconds: number) {
@@ -30,39 +40,33 @@ function formatDuration(totalSeconds: number) {
   const m = Math.floor((s % 3600) / 60)
   const sec = s % 60
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
-  return `${m}:${String(sec).padStart(2, "0")}`
+  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
 }
 
-export default function DwellTimeWidget({ timeRange }: WidgetProps) {
+export default function DwellTimeWidget({ timeRange, language }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const common = getCommonWidgetCopy(language)
+  const copy = getDwellTimeCopy(language)
 
-  // Mock data until backend is ready
   useEffect(() => {
-    let cancelled = false
-    setRows(null)
-    setError(null)
+    let active = true
 
-    const MOCK_ROWS: Row[] = [
-      { path: "/", avgSeconds: 185 },
-      { path: "/pricing", avgSeconds: 142 },
-      { path: "/blog/how-to-start", avgSeconds: 226 },
-      { path: "/docs/getting-started", avgSeconds: 318 },
-      { path: "/features", avgSeconds: 174 },
-      { path: "/blog/performance-tips", avgSeconds: 261 },
-      { path: "/dashboard", avgSeconds: 203 },
-      { path: "/signup", avgSeconds: 97 },
-      { path: "/changelog", avgSeconds: 156 },
-      { path: "/careers", avgSeconds: 134 },
-    ]
+    async function load() {
+      setRows(null)
+      setError(null)
+      const range = timeRange?.trim() || "7d"
+      try {
+        const data = await fetchDwellTime(range, 10)
+        if (active) setRows(data)
+      } catch (err) {
+        if (active) setError(err instanceof Error ? err.message : String(err))
+      }
+    }
 
-    const t = setTimeout(() => {
-      if (!cancelled) setRows(MOCK_ROWS)
-    }, 250)
-
+    load()
     return () => {
-      cancelled = true
-      clearTimeout(t)
+      active = false
     }
   }, [timeRange])
 
@@ -74,21 +78,21 @@ export default function DwellTimeWidget({ timeRange }: WidgetProps) {
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
-        <CardTitle>Top Pages by Average Dwell Time</CardTitle>
+        <CardTitle>{copy.title}</CardTitle>
       </CardHeader>
       <CardContent className="pt-2">
         <div className="mb-2 flex items-center justify-between text-sm font-semibold text-foreground">
-          <span>Page</span>
-          <span>Avg Time</span>
+          <span>{copy.pageColumn}</span>
+          <span>{copy.avgTimeColumn}</span>
         </div>
 
-        {error && <div className="text-sm text-red-500">Error: {error}</div>}
-        {!error && rows === null && <div className="text-sm text-muted-foreground">Loading...</div>}
-        {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">No data</div>}
+        {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
+        {!error && rows === null && <div className="text-sm text-muted-foreground">{common.loading}</div>}
+        {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">{common.noData}</div>}
         {!error && rows && rows.length > 0 && (
           <div className="divide-y">
             {topSorted.map((r, idx) => (
-              <div key={`${r.path}-${idx}`} className="flex items-center justify-between py-2">
+              <div key={`${r.path}-${r.avgSeconds}-${idx}`} className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-xs tabular-nums text-muted-foreground w-6 text-right">{idx + 1}.</span>
                   <div className="text-sm truncate">{displayPath(r.path)}</div>

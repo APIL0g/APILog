@@ -9,11 +9,12 @@ interface WidgetHostProps {
   type: string
   config?: Record<string, any>
   timeRange: string
+  language?: string
   isEditMode: boolean
   onRemove: () => void
 }
 
-export function WidgetHost({ type, config, timeRange, isEditMode, onRemove }: WidgetHostProps) {
+export function WidgetHost({ type, config, timeRange, language, isEditMode, onRemove }: WidgetHostProps) {
   const WidgetComponent = widgetRegistry[type]
 
   if (!WidgetComponent) {
@@ -58,7 +59,7 @@ export function WidgetHost({ type, config, timeRange, isEditMode, onRemove }: Wi
 
       {/* Widget Content */}
       <div className="flex-1 overflow-auto">
-        <WidgetComponent config={config} timeRange={timeRange} />
+        <WidgetComponent config={config} timeRange={timeRange} language={language} />
       </div>
     </Card>
   )

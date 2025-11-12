@@ -6,6 +6,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 import { ChevronDown } from "lucide-react"
 import { getIconFor } from "../utils"
+import { getCommonWidgetCopy } from "../i18n"
+import { getTopButtonsGlobalCopy } from "./locales"
 
 type Row = { element_text: string; count: number }
 
@@ -21,11 +23,13 @@ async function fetchTopButtonsGlobal(range: string): Promise<Row[]> {
   }))
 }
 
-export default function TopButtonsGlobalWidget({ timeRange }: WidgetProps) {
+export default function TopButtonsGlobalWidget({ timeRange, language }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [range, setRange] = useState<string>("7d")
   const [openRange, setOpenRange] = useState(false)
+  const common = getCommonWidgetCopy(language)
+  const copy = getTopButtonsGlobalCopy(language)
 
   useEffect(() => {
     let cancelled = false
@@ -51,7 +55,7 @@ export default function TopButtonsGlobalWidget({ timeRange }: WidgetProps) {
   return (
     <>
       <CardHeader className="flex items-center justify-between">
-        <CardTitle>Top Button Clicks (Global)</CardTitle>
+        <CardTitle>{copy.title}</CardTitle>
         <div className="ml-auto flex items-center gap-2">
           <Popover open={openRange} onOpenChange={setOpenRange}>
             <PopoverTrigger asChild>
@@ -60,17 +64,17 @@ export default function TopButtonsGlobalWidget({ timeRange }: WidgetProps) {
                 size="sm"
                 className="h-8 min-w-[16ch] px-3 gap-2 whitespace-nowrap justify-between shrink-0"
               >
-                {range === "30d" ? "Last 30 days" : "Last 7 days"}
+                {range === "30d" ? copy.range30 : copy.range7}
                 <ChevronDown className="h-4 w-4 opacity-60" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0 w-[180px]" align="end">
               <Command>
                 <CommandList>
-                  <CommandEmpty>No options</CommandEmpty>
+                  <CommandEmpty>{copy.noOptions}</CommandEmpty>
                   <CommandGroup>
-                    <CommandItem onSelect={() => { setRange("7d"); setOpenRange(false) }}>Last 7 days</CommandItem>
-                    <CommandItem onSelect={() => { setRange("30d"); setOpenRange(false) }}>Last 30 days</CommandItem>
+                    <CommandItem onSelect={() => { setRange("7d"); setOpenRange(false) }}>{copy.range7}</CommandItem>
+                    <CommandItem onSelect={() => { setRange("30d"); setOpenRange(false) }}>{copy.range30}</CommandItem>
                   </CommandGroup>
                 </CommandList>
               </Command>
@@ -80,12 +84,12 @@ export default function TopButtonsGlobalWidget({ timeRange }: WidgetProps) {
       </CardHeader>
       <CardContent className="pt-2">
         <div className="mb-2 flex items-center justify-between text-sm font-semibold text-foreground">
-          <span>Button</span>
-          <span>Clicks</span>
+          <span>{copy.columnButton}</span>
+          <span>{copy.columnClicks}</span>
         </div>
-        {error && <div className="text-sm text-red-500">Error: {error}</div>}
-        {!error && rows === null && <div className="text-sm text-muted-foreground">Loading...</div>}
-        {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">No data</div>}
+        {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
+        {!error && rows === null && <div className="text-sm text-muted-foreground">{common.loading}</div>}
+        {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">{common.noData}</div>}
         {!error && rows && rows.length > 0 && (
           <div className="divide-y">
             {topSorted.map((r, idx) => (

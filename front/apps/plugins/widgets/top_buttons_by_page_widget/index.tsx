@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { getIconFor } from "../utils"
+import { getCommonWidgetCopy } from "../i18n"
+import { getTopButtonsByPageCopy } from "./locales"
 
 type Row = { site_id: string; element_text: string; count: number }
 type PathOption = { path: string; count: number }
@@ -52,7 +54,7 @@ async function fetchTopButtonsByPath(path: string, range: string): Promise<Row[]
   return rows.map((r) => ({ site_id: path, element_text: r?.element_text ?? "unknown", count: Number(r?.count ?? 0) }))
 }
 
-export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
+export default function TopButtonsByPageWidget({ timeRange, language }: WidgetProps) {
   const [paths, setPaths] = useState<PathOption[]>([])
   const [pagePath, setPagePath] = useState<string>("")
   const [range, setRange] = useState<string>("7d")
@@ -60,6 +62,8 @@ export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const common = getCommonWidgetCopy(language)
+  const copy = getTopButtonsByPageCopy(language)
 
   useEffect(() => {
     let cancelled = false
@@ -130,7 +134,7 @@ export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
 
   const fmt = (n: number) => new Intl.NumberFormat().format(n)
   const displayPath = (p: string) => {
-    if (!p) return "Select page"
+    if (!p) return copy.pagePlaceholder
     if (p === "/") return "/"
     return p.replace(/^\/+/, "")
   }
@@ -138,7 +142,7 @@ export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
   return (
     <>
       <CardHeader className="flex items-center justify-between">
-        <CardTitle>Top Button Clicks by Page</CardTitle>
+        <CardTitle>{copy.title}</CardTitle>
         <div className="ml-auto flex items-center gap-2">
           <Popover open={openRange} onOpenChange={setOpenRange}>
             <PopoverTrigger asChild>
@@ -147,17 +151,17 @@ export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
                 size="sm"
                 className="h-8 min-w-[16ch] px-3 gap-2 whitespace-nowrap justify-between shrink-0"
               >
-                {range === "30d" ? "Last 30 days" : "Last 7 days"}
+                {range === "30d" ? copy.range30 : copy.range7}
                 <ChevronDown className="h-4 w-4 opacity-60" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="p-0 w-[180px]" align="end">
               <Command>
                 <CommandList>
-                  <CommandEmpty>No options</CommandEmpty>
+                  <CommandEmpty>{copy.noOptions}</CommandEmpty>
                   <CommandGroup>
-                    <CommandItem onSelect={() => { setRange("7d"); setOpenRange(false) }}>Last 7 days</CommandItem>
-                    <CommandItem onSelect={() => { setRange("30d"); setOpenRange(false) }}>Last 30 days</CommandItem>
+                    <CommandItem onSelect={() => { setRange("7d"); setOpenRange(false) }}>{copy.range7}</CommandItem>
+                    <CommandItem onSelect={() => { setRange("30d"); setOpenRange(false) }}>{copy.range30}</CommandItem>
                   </CommandGroup>
                 </CommandList>
               </Command>
@@ -180,9 +184,9 @@ export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
             </PopoverTrigger>
             <PopoverContent className="p-0 w-64" align="end">
               <Command>
-                <CommandInput placeholder="Search page..." />
+                <CommandInput placeholder={copy.searchPlaceholder} />
                 <CommandList>
-                  <CommandEmpty>No results found</CommandEmpty>
+                  <CommandEmpty>{copy.noResults}</CommandEmpty>
                   <CommandGroup>
                     {paths.map((p) => {
                       const percent = totalPathCount > 0 ? ((p.count / totalPathCount) * 100).toFixed(1) : null
@@ -198,7 +202,7 @@ export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
                           <div className="flex flex-col">
                             <span>{displayPath(p.path)}</span>
                             <span className="text-xs text-muted-foreground">
-                              {fmt(p.count)} clicks{percent ? ` · ${percent}%` : ""}
+                              {fmt(p.count)} {copy.clicksLabel}{percent ? ` · ${percent}%` : ""}
                             </span>
                           </div>
                         </CommandItem>
@@ -212,13 +216,13 @@ export default function TopButtonsByPageWidget({ timeRange }: WidgetProps) {
         </div>
 
         <div className="mb-2 flex items-center justify-between text-sm font-semibold text-foreground">
-          <span>Button</span>
-          <span>Clicks</span>
+          <span>{copy.columnButton}</span>
+          <span>{copy.columnClicks}</span>
         </div>
 
-        {error && <div className="text-sm text-red-500">Error: {error}</div>}
-        {!error && rows === null && <div className="text-sm text-muted-foreground">Loading...</div>}
-        {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">No data</div>}
+        {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
+        {!error && rows === null && <div className="text-sm text-muted-foreground">{common.loading}</div>}
+        {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">{common.noData}</div>}
         {!error && rows && rows.length > 0 && (
           <div className="divide-y">
             {topSorted.map((r, idx) => (

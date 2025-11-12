@@ -3,14 +3,9 @@ import base64
 
 from typing import Any, Dict, List
 
-try:
-    from influxdb_client_3 import InfluxDBClient3  # type: ignore
-except Exception:  # pragma: no cover
-    InfluxDBClient3 = None  # type: ignore
+from influxdb_client_3 import InfluxDBClient3
 
-from influxdb_client import InfluxDBClient
-
-from config import INFLUX_URL, INFLUX_TOKEN, INFLUX_BUCKET
+from config import INFLUX_DATABASE, INFLUX_URL, INFLUX_TOKEN
 # from app.ingest.influx import get_influxdb # (InfluxDB 연동 시 필요)
 
 # 모든 스냅샷이 저장될 단일 디렉토리 (docker-compose.yml에서 볼륨 마운트 필요)
@@ -67,11 +62,12 @@ def get_click_data_from_influx(path: str, device_type: str) -> List[Dict[str, An
         WHERE
             "path" = '{path}' 
             AND "device_type" = '{device_type}'
+            AND "event_name" = 'click'
         GROUP BY x, y
     '''
 
     try:
-        result_df = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_BUCKET).query(query)
+        result_df = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_DATABASE).query(query)
 
         if result_df is None:
             return []
@@ -93,7 +89,7 @@ def get_available_paths_from_influx() -> List[str]:
 
     try:
         # 2. InfluxDB 3.x 클라이언트로 쿼리 실행
-        result_df = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_BUCKET).query(query)
+        result_df = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_DATABASE).query(query)
 
         if result_df is None:
             return []

@@ -26,9 +26,9 @@ export default function RootLayout({
     <html lang="ko">
       <head>
         <Script
-          src="http://localhost:8080/apilog/embed.js"
+          src="http://localhost:10000/apilog/embed.js"
           data-site-id="main"
-          data-ingest-url="http://localhost:8080/api/ingest/events"
+          data-ingest-url="http://localhost:10000/api/ingest/events"
           strategy="beforeInteractive"
         />
       </head>

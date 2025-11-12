@@ -1,5 +1,10 @@
 ﻿# Contributing Guide (English)
 
+<p align="center">
+  <a href="CONTRIBUTING.md"><strong>English</strong></a> |
+  <a href="CONTRIBUTING.ko.md">한국어</a>
+</p>
+
 ## Communication
 - Discuss significant changes in GitHub issues before opening a pull request.
 - Use English for issue titles and summaries; add Korean context when helpful.
@@ -171,3 +176,4 @@ These conventions are designed to ensure **maintainability and consistency** acr
 ## Conduct
 - Be respectful, collaborate openly, and welcome new contributors.
 - Report abusive behaviour to the maintainers via the security contact channel.
+

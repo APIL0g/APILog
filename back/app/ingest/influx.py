@@ -3,21 +3,23 @@
 """
 
 from typing import Any, Dict, List, Optional
-import os
 import math
 
-from influxdb_client import InfluxDBClient, Point
-from influxdb_client.client.write_api import SYNCHRONOUS
+from influxdb_client_3 import InfluxDBClient3, Point
 
-INFLUX_URL = os.getenv("INFLUX_URL", "http://localhost:8086")
-INFLUX_TOKEN = os.getenv("INFLUX_TOKEN", "dev-token")
-INFLUX_ORG = os.getenv("INFLUX_ORG", "apilog")
-INFLUX_BUCKET = os.getenv("INFLUX_BUCKET", "apilog_raw")
-DEFAULT_TAG_VALUE = os.getenv("INFLUX_TAG_DEFAULT", "none")
+from config import (
+    INFLUX_DATABASE,
+    INFLUX_TOKEN,
+    INFLUX_URL,
+)
 
-_client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
-_write = _client.write_api(write_options=SYNCHRONOUS)
-_query = _client.query_api()
+DEFAULT_TAG_VALUE = "none"
+
+_client = InfluxDBClient3(
+    host=INFLUX_URL,
+    token=INFLUX_TOKEN,
+    database=INFLUX_DATABASE,
+)
 
 
 def _safe_str(value: Any, default: str = "") -> str:
@@ -146,9 +148,7 @@ def write_events(events: List[Dict[str, Any]]) -> None:
     if points:
         # Batch write all prepared points to reduce network overhead.
         # 네트워크 오버헤드를 줄이기 위해 준비된 포인트를 배치로 기록합니다.
-        _write.write(
-            bucket=INFLUX_BUCKET,
-            org=INFLUX_ORG,
+        _client.write(
             record=points,
             write_precision="ms",
         )

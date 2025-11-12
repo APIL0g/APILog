@@ -10,6 +10,8 @@ import {
   CartesianGrid,
   LabelList,
 } from "@/lib/recharts"
+import { getCommonWidgetCopy } from "../i18n"
+import { getDailyCountCopy } from "./locales"
 
 type Row = { date: string; cnt: number }
 
@@ -41,9 +43,11 @@ async function fetchDaily(range: string): Promise<Row[]> {
   return data?.rows ?? []
 }
 
-export default function DailyCountWidget({ timeRange }: WidgetProps) {
+export default function DailyCountWidget({ timeRange, language }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const common = getCommonWidgetCopy(language)
+  const copy = getDailyCountCopy(language)
 
   useEffect(() => {
     let alive = true
@@ -87,13 +91,13 @@ export default function DailyCountWidget({ timeRange }: WidgetProps) {
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
-        <CardTitle>Daily Log Count (7d)</CardTitle>
+        <CardTitle>{copy.title}</CardTitle>
       </CardHeader>
       <CardContent className="pt-3 md:pt-4" style={{ height: 280 }}>
-        {error && <div className="text-sm text-red-500">Error: {error}</div>}
-        {!rows && !error && <div className="text-sm text-muted-foreground">Loading...</div>}
+        {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
+        {!rows && !error && <div className="text-sm text-muted-foreground">{common.loading}</div>}
         {rows && rows.length === 0 && (
-          <div className="text-sm text-muted-foreground">No data</div>
+          <div className="text-sm text-muted-foreground">{common.noData}</div>
         )}
         {rows && rows.length > 0 && (
           <ResponsiveContainer width="100%" height="100%">

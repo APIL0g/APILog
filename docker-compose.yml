@@ -1,13 +1,12 @@
-﻿############################################################
 # Docker Compose for APILog Production Environment
-# APILog 실제 배포 환경용 Docker Compose
+# APILog 운영 배포용 Docker Compose 구성 (Prod)
 ############################################################
 
 services:
   ############################################################
   # 1) InfluxDB 3 Core
-  #    Time-series DB (HTTP API on port 8181, localhost only)
-  #    시계열 데이터베이스 (로컬호스트에서만 8181 포트 제공)
+  #    Time-series DB (HTTP API on port 8181, local-only access)
+  #    시간 기반 데이터 저장소 (8181 포트, 내부 전용)
   ############################################################
   influxdb3-core:
     image: influxdb:3-core
@@ -19,16 +18,19 @@ services:
       INFLUXDB3_OBJECT_STORE: file
 
       # Data directory (persisted to volume)
-      # 데이터 디렉터리 (볼륨에 영구 저장)
+      # 데이터 디렉터리 (볼륨에 영속 저장)
       INFLUXDB3_DB_DIR: /var/lib/influxdb3
 
       # Node ID (required argument)
       # 노드 ID (필수 인자)
       INFLUXDB3_NODE_ID: influx-node0
 
+      # Disable auth for self-contained deployments
+      # 단일 배포 구성에서는 인증 비활성화
       INFLUXDB3_START_WITHOUT_AUTH: "true"
 
     command:
+      # Entry command with explicit parameters / 필수 인자 명시
       - influxdb3
       - serve
       - --log-filter
@@ -40,17 +42,20 @@ services:
       - --node-id
       - influx-node0
 
+    # Expose port 8181 only inside the compose network (no host binding)
+    # compose 네트워크 내부에서만 8181 포트를 노출 (호스트 포트 사용 안 함)
+    expose:
+      - "8181"
+
     volumes:
       # Database / catalog / parquet storage
-      # 데이터베이스, 카탈로그, 파케 저장 볼륨
+      # DB / 카탈로그 / Parquet 데이터 저장
       - influx-data:/var/lib/influxdb3
-
       # Home metadata for influxdb3 user
-      # influxdb3 유저 홈 메타데이터
+      # influxdb3 사용자 홈 메타데이터
       - influx-meta:/home/influxdb3/.influxdb3
-
       # Plugins directory (rollups, custom scripts)
-      # 플러그인 저장소 (롤업, 커스텀 스크립트)
+      # 플러그인/커스텀 스크립트 디렉터리
       - influx-plugins:/plugins
 
     restart: unless-stopped
@@ -58,33 +63,46 @@ services:
 
   ############################################################
   # 2) apilog-api (FastAPI backend)
-  #    Event ingestion & query API for APILog
-  #    APILog의 이벤트 수집 및 조회용 백엔드 API
+  #    Event ingestion & query API
+  #    이벤트 수집/조회 API
   ############################################################
   apilog-api:
     container_name: apilog-api
     build: ./back/app
 
     environment:
-      INFLUX_URL: http://influxdb3-core:8181
-      INFLUX_TOKEN: ${INFLUX_TOKEN}       # prod에서는 실제 토큰을 .env에
-      INFLUX_ORG: ${INFLUX_ORG}
-      INFLUX_BUCKET: ${INFLUX_DATABASE}
+      # Backend <-> InfluxDB connection info
+      # API와 InfluxDB 연결 정보
+      INFLUX_URL: ${INFLUX_URL}
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      INFLUX_DATABASE: ${INFLUX_DATABASE}
+
+      # Web API behavior (CORS & LLM)
+      # 웹 API 동작 (CORS, LLM)
       CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN}
       LLM_PROVIDER: ${LLM_PROVIDER}
       LLM_ENDPOINT: ${LLM_ENDPOINT}
       LLM_MODEL: ${LLM_MODEL}
-      LLM_TEMPERATURE: ${LLM_TEMPERATURE}
-      LLM_TIMEOUT_S: ${LLM_TIMEOUT_S}
+
+      # AI widgets' knobs (cache/internal API/snapshot target)
+      # AI 위젯 설정 (캐시/내부 API/스냅샷 대상)
+      AI_INSIGHTS_CACHE_TTL: ${AI_INSIGHTS_CACHE_TTL}
+      AI_INSIGHTS_EXPLAIN_CACHE_TTL: ${AI_INSIGHTS_EXPLAIN_CACHE_TTL}
+      AI_REPORT_FETCH_BASE: ${AI_REPORT_FETCH_BASE}
+      TARGET_SITE_BASE_URL: ${TARGET_SITE_BASE_URL}
 
     depends_on:
       - influxdb3-core
       - ollama
 
+    # Expose backend port internally (reverse proxy consumes it)
+    # 내부에서만 8000 포트를 노출 (Nginx가 프록시)
     expose:
-      - "8000"  # 내부 컨테이너에서만 접근
+      - "8000"
 
     volumes:
+      # Persisted snapshot images mounted at /api/snapshots
+      # 히트맵 스냅샷 저장용 볼륨
       - snapshots:/snapshots
 
     restart: unless-stopped
@@ -92,7 +110,8 @@ services:
 
   ############################################################
   # 3) apilog-nginx (Frontend + Reverse Proxy)
-  #    프론트엔드 정적파일 서빙 및 API 프록시
+  #    Serves static dashboard + proxies API
+  #    프런트 대시보드 및 API 리버스 프록시
   ############################################################
   apilog-nginx:
     container_name: apilog-nginx
@@ -100,8 +119,10 @@ services:
       context: .
       dockerfile: infra/nginx/Dockerfile
 
+    # Map host 10000 -> container 80 (adjust if port conflict occurs)
+    # 호스트 10000 포트를 컨테이너 80에 매핑 (충돌 시 수정)
     ports:
-      - "8080:80"   # 예: Cloudflare / 외부 Nginx → :8080
+      - "10000:80"
 
     depends_on:
       - apilog-api
@@ -111,18 +132,44 @@ services:
 
   ############################################################
   # 4) ollama (Local LLM Server)
-  #    AI 모델 로컬 인퍼런스 서버 (포트 11434)
+  #    Provides local LLM endpoint for AI widgets
+  #    AI 위젯에 필요한 로컬 LLM 서버
   ############################################################
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
 
     environment:
-      - OLLAMA_HOST=0.0.0.0
-      - OLLAMA_KEEP_ALIVE=1h
+      # Network binding for the Ollama service
+      # LLM 서비스 바인딩
+      OLLAMA_HOST: 0.0.0.0
+      OLLAMA_KEEP_ALIVE: 1h
+      # If not provided via .env it falls back to llama3:8b
+      # .env에 없으면 기본값(laama3:8b) 사용
+      LLM_MODEL: ${LLM_MODEL:-llama3:8b}
+
+    # Only expose internally; FastAPI calls it via service name.
+    # 내부에서만 노출, FastAPI가 서비스 이름으로 접근
+    expose:
+      - "11434"
 
     volumes:
+      # Cache downloaded models
+      # 다운로드 모델 캐시
       - ollama-data:/root/.ollama
+
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "Bootstrapping Ollama model: $LLM_MODEL"
+        ollama serve &
+        PID=$!
+        sleep 10
+        if [ -n "$LLM_MODEL" ]; then
+          ollama pull "$LLM_MODEL" || echo "Warning: failed to pull $LLM_MODEL"
+        fi
+        wait $PID
 
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:11434/api/tags"]
@@ -132,17 +179,12 @@ services:
 
     restart: unless-stopped
 
-    # GPU 환경이면 아래 주석 해제해서 GPU 사용 가능
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - capabilities: ["gpu"]
+    # gpus: all
 
 
 ##############################################################
 # Named Volumes (Persistent storage)
-# 영구 데이터 저장소
+# 영속 데이터를 위한 볼륨 정의
 ##############################################################
 volumes:
   influx-data:
