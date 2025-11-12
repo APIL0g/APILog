@@ -46,6 +46,22 @@
     globalApi.__q = [];
   }
 
+  const INTERACTIVE_SELECTOR = [
+    "button",
+    'input[type="button"]',
+    'input[type="submit"]',
+    "select",
+    "textarea",
+    '[role="button"]',
+    '[role="link"]',
+    "[onclick]",
+    "[data-action]",
+    "[data-apilog-action]",
+    "[data-apilog-interactive]",
+    "summary",
+  ].join(", ");
+  const DEAD_CLICK_LABEL = "dead-click";
+
   // ===========================================================================
   // 1. Small utility helpers
   // 작은 유틸 함수들
@@ -316,21 +332,67 @@
     return parts.join(" > ");
   }
 
-  function hashString(input: string): string {
-    let hash1 = 5381;
-    let hash2 = 52711;
-    for (let i = 0; i < input.length; i++) {
-      const ch = input.charCodeAt(i);
-      hash1 = (hash1 * 33) ^ ch;
-      hash2 = (hash2 * 33) ^ ch;
+  function normalizeWhitespace(value?: string): string {
+    return (value ?? "").replace(/\s+/g, " ").trim();
+  }
+
+  function findInteractiveFromEvent(ev: Event): Element | null {
+    if (typeof ev.composedPath === "function") {
+      const path = ev.composedPath();
+      for (const node of path) {
+        if (
+          node instanceof Element &&
+          typeof node.matches === "function" &&
+          node.matches(INTERACTIVE_SELECTOR)
+        ) {
+          return node;
+        }
+      }
     }
-    return (Math.abs(hash1 + hash2 * 15619) >>> 0).toString(36);
+    const target = ev.target as Element | null;
+    return target?.closest?.(INTERACTIVE_SELECTOR) ?? null;
+  }
+
+  function getReadableLabel(el: Element | null): string {
+    if (!el) {
+      return DEAD_CLICK_LABEL;
+    }
+    const heuristics = el.getAttribute?.("data-apilog-label")?.trim();
+    const text = (el as HTMLElement).innerText?.trim();
+    const aria = el.getAttribute?.("aria-label")?.trim();
+    const alt = (el as HTMLElement).getAttribute?.("alt")?.trim();
+    const title = el.getAttribute?.("title")?.trim();
+    const candidate = heuristics || text || aria || alt || title;
+    if (!candidate) {
+      return DEAD_CLICK_LABEL;
+    }
+    const cleaned = normalizeWhitespace(candidate);
+    if (!cleaned) {
+      return DEAD_CLICK_LABEL;
+    }
+    const alphaChars = cleaned.replace(/[^a-zA-Z가-힣ㄱ-ㅎㅏ-ㅣ]/g, "").length;
+    const digitChars = cleaned.replace(/[^0-9]/g, "").length;
+    const wordCount = cleaned.split(/\s+/).length;
+    if (alphaChars === 0) {
+      return DEAD_CLICK_LABEL;
+    }
+    if (digitChars >= alphaChars || digitChars >= 4) {
+      return DEAD_CLICK_LABEL;
+    }
+    if (wordCount > 8) {
+      return DEAD_CLICK_LABEL;
+    }
+    if (cleaned.length > 48) {
+      return cleaned.slice(0, 48).trim();
+    }
+    return cleaned;
   }
 
   function getElementSignature(
     el: Element,
     clickX: number,
-    clickY: number
+    clickY: number,
+    labelSource?: Element | null
   ): {
     selector: string;
     elementHash: string;
@@ -338,7 +400,7 @@
     relY: number | null;
   } {
     const selector = buildDomSelector(el);
-    const elementHash = hashString(selector);
+    const elementHash = getReadableLabel(labelSource ?? el);
 
     const rect = (el as HTMLElement).getBoundingClientRect();
 
@@ -529,6 +591,7 @@
       document.addEventListener(
         "click",
         (ev: MouseEvent) => {
+          const interactiveEl = findInteractiveFromEvent(ev);
           const docEl = document.documentElement;
           const bodyEl = document.body;
           const scrollX = window.pageXOffset || docEl.scrollLeft || 0;
@@ -551,8 +614,19 @@
           const x_pct = (maxW > 0) ? (x / maxW) : 0;
           const y_pct = (maxH > 0) ? (y / maxH) : 0;
 
-          const targetEl = (ev.target as Element) || document.body;
-          this.emitClick(targetEl, x_pct, y_pct);
+          if (!interactiveEl) {
+            this.q.push({
+              ...this.baseTags("dead_click", DEAD_CLICK_LABEL),
+              ...this.baseFields(),
+              click_x: x_pct,
+              click_y: y_pct,
+              scroll_pct: this.maxScrollSeen,
+              ts: now(),
+            });
+            return;
+          }
+
+          this.emitClick(interactiveEl, x_pct, y_pct, interactiveEl);
         },
         true // capture
       );
@@ -696,8 +770,8 @@
       this.pushRecord(rec);
     }
 
-    emitClick(targetEl: Element, absX: number, absY: number) {
-      const sig = getElementSignature(targetEl, absX, absY);
+    emitClick(targetEl: Element, absX: number, absY: number, labelEl?: Element | null) {
+      const sig = getElementSignature(targetEl, absX, absY, labelEl);
 
       const rec = Object.assign(
         {},
