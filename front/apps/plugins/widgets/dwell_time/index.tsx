@@ -7,6 +7,7 @@ import { getDwellTimeCopy } from "./locales"
 type Row = { path: string; avgSeconds: number; sessions?: number }
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "")
+const TIME_RANGE = "7d"
 
 async function fetchDwellTime(range: string, top = 10): Promise<Row[]> {
   const url = `${API_BASE}/api/query/dwell-time?range=${encodeURIComponent(range)}&top=${top}`
@@ -43,7 +44,7 @@ function formatDuration(totalSeconds: number) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
 }
 
-export default function DwellTimeWidget({ timeRange, language }: WidgetProps) {
+export default function DwellTimeWidget({ language }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const common = getCommonWidgetCopy(language)
@@ -55,9 +56,8 @@ export default function DwellTimeWidget({ timeRange, language }: WidgetProps) {
     async function load() {
       setRows(null)
       setError(null)
-      const range = timeRange?.trim() || "7d"
       try {
-        const data = await fetchDwellTime(range, 10)
+        const data = await fetchDwellTime(TIME_RANGE, 10)
         if (active) setRows(data)
       } catch (err) {
         if (active) setError(err instanceof Error ? err.message : String(err))
@@ -68,7 +68,7 @@ export default function DwellTimeWidget({ timeRange, language }: WidgetProps) {
     return () => {
       active = false
     }
-  }, [timeRange])
+  }, [])
 
   const topSorted = useMemo(() => {
     const list = rows ? [...rows] : []
