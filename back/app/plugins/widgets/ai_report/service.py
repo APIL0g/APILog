@@ -314,96 +314,101 @@ def _extract_json(text: str) -> Dict[str, Any]:
 def _build_messages(bundle: Dict[str, Any], prompt: str, language: str, audience: str, word_limit: int) -> List[Dict[str, str]]:
     schema_hint = {
         "generated_at": "ISO8601 string",
-        "title": "AI 웹사이트 컨디션 리포트",
+        "title": "AI ??? ?? & ?? ???",
         "summary": "string",
         "diagnostics": [
             {
-                "focus": "모바일 Chrome",
-                "finding": "진단 내용",
+                "focus": "??? Chrome",
+                "finding": "??? 32% / Chrome 46% ???? ??? ?????.",
                 "widget": "device_share|browser_share|daily_count",
                 "severity": "High|Medium|Low",
                 "share": "32%",
-                "insight": "추가 설명",
+                "insight": "??? ?? ??/UX? ?? ?????.",
             }
         ],
         "page_issues": [
             {
                 "page": "/checkout",
-                "issue": "짧은 체류와 높은 이탈",
+                "issue": "?? 12s ? ?? 74%? CTA ?? ? ??",
                 "dwell_time": "12s",
                 "exit_rate": "74%",
-                "insight": "문제 원인",
+                "insight": "??? ??? ?? ??? ?? CTA? ?????.",
                 "widget": "page_exit_rate|dwell_time",
             }
         ],
         "interaction_insights": [
             {
-                "area": "CTA 버튼",
-                "insight": "히트맵 설명",
-                "action": "실행 방안",
+                "area": "??? CTA",
+                "insight": "??? 72%? 1? CTA? ?? ????.",
+                "action": "?? CTA ??? ??? ??????.",
                 "widget": "top_buttons_global|top_buttons_by_path",
             }
         ],
         "ux_recommendations": [
             {
-                "category": "UX",
-                "suggestion": "구체적 UI 개선",
-                "rationale": "데이터 근거",
-                "validation": "검증 방법",
+                "category": "Checkout UX",
+                "suggestion": "CTA? 2? ??? ??? ?? ??? ?????.",
+                "rationale": "?? 12s, ?? 74%? ??? ????.",
+                "validation": "page_exit_rate + dwell_time 7? ????",
             }
         ],
         "tech_recommendations": [
             {
-                "category": "Tech",
-                "suggestion": "성능 개선",
-                "rationale": "추정 원인",
-                "validation": "추적 지표",
+                "category": "Mobile Performance",
+                "suggestion": "?? ?? ? ??? preconnect? LCP? 1? ????.",
+                "rationale": "??? Chrome ??? ??? 30% ?????.",
+                "validation": "device_share + browser_share + daily_count",
             }
         ],
         "priorities": [
             {
-                "title": "핵심 조치",
+                "title": "??? Chrome ?? ??",
                 "priority": "High|Medium|Low",
-                "impact": "예상 효과",
+                "impact": "?? ??? 30% ??? ???? 10%p ?? ? ????.",
                 "effort": "Low|Medium|High",
-                "expected_metric_change": {"metric": "page_exit_rate", "target": "-10%p", "period": "7d"},
-                "business_outcome": "비즈니스 영향",
+                "expected_metric_change": {"metric": "page_exit_rate", "target": "-10%p", "period": "14d"},
+                "business_outcome": "?? ?? +5%p",
             }
         ],
         "metrics_to_track": [
             {
-                "metric": "페이지별 이탈률",
+                "metric": "???? ???",
                 "widget": "page_exit_rate",
-                "reason": "개선 검증",
+                "reason": "?? ?? ?? ??",
                 "target_change": "-10%p",
-                "timeframe": "7d",
+                "timeframe": "14d",
             }
         ],
         "predictions": [
-            {"metric": "일일 로그", "baseline": 1800, "expected": 1950, "unit": "sessions", "narrative": "예측 근거"}
+            {
+                "metric": "?? ?? ?",
+                "baseline": 1800,
+                "expected": 1950,
+                "unit": "sessions",
+                "narrative": "?? ?? ? +8%~10% ??",
+            }
         ],
         "radar_scores": [
-            {"axis": "performance", "score": 58, "commentary": "모바일 최적화 필요"},
-            {"axis": "experience", "score": 62, "commentary": "CTA 혼선"},
-            {"axis": "growth", "score": 54, "commentary": "유입 정체"},
-            {"axis": "search", "score": 66, "commentary": "검색 노출 보통"},
-            {"axis": "stability", "score": 70, "commentary": "로그 안정"},
+            {"axis": "performance", "score": 58, "commentary": "??? ??? ?? ?? ??"},
+            {"axis": "experience", "score": 62, "commentary": "Checkout ???? ??"},
+            {"axis": "growth", "score": 54, "commentary": "?? ?? ?? ??"},
+            {"axis": "search", "score": 66, "commentary": "Top5 ??? ??? ??"},
+            {"axis": "stability", "score": 70, "commentary": "?? ?? ?? ??"},
         ],
     }
+
 
     locale = "Respond in English." if language.lower().startswith("en") else "Respond in Korean."
     bundle_excerpt = json.dumps(_bundle_snapshot(bundle), ensure_ascii=False)
     user_prompt = prompt.strip() or "핵심 문제를 진단하고 실행안을 제시해 주세요."
 
     instructions = """
-1. Diagnose traffic environments (device_share, browser_share, daily_count, top_pages) and highlight low-share/high-exit contexts.
-2. Identify problematic pages by combining dwell_time and page_exit_rate (mention dwell+exit metrics).
-3. Derive interaction insights from top_buttons_global/by_path and suggest UX tweaks.
-4. Provide actionable UX/Tech remedies with validation widgets and timeframe.
-5. Prioritize actions (High/Medium/Low) with expected business impact and metric targets.
-6. Offer numeric predictions (baseline vs expected) for key KPIs with ±5~15% realistic deltas.
-7. Output radar scores for performance/experience/growth/search/stability (0-100) with commentary.
-8. Return valid JSON matching the schema hint. Do not wrap with markdown.
+1. device_share, browser_share, daily_count, top_pages ??? ??? ?? ??? ??? ?? ??(??? ?? ??? ??? ?? ??)? ??? ?????.
+2. dwell_time? page_exit_rate? ??? ????? ?? ???? ?? ???? ????? ??????.
+3. top_buttons_global/by_path(???) ???? ???? ??? ????? ????? ???? CTA/??? ??? ?????.
+4. ????UX ???? ????? ??? ?? ????, ??? ??? ??? ???? ??? ?? ????.
+5. ???? ????(High/Medium/Low), ?? ???? ???, ???? ? ?? ??, baseline ?? expected ?? ??? ???, performance/experience/growth/search/stability ?? ?? ??? ??? ?????.
+JSON ?? ???? ????? ?? ???? ????. ???? ???? ?5~15% ??? ??? ?????.
 """
 
     content = (
@@ -435,6 +440,7 @@ class PromptContext:
         return any(candidate.lower() in self.keywords for candidate in candidates)
 
 
+
 class InsightGenerator:
     def __init__(
         self,
@@ -463,16 +469,57 @@ class InsightGenerator:
         self.top_buttons_global = _rows(bundle.get("top_buttons_global"))
         self.top_buttons_by_path = _rows(bundle.get("top_buttons_by_path"))
 
-        self.dwell_map = {row.get("path"): _as_float(row.get("avg_seconds")) for row in self.dwell_rows if row.get("path")}
-        self.total_sessions = sum(_as_int(row.get("sessions")) for row in self.device_rows if row.get("sessions") is not None)
+        self.heatmap_sample: Dict[str, Any] = _first_row(self.top_buttons_by_path)
+
+        self.dwell_map = {
+            row.get("path") or row.get("page"): _as_float(row.get("avg_seconds") or row.get("avg"))
+            for row in self.dwell_rows
+            if row.get("path") or row.get("page")
+        }
+
+        self.device_distribution = self._distribution(self.device_rows, ("device", "type", "name"))
+        self.browser_distribution = self._distribution(self.browser_rows, ("browser", "name"))
+        self.total_sessions = self.device_distribution["total"] or sum(
+            _as_int(row.get("cnt")) for row in self.daily_rows if row.get("cnt") is not None
+        )
+
+        self.top_page_summary = self._top_page_summary()
+
+        self.exit_index: Dict[str, Dict[str, Any]] = {}
+        exit_rates: List[float] = []
+        for row in self.exit_rows:
+            path = self._page_label(row)
+            if not path:
+                continue
+            exit_rate = self._percent(row.get("exit_rate"))
+            exit_rates.append(exit_rate)
+            self.exit_index[path] = {
+                "exit_rate": exit_rate,
+                "views": int(self._pick(row, ("views", "sessions", "count", "value"))),
+                "exits": int(self._pick(row, ("exits", "exit_count"))),
+            }
+        self.avg_exit_rate = mean(exit_rates) if exit_rates else 0.0
+        self.avg_dwell = mean(self.dwell_map.values()) if self.dwell_map else 0.0
+        self.daily_series = [_as_int(row.get("cnt")) for row in self.daily_rows if row.get("cnt") is not None]
+
+        button_sorted = sorted(
+            [row for row in self.top_buttons_global if self._pick(row, ("count", "clicks", "value")) > 0],
+            key=lambda row: self._pick(row, ("count", "clicks", "value")),
+            reverse=True,
+        )
+        self.button_sorted = button_sorted
+        self.button_leader = button_sorted[0] if button_sorted else None
+        self.button_tail = button_sorted[-1] if len(button_sorted) > 1 else None
+        self.total_clicks = sum(int(self._pick(row, ("count", "clicks", "value"))) for row in self.top_buttons_global)
+        self.click_rate_pct = _safe_pct(self.total_clicks, self.total_sessions or 1)
 
     def build(self) -> Dict[str, Any]:
         trend = self._traffic_trend()
         page_issues = self._page_issues()
         interactions = self._interaction_insights()
-        diagnostics = self._diagnostics(trend, interactions)
+        diagnostics = self._diagnostics(trend, page_issues, interactions)
         ux_recs, tech_recs = self._recommendations(page_issues, trend, interactions)
-        priorities = self._priorities(page_issues, diagnostics, trend)
+        priorities = self._priorities(page_issues, trend)
         metrics = self._metrics_to_track(page_issues)
         predictions = self._predictions(page_issues, trend)
         radar = self._radar_scores(page_issues, trend)
@@ -481,7 +528,7 @@ class InsightGenerator:
         meta: Dict[str, Any] = {
             "mode": "deterministic",
             "provider": "insight-engine",
-            "model": "deterministic-v1",
+            "model": "deterministic-v2",
             "prompt": self.prompt.raw,
             "time": {"from": self.from_iso, "to": self.to_iso, "bucket": self.bucket},
             "site_id": self.site_id,
@@ -495,15 +542,18 @@ class InsightGenerator:
                     ("page_exit_rate", self.exit_rows),
                     ("dwell_time", self.dwell_rows),
                     ("top_buttons_global", self.top_buttons_global),
+                    ("top_buttons_by_path", self.top_buttons_by_path),
                 ]
                 if not rows
             ),
             "trend": trend,
+            "focus_pages": [item["page"] for item in self.top_page_summary["items"]],
+            "button_sample_path": self.heatmap_sample.get("path"),
         }
 
         return {
             "generated_at": _now_iso(),
-            "title": "AI 웹사이트 컨디션 리포트",
+            "title": "AI ??? ?? & ?? ???",
             "summary": summary,
             "diagnostics": diagnostics,
             "page_issues": page_issues,
@@ -518,7 +568,7 @@ class InsightGenerator:
         }
 
     def _traffic_trend(self) -> Dict[str, Any]:
-        values = [_as_int(row.get("cnt")) for row in self.daily_rows if row.get("cnt") is not None]
+        values = self.daily_series
         if not values:
             return {"label": "unknown"}
         first, last = values[0], values[-1]
@@ -528,11 +578,16 @@ class InsightGenerator:
         early = mean(values[:half])
         late = mean(values[-half:])
         momentum = _safe_pct(late - early, early or 1)
-        label = "정체"
+        label = "??"
         if change_pct >= 8:
-            label = "상승"
+            label = "??"
         elif change_pct <= -8:
-            label = "하락"
+            label = "??"
+        top_pages = [
+            {"page": item["page"], "share": item["share"], "views": item["views"]}
+            for item in self.top_page_summary["items"]
+        ]
+        top_share = round(sum(item["share"] for item in top_pages), 2)
         return {
             "label": label,
             "first": first,
@@ -542,123 +597,169 @@ class InsightGenerator:
             "momentum_pct": round(momentum, 2),
             "average": round(mean(values), 2),
             "days": len(values),
+            "top_pages": top_pages,
+            "top_share": top_share,
         }
 
     def _page_issues(self) -> List[Dict[str, Any]]:
-        if not self.exit_rows:
+        if not self.exit_index:
             return []
-        sorted_rows = sorted(self.exit_rows, key=lambda r: _as_float(r.get("exit_rate")), reverse=True)[:3]
+        candidates: List[Tuple[float, str, float, float, Dict[str, Any]]] = []
+        for path, info in self.exit_index.items():
+            exit_rate = info["exit_rate"]
+            dwell = self.dwell_map.get(path, 0.0)
+            severity = exit_rate + max(0.0, 20.0 - dwell) * 1.5
+            candidates.append((severity, path, exit_rate, dwell, info))
+        candidates.sort(key=lambda item: item[0], reverse=True)
         issues: List[Dict[str, Any]] = []
-        for row in sorted_rows:
-            path = row.get("path") or "unknown"
-            exit_rate = _as_float(row.get("exit_rate"))
-            dwell = self.dwell_map.get(path)
-            dwell_text = f"{dwell:.0f}s" if dwell else None
-            exit_text = f"{exit_rate:.1f}%" if exit_rate else None
-            views = _as_int(row.get("views"))
-            exits = _as_int(row.get("exits"))
-            insight = None
-            if dwell and dwell < 15 and exit_rate >= 60:
-                insight = "평균 체류가 15초 미만으로 메시지가 닿기 전에 이탈합니다."
-            elif views and exits:
-                insight = f"{views:,}뷰 중 {exits:,}뷰에서 세션이 종료되었습니다."
+        for _, path, exit_rate, dwell, info in candidates[:3]:
+            dwell_text = f"{dwell:.0f}s" if dwell else "-"
+            exit_text = f"{exit_rate:.1f}%"
+            dwell_gap = (self.avg_dwell - dwell) if dwell else 0.0
+            if dwell and dwell < 20 and exit_rate >= 60:
+                issue_text = f"{path} - ?? {dwell_text}, ?? {exit_text}? ?? ??? ?? ? ?????."
+                insight = "??? ??? ?? ????? ???? ???? CTA? ? ???? ?????."
+            elif exit_rate >= 70:
+                issue_text = f"{path} - ??? {exit_text}? ?? CTA ??? ????."
+                insight = "??? 2??? ??? ?? ?? ??? ? CTA ?? ??? ?? ??? ?????."
+            else:
+                issue_text = f"{path} - ?? {dwell_text} ?? ?? {exit_text}? ????."
+                insight = "?? ??? ???? CTA ???? 4.5:1 ???? ????."
+            if dwell_gap > 0:
+                insight += f" ?? ?? ?? {abs(dwell_gap):.0f}s ????."
+            views = info.get("views")
+            exits = info.get("exits")
+            if views and exits:
+                insight += f" ({views:,}? ? {exits:,}? ??)"
             issues.append(
                 {
                     "page": path,
-                    "issue": f"이탈률 {exit_text or 'N/A'}로 세션 손실이 큰 페이지입니다.",
+                    "issue": issue_text,
                     "dwell_time": dwell_text,
                     "exit_rate": exit_text,
                     "insight": insight,
-                    "widget": "page_exit_rate",
+                    "widget": "page_exit_rate|dwell_time",
                 }
             )
         return issues
 
     def _interaction_insights(self) -> List[Dict[str, Any]]:
         insights: List[Dict[str, Any]] = []
-        if self.top_buttons_global:
-            total_clicks = sum(_as_int(row.get("count")) for row in self.top_buttons_global)
-            top_button = self.top_buttons_global[0]
-            tail_button = self.top_buttons_global[-1]
-            top_share = _safe_pct(_as_int(top_button.get("count")), total_clicks or 1)
-            tail_share = _safe_pct(_as_int(tail_button.get("count")), total_clicks or 1)
+        if self.button_leader and self.total_clicks:
+            leader_label = self._safe_label(
+                self.button_leader,
+                ("element_text", "text", "label", "selector", "id"),
+                "Primary CTA",
+            )
+            leader_clicks = int(self._pick(self.button_leader, ("count", "clicks", "value")))
+            leader_share = _safe_pct(leader_clicks, self.total_clicks or 1)
             insights.append(
                 {
-                    "area": f"전역 CTA · {top_button.get('element_text')}",
-                    "insight": f"전체 클릭 {total_clicks:,}건 중 {top_share:.1f}%가 한 CTA에 집중되었습니다.",
-                    "action": "보조 CTA 컬러 대비와 서브 카피를 강화해 클릭 분포를 분산하세요.",
+                    "area": f"?? CTA - {leader_label}",
+                    "insight": f"?? ?? {self.total_clicks:,}? ? {leader_share:.1f}%? ? CTA? ?? ?? ?? ??? ?? ????.",
+                    "action": "?? CTA? ??? ???? ????? ???? ?? ??? ?????.",
                     "widget": "top_buttons_global",
                 }
             )
+            if self.button_tail and self.button_tail is not self.button_leader:
+                tail_label = self._safe_label(
+                    self.button_tail,
+                    ("element_text", "text", "label", "selector", "id"),
+                    "Secondary CTA",
+                )
+                tail_clicks = int(self._pick(self.button_tail, ("count", "clicks", "value")))
+                if tail_clicks:
+                    tail_share = _safe_pct(tail_clicks, self.total_clicks or 1)
+                    insights.append(
+                        {
+                            "area": f"??? CTA - {tail_label}",
+                            "insight": f"{tail_label}? {tail_share:.1f}%({tail_clicks:,}?)? ???? ??? ??? ???? ????.",
+                            "action": "?? ??? ??????? ??? ??? ?? ??? ??? ??????.",
+                            "widget": "top_buttons_global",
+                        }
+                    )
+        heatmap_path = self.heatmap_sample.get("path") or self.heatmap_sample.get("page")
+        if heatmap_path:
+            hotspots = self.heatmap_sample.get("hotspots") or self.heatmap_sample.get("elements") or []
+            hotspot_count = len(hotspots) if isinstance(hotspots, list) else 0
+            primary_hotspot = ""
+            if isinstance(hotspots, list) and hotspots:
+                primary_hotspot = hotspots[0].get("text") or hotspots[0].get("selector") or ""
             insights.append(
                 {
-                    "area": f"저성과 요소 · {tail_button.get('element_text')}",
-                    "insight": f"하위 버튼은 {tail_share:.1f}%({tail_button.get('count')}회)만 클릭됩니다.",
-                    "action": "요소 제거 또는 위치 조정으로 상호작용 노이즈를 줄이세요.",
-                    "widget": "top_buttons_global",
-                }
-            )
-        heatmap = _first_row(self.top_buttons_by_path)
-        if heatmap.get("path"):
-            insights.append(
-                {
-                    "area": f"히트맵 · {heatmap.get('path')}",
-                    "insight": "히어로 상단 버튼 이후 클릭이 급감해 폴드 하단 CTA 노출이 부족합니다.",
-                    "action": "스크롤 유도 UI(진행 바, 앵커 링크)로 하단 CTA 가시성을 확보하세요.",
+                    "area": f"??? - {heatmap_path}",
+                    "insight": f"?? {hotspot_count or 3}? ?? ???? ?? 30% ??? ???? CTA ??? ?????."
+                    + (f" ?? ?? ?? ??: {primary_hotspot}" if primary_hotspot else ""),
+                    "action": "??? ?? 1??? ?? ?? CTA? ?? ??? ?? ???? ??? ?? ??? ??????.",
                     "widget": "top_buttons_by_path",
                 }
             )
         return insights
 
-    def _diagnostics(self, trend: Dict[str, Any], interactions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _diagnostics(
+        self,
+        trend: Dict[str, Any],
+        page_issues: List[Dict[str, Any]],
+        interactions: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
         diagnostics: List[Dict[str, Any]] = []
-        if self.device_rows:
-            sorted_devices = sorted(self.device_rows, key=lambda r: _as_int(r.get("sessions")), reverse=True)
-            top_device = sorted_devices[0]
-            weak_device = sorted_devices[-1]
-            total = sum(_as_int(row.get("sessions")) for row in self.device_rows) or 1
-            top_share = _safe_pct(_as_int(top_device.get("sessions")), total)
-            weak_share = _safe_pct(_as_int(weak_device.get("sessions")), total)
-            diagnostic = {
-                "focus": f"{weak_device.get('device', '모바일')} 트래픽",
-                "finding": f"세션 비중 {weak_share:.1f}%로 {top_device.get('device')} 대비 {top_share - weak_share:.1f}%p 격차가 있습니다.",
-                "widget": "device_share",
-                "severity": "High" if weak_share < 35 else "Medium",
-                "share": f"{weak_share:.1f}%",
-                "insight": None,
-            }
-            if interactions:
-                diagnostic["widget"] = "device_share|top_buttons_by_path"
-                diagnostic["insight"] = "히트맵에서도 상단 CTA 외 클릭이 급감해 모바일 UX 저하가 의심됩니다."
-            diagnostics.append(diagnostic)
-
-        if self.browser_rows:
-            sorted_browser = sorted(self.browser_rows, key=lambda r: _as_int(r.get("sessions")), reverse=True)
-            tail = sorted_browser[-1]
-            head = sorted_browser[0]
-            total = sum(_as_int(row.get("sessions")) for row in self.browser_rows) or 1
-            head_share = _safe_pct(_as_int(head.get("sessions")), total)
-            tail_share = _safe_pct(_as_int(tail.get("sessions")), total)
+        if self.device_distribution["items"]:
+            head = self.device_distribution["items"][0]
+            tail = self.device_distribution["items"][-1]
+            gap = head["share"] - tail["share"]
+            context = None
+            if page_issues:
+                context = f"{page_issues[0]['page']} ?? {page_issues[0].get('dwell_time', '-')}/?? {page_issues[0].get('exit_rate', '-')}"
             diagnostics.append(
                 {
-                    "focus": f"{tail.get('browser', 'Safari')} 세션",
-                    "finding": f"{tail.get('browser')} 비중 {tail_share:.1f}%로 상위 브라우저 대비 {head_share - tail_share:.1f}%p 뒤처집니다.",
-                    "widget": "browser_share",
-                    "severity": "Medium" if tail_share < 15 else "Low",
-                    "share": f"{tail_share:.1f}%",
-                    "insight": "CSS sticky 요소나 고정 헤더가 브라우저별로 다르게 렌더링되는지 확인하세요.",
+                    "focus": f"{tail['label']} ???",
+                    "finding": f"{tail['label']} ??? {tail['share']:.1f}%? {head['label']} ?? {gap:.1f}%p ????.",
+                    "widget": "device_share|page_exit_rate",
+                    "severity": "High" if tail["share"] <= 30 else "Medium",
+                    "share": f"{tail['share']:.1f}%",
+                    "insight": context or "??? ?? ??/UX ?? ? ?? ??? ?????.",
                 }
             )
-
-        if trend.get("label"):
+        if self.browser_distribution["items"]:
+            head = self.browser_distribution["items"][0]
+            tail = self.browser_distribution["items"][-1]
+            gap = head["share"] - tail["share"]
             diagnostics.append(
                 {
-                    "focus": "일일 로그 추세",
-                    "finding": f"{trend['label']} 흐름이며 마지막 날 {trend.get('last', 0):,}건, 변동 {trend.get('change_pct', 0):+.1f}%.",
+                    "focus": f"{tail['label']} ????",
+                    "finding": f"{tail['label']} ??? {tail['share']:.1f}%?, {head['label']} ?? {gap:.1f}%p ?? CSS/??? ??? ???? ????.",
+                    "widget": "browser_share",
+                    "severity": "Medium" if tail["share"] <= 15 else "Low",
+                    "share": f"{tail['share']:.1f}%",
+                    "insight": "Sticky ???? ??? Safari/Edge?? ?? ??????.",
+                }
+            )
+        if trend.get("label"):
+            severity = "High" if trend["label"] == "??" else ("Medium" if trend["label"] == "??" else "Low")
+            top_pages = trend.get("top_pages") or []
+            top_names = ", ".join(item["page"] for item in top_pages[:3])
+            diagnostics.append(
+                {
+                    "focus": "Top5 ??? & ?? ??",
+                    "finding": f"{trend['label']} ?? ({trend.get('change_pct', 0):+.1f}%)?? Top5? ??? {trend.get('top_share', 0):.1f}%? ????? ({top_names}).",
                     "widget": "daily_count|top_pages",
-                    "severity": "High" if trend["label"] == "하락" else ("Medium" if trend["label"] == "정체" else "Low"),
-                    "share": None,
-                    "insight": "Top5 페이지 구성이 거의 동일하여 신규 랜딩이 부족합니다.",
+                    "severity": severity,
+                    "insight": "?? ?? ???? ?? ??? ???? ?????.",
+                }
+            )
+        if self.button_leader and self.button_tail and self.total_clicks:
+            leader_clicks = int(self._pick(self.button_leader, ("count", "clicks", "value")))
+            tail_clicks = int(self._pick(self.button_tail, ("count", "clicks", "value")))
+            leader_share = _safe_pct(leader_clicks, self.total_clicks or 1)
+            tail_share = _safe_pct(tail_clicks, self.total_clicks or 1) if tail_clicks else 0.0
+            diagnostics.append(
+                {
+                    "focus": "CTA ???? ??",
+                    "finding": f"??? CTA? ??? {leader_share:.1f}%? ????, ?? CTA? {tail_share:.1f}%? ????.",
+                    "widget": "top_buttons_global|top_buttons_by_path",
+                    "severity": "Medium",
+                    "share": f"{leader_share:.1f}% vs {tail_share:.1f}%",
+                    "insight": "?? ?? ?? ??? ? ??? ?? ?? ?? ?? ?? ??? ?????.",
                 }
             )
         return diagnostics
@@ -671,93 +772,104 @@ class InsightGenerator:
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         ux: List[Dict[str, Any]] = []
         tech: List[Dict[str, Any]] = []
-
-        if page_issues:
-            worst = page_issues[0]
+        worst = page_issues[0] if page_issues else None
+        if worst:
             ux.append(
                 {
-                    "category": "Checkout UX",
-                    "suggestion": f"{worst['page']} 상단을 가치제안 > 증거 > CTA 순으로 재구성해 3초 내 메시지를 완결하세요.",
-                    "rationale": f"체류 {worst.get('dwell_time') or '-'} / 이탈 {worst.get('exit_rate') or '-'} 데이터 근거",
-                    "validation": "page_exit_rate·dwell_time 위젯으로 7일간 추적",
+                    "category": "???? ??",
+                    "suggestion": f"{worst['page']}? 2? CTA(????)? ?? ??? ???? ? ??? ???? ?????.",
+                    "rationale": f"?? {worst.get('dwell_time', '-')} ? ?? {worst.get('exit_rate', '-')}? CTA ?? ? ??.",
+                    "validation": "page_exit_rate + dwell_time ??? 7?? ??",
                 }
             )
-
-        if interactions:
+        heatmap_path = self.heatmap_sample.get("path") or self.heatmap_sample.get("page")
+        if heatmap_path:
             ux.append(
                 {
-                    "category": "히트맵",
-                    "suggestion": "보조 CTA 대비와 스크롤 유도 인디케이터를 도입해 하단 CTA 가시성을 높이세요.",
-                    "rationale": "히트맵에서 상단 CTA 독식으로 클릭 분포가 쏠림",
-                    "validation": "top_buttons_by_path 위젯에서 구간별 클릭 점유율 비교",
+                    "category": "??? ?? ???",
+                    "suggestion": f"{heatmap_path}? ?? ??? ???? ?? ??? ? ??? ? ??(Sticky) ?????.",
+                    "rationale": "??? ??? ??? ??? CTA ??? ????.",
+                    "validation": "top_buttons_by_path + scroll heatmap? AB ???",
                 }
             )
-
-        if trend.get("label") in {"하락", "정체"}:
-            tech.append(
+        if self.button_leader and interactions:
+            ux.append(
                 {
-                    "category": "성능",
-                    "suggestion": "모바일 번들 사이즈, 이미지 lazy-load, LCP 2.5초 목표 여부를 점검하세요.",
-                    "rationale": "모바일 비중 저하 + CTA 집중 현상 → 로딩 지연 가능성",
-                    "validation": "device_share와 RUM 성능 로그 비교",
+                    "category": "CTA ??/??",
+                    "suggestion": "CTA ??? ??????? ????? ??? 4.5:1 ??? ?????.",
+                    "rationale": "?? CTA ??? 70% ??? ???? ?? ??? ? ??? ???????.",
+                    "validation": "top_buttons_global / session replay ??",
                 }
             )
-
+        mobile = self._find_distribution_item(self.device_distribution, "mobile")
+        chrome = self._find_distribution_item(self.browser_distribution, "chrome")
+        mobile_share = mobile["share"] if mobile else (self.device_distribution["items"][0]["share"] if self.device_distribution["items"] else 0.0)
+        chrome_share = chrome["share"] if chrome else (self.browser_distribution["items"][0]["share"] if self.browser_distribution["items"] else 0.0)
         tech.append(
             {
-                "category": "로그 품질",
-                "suggestion": "일일 로그가 꺾인 구간에서 이벤트 누락 여부를 교차 검증하세요.",
-                "rationale": "daily_count 지표 변동이 ±8%p 이상 발생",
-                "validation": "daily_count 위젯 + 원시 로그 샘플 비교",
+                "category": "??? Chrome ??",
+                "suggestion": "???? CSS ???, ?? ?? 50KB ?? ??, ??? preconnect+lazy-load? LCP? 1? ????.",
+                "rationale": f"??? {mobile_share:.1f}% / Chrome {chrome_share:.1f}% ????? ??? ?????.",
+                "validation": "device_share + browser_share + daily_count",
             }
         )
-
+        tech.append(
+            {
+                "category": "API/??? ??",
+                "suggestion": "Top5 ???? edge ??? prefetch? ??? ?? ?? ?? ??? ?????.",
+                "rationale": f"?? ??? {trend.get('label', '??')} ??({trend.get('change_pct', 0):+.1f}%).",
+                "validation": "top_pages + daily_count ?? ??",
+            }
+        )
         return ux, tech
 
     def _priorities(
         self,
         page_issues: List[Dict[str, Any]],
-        diagnostics: List[Dict[str, Any]],
         trend: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         priorities: List[Dict[str, Any]] = []
-        if page_issues:
-            top_issue = page_issues[0]
-            baseline = _as_float((top_issue.get("exit_rate") or "").replace("%", "")) if isinstance(top_issue.get("exit_rate"), str) else 70.0
+        worst = page_issues[0] if page_issues else None
+        if worst:
+            baseline = self._percent(worst.get("exit_rate"))
+            target = max(0.0, baseline - 12.0)
             priorities.append(
                 {
-                    "title": f"{top_issue['page']} CTA 재구성",
+                    "title": f"{worst['page']} ??? ?? ??",
                     "priority": "High",
-                    "impact": "이탈률 10~12%p 감소 시 전환률 +5%p 기대",
+                    "impact": f"?? {baseline:.1f}%?{target:.1f}%? ??? ?? ?? +5~7%p ??.",
                     "effort": "Medium",
-                    "expected_metric_change": {"metric": "page_exit_rate", "target": f"{max(0.0, baseline - 12):.1f}%", "period": "7d"},
-                    "business_outcome": "결제 단계 이탈 감소로 주간 매출 방어",
+                    "expected_metric_change": {
+                        "metric": "page_exit_rate",
+                        "baseline": round(baseline, 2),
+                        "target": f"{target:.1f}%",
+                        "period": "14d",
+                    },
+                    "business_outcome": "???? ?? +6%p",
                 }
             )
-
-        mobile = next((row for row in self.device_rows if (row.get("device") or "").lower().startswith("mobile")), None)
-        if mobile:
-            share = _safe_pct(_as_int(mobile.get("sessions")), self.total_sessions or 1)
+        mobile = self._find_distribution_item(self.device_distribution, "mobile")
+        if mobile or self.device_distribution["items"]:
+            share = mobile["share"] if mobile else self.device_distribution["items"][0]["share"]
             priorities.append(
                 {
-                    "title": "모바일 로딩 속도 개선",
+                    "title": "??? Chrome ?? ?? ??",
                     "priority": "High" if share >= 30 else "Medium",
-                    "impact": f"모바일 세션 {share:.1f}% 차지 · LCP 1초 단축 시 전환률 +4%p",
+                    "impact": f"?? ???? {share:.1f}%? ???? ????? ?? 1? ?? ? ?? ?? +4~5%p.",
                     "effort": "Medium",
-                    "expected_metric_change": {"metric": "device_share", "target": "+5%p", "period": "14d"},
-                    "business_outcome": "모바일 매출 유지 및 신규 캠페인 효율 확보",
+                    "expected_metric_change": {"metric": "device_share", "target": "+4%p", "period": "21d"},
+                    "business_outcome": "??? ?? +4%p, ?? ?? ?",
                 }
             )
-
-        if trend.get("label") in {"하락", "정체"}:
+        if trend.get("label") in {"??", "??"}:
             priorities.append(
                 {
-                    "title": "랜딩 캠페인 리뉴얼",
-                    "priority": "High" if trend["label"] == "하락" else "Medium",
-                    "impact": f"일일 로그 {trend.get('change_pct', 0):+.1f}%p 반등 시 퍼널 복원",
+                    "title": "?? ??/??? ??",
+                    "priority": "Medium" if trend["label"] == "??" else "High",
+                    "impact": f"Top5 ??? ??? {trend.get('top_share', 0):.1f}% ? 5%p ?? ? ?? ?? +8% ??.",
                     "effort": "Medium",
-                    "expected_metric_change": {"metric": "daily_count", "target": "+12%", "period": "14d"},
-                    "business_outcome": "신규 유입 확보로 성장 정체 해소",
+                    "expected_metric_change": {"metric": "daily_count", "target": "+12%", "period": "21d"},
+                    "business_outcome": "?? ?? ?? +10% ??",
                 }
             )
         return priorities
@@ -765,30 +877,47 @@ class InsightGenerator:
     def _metrics_to_track(self, page_issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         metrics: List[Dict[str, Any]] = []
         if page_issues:
+            worst = page_issues[0]
             metrics.append(
                 {
-                    "metric": f"{page_issues[0]['page']} 이탈률",
+                    "metric": f"{worst['page']} ???",
                     "widget": "page_exit_rate",
-                    "reason": "CTA 재구성 효과 검증",
+                    "reason": "CTA ??? ??? ???? ?? ?? ??.",
                     "target_change": "-10%p",
-                    "timeframe": "7d",
+                    "timeframe": "14d",
+                }
+            )
+            metrics.append(
+                {
+                    "metric": f"{worst['page']} ?? ??",
+                    "widget": "dwell_time",
+                    "reason": "??? ??? ? ?? ?? 20s ?? ??",
+                    "target_change": "+15%",
+                    "timeframe": "14d",
                 }
             )
         metrics.append(
             {
-                "metric": "페이지별 체류 시간",
-                "widget": "dwell_time",
-                "reason": "상단 메시지 개선 후 20초 이상 체류 확보 여부 확인",
-                "target_change": "+15%",
-                "timeframe": "14d",
+                "metric": "??? ?? ???",
+                "widget": "device_share",
+                "reason": "??? ?? +5%p ?? ?? ??",
+                "timeframe": "21d",
             }
         )
         metrics.append(
             {
-                "metric": "일일 로그 수",
-                "widget": "daily_count",
-                "reason": "성능·캠페인 조치 이후 유입 회복 확인",
-                "target_change": "+12%",
+                "metric": "????? ??",
+                "widget": "browser_share",
+                "reason": "Safari/Edge ??? ?? ? ??? ??",
+                "timeframe": "21d",
+            }
+        )
+        metrics.append(
+            {
+                "metric": "CTA ???",
+                "widget": "top_buttons_global",
+                "reason": "??? ????? ????? ??",
+                "target_change": "+3%p",
                 "timeframe": "14d",
             }
         )
@@ -797,63 +926,173 @@ class InsightGenerator:
     def _predictions(self, page_issues: List[Dict[str, Any]], trend: Dict[str, Any]) -> List[Dict[str, Any]]:
         predictions: List[Dict[str, Any]] = []
         if page_issues:
-            exit_rate = _as_float((page_issues[0].get("exit_rate") or "").replace("%", "")) if isinstance(page_issues[0].get("exit_rate"), str) else 70.0
+            worst = page_issues[0]
+            baseline = self._percent(worst.get("exit_rate"))
+            expected = round(max(0.0, baseline - max(8.0, baseline * 0.12)), 2)
             predictions.append(
                 {
-                    "metric": f"{page_issues[0]['page']} 이탈률",
-                    "baseline": round(exit_rate, 2),
-                    "expected": round(max(0.0, exit_rate - 12.0), 2),
+                    "metric": f"{worst['page']} ???",
+                    "baseline": round(baseline, 2),
+                    "expected": expected,
                     "unit": "%",
-                    "narrative": "CTA 재배치 및 신뢰요소 추가 시 2주 내 10~12%p 개선 예상",
+                    "narrative": "CTA ??? + ??? ???? 2? ? 10~12%p ?? ??.",
                 }
             )
         if trend.get("last") is not None:
             baseline = trend.get("last") or trend.get("average") or 0
-            expected = baseline + max(int(baseline * 0.08), 10)
+            expected = int(round(baseline * 1.08 + 5))
             predictions.append(
                 {
-                    "metric": "일일 로그",
+                    "metric": "?? ?? ?",
                     "baseline": baseline,
                     "expected": expected,
                     "unit": "sessions",
-                    "narrative": "성능/캠페인 실행 시 주 단위 +8% 성장 목표",
+                    "narrative": "?? ??????? ?? ? 8% ?? ?? ?? ??.",
+                }
+            )
+        if self.total_sessions:
+            baseline = round(self.click_rate_pct, 2)
+            expected = round(min(100.0, baseline + 3.5), 2)
+            predictions.append(
+                {
+                    "metric": "CTA ???",
+                    "baseline": baseline,
+                    "expected": expected,
+                    "unit": "%",
+                    "narrative": "??? ?? UI ?? ? ??? +3~4%p ??.",
                 }
             )
         return predictions
 
     def _radar_scores(self, page_issues: List[Dict[str, Any]], trend: Dict[str, Any]) -> List[Dict[str, Any]]:
-        top_exit = _as_float((page_issues[0].get("exit_rate") or "").replace("%", "")) if page_issues else 65.0
-        dwell = self.dwell_map.get(page_issues[0]["page"]) if page_issues else None
-        performance = max(30, min(85, 90 - top_exit * 0.4))
-        experience = max(28, min(90, 70 - (top_exit - 50) * 0.6 + (dwell or 18)))
-        growth = 60 + (trend.get("change_pct", 0) / 2 if trend else 0)
-        search = 55 + min(10, len(self.top_pages) * 2)
-        stability = 70 - (5 if self.bundle.get("misc") else 0)
+        top_exit = self.avg_exit_rate
+        if page_issues:
+            top_exit = self._percent(page_issues[0].get("exit_rate"))
+        dwell = self.avg_dwell
+        mobile = self._find_distribution_item(self.device_distribution, "mobile")
+        mobile_share = mobile["share"] if mobile else (self.device_distribution["items"][0]["share"] if self.device_distribution["items"] else 0.0)
+        exit_penalty = max(0.0, top_exit - 55.0) * 0.4
+        mobile_penalty = max(0.0, 40.0 - mobile_share) * 0.3
+        performance = max(25, min(90, 78 - exit_penalty - mobile_penalty))
+        experience = max(25, min(90, 62 + min(12, dwell - 20) - max(0.0, top_exit - 60) * 0.5))
+        growth = max(25, min(90, 55 + trend.get("change_pct", 0) * 0.6))
+        search = max(25, min(90, 58 + min(12, len(self.top_page_summary["items"]) * 3)))
+        stability_penalty = 5 if self.bundle.get("misc") else 0
+        stability_penalty += 5 if not self.daily_rows else 0
+        stability = max(25, min(90, 70 - stability_penalty + min(8, len(self.daily_rows) // 2)))
         axes = [
-            ("performance", performance, "모바일 번들 최적화 필요"),
-            ("experience", experience, "Checkout 이탈률이 높음"),
-            ("growth", growth, "일일 로그 추세 기반"),
-            ("search", search, "상위 페이지 다양성 기준"),
-            ("stability", stability, "로그 수집은 안정적"),
+            ("performance", performance, f"??? ?? {mobile_share:.1f}%??? ?? {top_exit:.1f}%"),
+            ("experience", experience, f"?? ?? {dwell:.0f}s?CTA ?? ?? ??"),
+            ("growth", growth, f"?? ?? ?? {trend.get('change_pct', 0):+.1f}%"),
+            ("search", search, f"Top5 ??? ???? {trend.get('top_share', 0):.1f}%"),
+            ("stability", stability, "?? ?? ?? ?? ??" if not stability_penalty else "?? ??/?? ?? ??"),
         ]
         radar: List[Dict[str, Any]] = []
         for axis, score, commentary in axes:
-            radar.append({"axis": axis, "score": int(round(max(20, min(90, score)))), "commentary": commentary})
+            radar.append({"axis": axis, "score": int(round(score)), "commentary": commentary})
         return radar
 
-    def _summary_text(self, diagnostics: List[Dict[str, Any]], page_issues: List[Dict[str, Any]], trend: Dict[str, Any]) -> str:
+    def _summary_text(
+        self,
+        diagnostics: List[Dict[str, Any]],
+        page_issues: List[Dict[str, Any]],
+        trend: Dict[str, Any],
+    ) -> str:
         lines: List[str] = []
+        if trend.get("label") and trend.get("change_pct") is not None:
+            lines.append(
+                f"일일 로그는 {trend['label']} 국면({trend.get('change_pct', 0):+.1f}%), Top5 페이지가 전체 유입의 {trend.get('top_share', 0):.1f}%를 차지합니다."
+            )
         if diagnostics:
             lines.append(" · ".join(f"{diag['focus']}: {diag['finding']}" for diag in diagnostics[:2]))
         if page_issues:
             worst = page_issues[0]
-            lines.append(f"{worst['page']} 페이지는 체류 {worst.get('dwell_time') or '-'} / 이탈 {worst.get('exit_rate') or '-'}로 손실이 가장 큽니다.")
-        if trend.get("label"):
-            lines.append(f"일일 로그는 {trend['label']} 흐름({trend.get('change_pct', 0):+.1f}%). 유입 부족 구간을 복원할 조치를 우선 배치했습니다.")
+            lines.append(
+                f"{worst['page']} 체류 {worst.get('dwell_time', '-')} / 이탈 {worst.get('exit_rate', '-')} → 즉시 UI·성능 보완 필요."
+            )
+        if self.click_rate_pct:
+            lines.append(f"현재 CTA 클릭률은 {self.click_rate_pct:.1f}% 수준으로 히트맵 재배치와 모바일 최적화가 요구됩니다.")
         if self.prompt.raw.strip():
-            lines.append(f"사용자 요청(\"{self.prompt.raw.strip()}\")을 반영해 결제 단계 개선을 선순위로 배치했습니다.")
-        return "\n".join(lines) or "수집된 위젯 데이터를 기반으로 핵심 문제와 조치안을 요약했습니다."
+            lines.append(f"사용자 요청(\"{self.prompt.raw.strip()}\")을 반영해 위 조치를 우선 제안했습니다.")
+        return "\n".join(lines) or "위젯 데이터가 제한적이라 추가 로그 확보 후 다시 실행해 주세요."
 
+    def _distribution(self, rows: List[Dict[str, Any]], label_keys: Tuple[str, ...]) -> Dict[str, Any]:
+        items: List[Dict[str, Any]] = []
+        total = 0
+        for row in rows:
+            label = self._safe_label(row, label_keys, "???")
+            value = int(self._pick(row, ("sessions", "count", "value", "views")))
+            if value <= 0:
+                continue
+            total += value
+            items.append({"label": label, "value": value})
+        items.sort(key=lambda item: item["value"], reverse=True)
+        for item in items:
+            item["share"] = _safe_pct(item["value"], total or 1)
+        return {"total": total, "items": items}
+
+    def _top_page_summary(self, limit: int = 5) -> Dict[str, Any]:
+        pages: List[Dict[str, Any]] = []
+        for row in self.top_pages:
+            page = self._page_label(row)
+            if not page:
+                continue
+            views = int(self._pick(row, ("views", "sessions", "count", "value")))
+            if views <= 0:
+                continue
+            pages.append({"page": page, "views": views})
+        pages.sort(key=lambda item: item["views"], reverse=True)
+        top = pages[:limit]
+        reference = self.total_sessions or sum(item["views"] for item in pages) or 1
+        for item in top:
+            item["share"] = _safe_pct(item["views"], reference)
+        return {"items": top, "total_views": sum(item["views"] for item in pages)}
+
+    def _pick(self, row: Dict[str, Any], keys: Tuple[str, ...]) -> float:
+        for key in keys:
+            if key not in row:
+                continue
+            value = row.get(key)
+            if value is None:
+                continue
+            if isinstance(value, str):
+                cleaned = value.strip().replace(",", "")
+                if cleaned.endswith("%"):
+                    cleaned = cleaned[:-1]
+                value = cleaned or "0"
+            try:
+                return float(value)
+            except Exception:
+                continue
+        return 0.0
+
+    def _percent(self, value: Any) -> float:
+        if value is None:
+            return 0.0
+        if isinstance(value, str):
+            value = value.replace("%", "").strip()
+        return _as_float(value)
+
+    def _page_label(self, row: Dict[str, Any]) -> str:
+        for key in ("path", "page", "url", "title"):
+            value = row.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return ""
+
+    def _safe_label(self, row: Dict[str, Any], keys: Tuple[str, ...], default: str) -> str:
+        for key in keys:
+            value = row.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return default
+
+    def _find_distribution_item(self, distribution: Dict[str, Any], keyword: str) -> Optional[Dict[str, Any]]:
+        keyword_lower = keyword.lower()
+        for item in distribution.get("items", []):
+            if keyword_lower in item["label"].lower():
+                return item
+        return None
 
 def generate_report(
     from_iso: Optional[str],
@@ -872,8 +1111,8 @@ def generate_report(
         log.error("Failed to collect widget data: %s", exc)
         return {
             "generated_at": _now_iso(),
-            "title": "AI 웹사이트 컨디션 리포트",
-            "summary": "위젯 데이터를 수집하지 못해 기본 리포트를 제공하지 못했습니다.",
+            "title": "AI ??? ?? & ?? ???",
+            "summary": "?? ??? ???? ?? ?? ??? ???? ??????. ?? ?? ??? ??? ? ?? ??????.",
             "diagnostics": [],
             "page_issues": [],
             "interaction_insights": [],

@@ -87,7 +87,7 @@ class RadarScoreItem(BaseModel):
 
 class ReportResponse(BaseModel):
     generated_at: str
-    title: str = "AI 웹사이트 컨디션 리포트"
+    title: str = "AI ??? ?? ???"
     summary: str = ""
     diagnostics: List[TrafficDiagnosisItem] = Field(default_factory=list)
     page_issues: List[PageIssueItem] = Field(default_factory=list)
