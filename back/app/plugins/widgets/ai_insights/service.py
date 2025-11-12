@@ -9,6 +9,8 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+log = logging.getLogger(__name__)
+
 from config import (
     AI_INSIGHTS_CACHE_TTL,
     INFLUX_TOKEN,

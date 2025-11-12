@@ -3,6 +3,8 @@ import { CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import type { WidgetMeta, WidgetProps } from "@/core/registry";
 import type { Digest, InsightsResp } from "./types";
 import { fetchDigest, explain, type ApiError } from "./api";
+import { getCommonWidgetCopy, resolveWidgetLanguage } from "../i18n";
+import { getAiInsightsCopy, type AiInsightsCopy } from "./locales";
 
 function sevClass(s?: string) {
   switch (s) {
@@ -13,11 +15,14 @@ function sevClass(s?: string) {
   }
 }
 
-function AiInsightsWidget({ timeRange }: WidgetProps) {
+function AiInsightsWidget({ timeRange, language }: WidgetProps) {
   const [digest, setDigest] = useState<Digest | null>(null);
   const [insights, setInsights] = useState<InsightsResp | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  const resolvedLanguage = resolveWidgetLanguage(language);
+  const common = getCommonWidgetCopy(resolvedLanguage);
+  const copy = getAiInsightsCopy(resolvedLanguage);
 
   useEffect(() => {
     let alive = true;
@@ -29,11 +34,16 @@ function AiInsightsWidget({ timeRange }: WidgetProps) {
     return () => { alive = false; };
   }, [timeRange]);
 
+  useEffect(() => {
+    setInsights(null);
+    setError(null);
+  }, [resolvedLanguage]);
+
   const onExplain = async () => {
     if (!digest) return;
     setLoading(true); setError(null);
     try {
-      const resp = await explain({ digest, language: "ko", word_limit: 300, audience: "dev" });
+      const resp = await explain({ digest, language: resolvedLanguage, word_limit: 300, audience: "dev" });
       setInsights(resp);
     } catch (e: any) {
       setError(e as ApiError);
@@ -43,33 +53,31 @@ function AiInsightsWidget({ timeRange }: WidgetProps) {
   };
 
   const renderError = (e: ApiError) => {
-    const code = e?.code;
-    if (code === "model_downloading") {
-      return "모델을 다운로드 중입니다. 잠시 후 다시 시도해주세요.";
+    const typedCode = e?.code as keyof AiInsightsCopy["errors"] | undefined;
+    if (typedCode && copy.errors[typedCode]) {
+      return copy.errors[typedCode];
     }
-    if (code === "model_not_found") {
-      return "모델을 찾을 수 없습니다. Ollama에서 해당 모델을 먼저 다운로드 해주세요.";
-    }
-    if (code === "ollama_unreachable") {
-      return "AI 백엔드(Ollama)에 연결할 수 없습니다. Docker/Ollama 상태를 확인해주세요.";
-    }
-    if ((e as any)?.status === 404) return "요청한 리소스를 찾을 수 없습니다.";
-    if ((e as any)?.status === 503) return "서비스를 일시적으로 이용할 수 없습니다. 잠시 후 다시 시도해주세요.";
-    return e?.message || String(e);
+    if (e?.status === 404) return copy.errors.status404;
+    if (e?.status === 503) return copy.errors.status503;
+    return e?.message || copy.errors.fallback;
   };
 
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
-        <CardTitle>AI Insights</CardTitle>
+        <CardTitle>{copy.title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
-        {error && <div className="text-sm text-red-500">Error: {renderError(error)}</div>}
+        {loading && <div className="text-sm text-muted-foreground">{common.loading}</div>}
+        {error && (
+          <div className="text-sm text-red-500">
+            {common.errorPrefix}: <span>{renderError(error)}</span>
+          </div>
+        )}
 
         {digest && (
           <div className="text-sm text-muted-foreground">
-            기간: {digest.time_window.from} → {digest.time_window.to} (bucket={digest.time_window.bucket})
+            {copy.timeWindowLabel}: {digest.time_window.from} → {digest.time_window.to} ({copy.bucketLabel}: {digest.time_window.bucket})
           </div>
         )}
 
@@ -79,12 +87,12 @@ function AiInsightsWidget({ timeRange }: WidgetProps) {
             onClick={onExplain}
             disabled={!digest || loading}
           >
-            Generate
+            {copy.generateButton}
           </button>
         </div>
 
         {insights && insights.insights.length === 0 && (
-          <div className="text-sm text-muted-foreground">인사이트 없음</div>
+          <div className="text-sm text-muted-foreground">{copy.noInsights}</div>
         )}
         {insights && insights.insights.length > 0 && (
           <ul className="space-y-3">
@@ -97,7 +105,11 @@ function AiInsightsWidget({ timeRange }: WidgetProps) {
                   <div className="font-medium">{it.title}</div>
                 </div>
                 {it.explanation && <div className="mt-1 text-sm">{it.explanation}</div>}
-                {it.action && <div className="mt-1 text-xs text-muted-foreground">Action: {it.action}</div>}
+                {it.action && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {copy.actionLabel}: {it.action}
+                  </div>
+                )}
               </li>
             ))}
           </ul>

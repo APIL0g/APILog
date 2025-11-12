@@ -35,8 +35,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { CopyPlus, LayoutGrid, PenLine, Plus, Save, Trash2, ChevronsUpDown, Check } from "lucide-react"
+import { CopyPlus, LayoutGrid, PenLine, Plus, Save, Trash2, ChevronsUpDown, Check, X } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { getAiInsightsCopy } from "@plugins/widgets/ai_insights/locales"
+import { getBrowserShareCopy } from "@plugins/widgets/browser_share/locales"
+import { getCountryShareCopy } from "@plugins/widgets/country_share/locales"
+import { getDailyCountCopy } from "@plugins/widgets/daily_count/locales"
+import { getDeviceShareCopy } from "@plugins/widgets/device_share/locales"
+import { getDwellTimeCopy } from "@plugins/widgets/dwell_time/locales"
+import { getHeatmapCopy } from "@plugins/widgets/heatmap/locales"
+import { getPageExitCopy } from "@plugins/widgets/page_exit/locales"
+import { getTimeTopPagesCopy } from "@plugins/widgets/time_top_pages/locales"
+import { getTopButtonsByPageCopy } from "@plugins/widgets/top_buttons_by_page_widget/locales"
+import { getTopButtonsGlobalCopy } from "@plugins/widgets/top_buttons_global_widget/locales"
+import { getTopPagesCopy } from "@plugins/widgets/top_pages/locales"
+import { getVisitorsStatCopy } from "@plugins/widgets/visitors_stat/locales"
 
 const ReactGridLayout = WidthProvider(RGL)
 
@@ -90,6 +103,12 @@ interface DashboardCopy {
   emptySubtitle: string
   emptyCta: string
   addWidgetHint: string
+  addWidgetTitle: string
+  addWidgetDescription: string
+  addWidgetSelectPlaceholder: string
+  addWidgetConfirm: string
+  addWidgetCancel: string
+  addWidgetButtonAria: string
   languageLabel: string
   presetButtonPlaceholder: string
   presetMenuTitle: string
@@ -104,6 +123,13 @@ interface DashboardCopy {
   editLayout: string
   saveLayout: string
   aiReport: string
+  cancelEdit: string
+}
+
+interface EditSnapshot {
+  dashboard: DashboardConfig | null
+  activePresetId: string | null
+  isNewPresetDraft: boolean
 }
 
 const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
@@ -113,6 +139,12 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     emptySubtitle: "Start building your custom dashboard by adding widgets that matter to you.",
     emptyCta: "Add Your First Widget",
     addWidgetHint: "Add Widget",
+    addWidgetTitle: "Add Widget",
+    addWidgetDescription: "Select a widget type to place on your dashboard.",
+    addWidgetSelectPlaceholder: "Choose a widget...",
+    addWidgetConfirm: "Add",
+    addWidgetCancel: "Cancel",
+    addWidgetButtonAria: "Add widget",
     languageLabel: "Language",
     presetButtonPlaceholder: "Select preset",
     presetMenuTitle: "Presets",
@@ -127,6 +159,7 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     editLayout: "Edit Layout",
     saveLayout: "Save",
     aiReport: "AI Report",
+    cancelEdit: "Cancel",
   },
   ko: {
     tagline: "프리셋으로 레이아웃을 저장하고 다시 불러올 수 있어요.",
@@ -134,6 +167,12 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     emptySubtitle: "필요한 위젯을 추가하면서 나만의 대시보드를 만들어 보세요.",
     emptyCta: "첫 번째 위젯 추가하기",
     addWidgetHint: "위젯 추가",
+    addWidgetTitle: "위젯 추가",
+    addWidgetDescription: "대시보드에 추가할 위젯 종류를 선택하세요.",
+    addWidgetSelectPlaceholder: "위젯을 선택하세요...",
+    addWidgetConfirm: "추가",
+    addWidgetCancel: "취소",
+    addWidgetButtonAria: "위젯 추가",
     languageLabel: "언어",
     presetButtonPlaceholder: "프리셋 선택",
     presetMenuTitle: "프리셋",
@@ -148,8 +187,35 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     editLayout: "레이아웃 편집",
     saveLayout: "저장",
     aiReport: "AI 리포트",
+    cancelEdit: "취소",
   },
 }
+
+const widgetTitleProviders: Record<string, (language: LanguageCode) => string> = {
+  ai_insights: (language) => getAiInsightsCopy(language).title,
+  browser_share: (language) => getBrowserShareCopy(language).title,
+  country_share: (language) => getCountryShareCopy(language).title,
+  daily_count: (language) => getDailyCountCopy(language).title,
+  device_share: (language) => getDeviceShareCopy(language).title,
+  "dwell-time": (language) => getDwellTimeCopy(language).title,
+  heatmap: (language) => getHeatmapCopy(language).title,
+  page_exit: (language) => getPageExitCopy(language).title,
+  time_top_pages: (language) => getTimeTopPagesCopy(language).title,
+  "top-buttons-by-page-widget": (language) => getTopButtonsByPageCopy(language).title,
+  "top-buttons-global-widget": (language) => getTopButtonsGlobalCopy(language).title,
+  top_pages: (language) => getTopPagesCopy(language).title,
+  visitor_stat: (language) => getVisitorsStatCopy(language).title,
+}
+
+const localizedWidgetNames: Record<LanguageCode, Record<string, string>> = {
+  en: {},
+  ko: {},
+}
+
+Object.entries(widgetTitleProviders).forEach(([widgetId, getTitle]) => {
+  localizedWidgetNames.en[widgetId] = getTitle("en")
+  localizedWidgetNames.ko[widgetId] = getTitle("ko")
+})
 
 const LANGUAGE_STORAGE_KEY = "dashboard-language"
 
@@ -328,6 +394,15 @@ export default function DashboardPage() {
   const [finishPresetName, setFinishPresetName] = useState("")
   const [isNewPresetDraft, setIsNewPresetDraft] = useState(false)
   const [language, setLanguage] = useState<LanguageCode>("en")
+  const [editSnapshot, setEditSnapshot] = useState<EditSnapshot | null>(null)
+
+  const captureEditSnapshot = () => {
+    setEditSnapshot({
+      dashboard: dashboard ? cloneDashboardConfig(dashboard) : null,
+      activePresetId,
+      isNewPresetDraft,
+    })
+  }
 
   const widgetMetadataKey = Object.keys(widgetMetadata).join(",")
   const availableWidgets = Object.values(widgetMetadata)
@@ -571,6 +646,8 @@ export default function DashboardPage() {
       if (!shouldProceed) return
     }
 
+    captureEditSnapshot()
+
     const defaultName = `New Layout ${presets.length + 1}`
     const blankPreset = createBlankDashboardPreset(defaultName)
 
@@ -586,6 +663,7 @@ export default function DashboardPage() {
     if (!dashboard) return
 
     if (!isEditMode) {
+      captureEditSnapshot()
       setIsEditMode(true)
       setFinishPresetName(dashboard.name)
       return
@@ -593,6 +671,20 @@ export default function DashboardPage() {
 
     setFinishPresetName(dashboard.name)
     setIsFinishPresetDialogOpen(true)
+  }
+
+  const handleCancelEditing = () => {
+    if (editSnapshot) {
+      setDashboard(editSnapshot.dashboard ? cloneDashboardConfig(editSnapshot.dashboard) : null)
+      setActivePresetId(editSnapshot.activePresetId ?? null)
+      setIsNewPresetDraft(editSnapshot.isNewPresetDraft)
+      setFinishPresetName(editSnapshot.dashboard?.name ?? "")
+    }
+
+    setHasUnsavedChanges(false)
+    setIsEditMode(false)
+    setIsFinishPresetDialogOpen(false)
+    setEditSnapshot(null)
   }
 
   const handleConfirmFinishEditing = () => {
@@ -611,6 +703,7 @@ export default function DashboardPage() {
     }
     setIsEditMode(false)
     setIsFinishPresetDialogOpen(false)
+    setEditSnapshot(null)
   }
 
   const handleAddWidget = () => {
@@ -818,10 +911,22 @@ export default function DashboardPage() {
                 </Badge>
               )}
 
-              {!isNewPresetDraft && (
+              {!isEditMode && !isNewPresetDraft && (
                 <Button variant="outline" size="sm" onClick={handleStartNewLayout}>
                   <Plus className="h-4 w-4 mr-2" />
                   {copy.newLayout}
+                </Button>
+              )}
+
+              {isEditMode && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancelEditing}
+                  className="text-destructive hover:text-destructive focus:text-destructive"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  {copy.cancelEdit}
                 </Button>
               )}
 
@@ -906,7 +1011,7 @@ export default function DashboardPage() {
               size="icon"
               className="h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:bg-primary/90"
               onClick={() => setIsAddingWidget(true)}
-              aria-label="Add widget"
+              aria-label={copy.addWidgetButtonAria}
             >
               <Plus className="h-6 w-6" />
             </Button>
@@ -922,25 +1027,25 @@ export default function DashboardPage() {
           >
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>Add Widget</DialogTitle>
-                <DialogDescription>Select a widget type to place on your dashboard.</DialogDescription>
+                <DialogTitle>{copy.addWidgetTitle}</DialogTitle>
+                <DialogDescription>{copy.addWidgetDescription}</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <Select value={selectedWidgetType} onValueChange={setSelectedWidgetType}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose a widget..." />
+                    <SelectValue placeholder={copy.addWidgetSelectPlaceholder} />
                   </SelectTrigger>
                   <SelectContent>
                     {sortedAvailableWidgets.map((meta) => (
                       <SelectItem key={meta.id} value={meta.id}>
-                        {meta.name ?? meta.id}
+                        {localizedWidgetNames[language]?.[meta.id] ?? meta.name ?? meta.id}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <div className="flex gap-2">
                   <Button onClick={handleAddWidget} disabled={!selectedWidgetType} className="flex-1">
-                    Add
+                    {copy.addWidgetConfirm}
                   </Button>
                   <Button
                     onClick={() => {
@@ -950,7 +1055,7 @@ export default function DashboardPage() {
                     variant="outline"
                     className="flex-1"
                   >
-                    Cancel
+                    {copy.addWidgetCancel}
                   </Button>
                 </div>
               </div>
