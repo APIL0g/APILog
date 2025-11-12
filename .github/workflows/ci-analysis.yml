@@ -24,14 +24,14 @@ jobs:
           python-version: '3.10'
 
       - name: BE requirements installation
-        env:
-          PYTHONPATH: .
         run: |
           python -m pip install --upgrade pip
           pip install -r back/app/requirements.txt
           pip install -r back/app/requirements-test.txt
 
       - name: BE test and coverage creation
+        env:
+          PYTHONPATH: .
         run: |
           pytest --cov=back/app --cov-report=xml:back/app/coverage.xml tests/
 
