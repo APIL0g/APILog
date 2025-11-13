@@ -32,8 +32,8 @@ jobs:
       - name: BE test and coverage creation
         env:
           PYTHONPATH: .:back/app
-          SNAPSHOT_STORAGE_ROOT: ./test-snapshots
         run: |
+          export SNAPSHOT_STORAGE_ROOT=./snapshots
           pytest --cov=back/app --cov-report=xml:back/app/coverage.xml tests/
 
       - name: Node.js 18.x configure
