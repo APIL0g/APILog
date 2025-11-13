@@ -17,7 +17,7 @@ class TimeRange(BaseModel):
 class ReportRequest(BaseModel):
     time: TimeRange = TimeRange()
     prompt: str = ""
-    language: str = "ko"
+    language: str = "en"
     audience: str = "dev"
     word_limit: int = 700
 
@@ -87,7 +87,7 @@ class RadarScoreItem(BaseModel):
 
 class ReportResponse(BaseModel):
     generated_at: str
-    title: str = "AI ??? ?? ???"
+    title: str = "AI Traffic Diagnosis Report"
     summary: str = ""
     diagnostics: List[TrafficDiagnosisItem] = Field(default_factory=list)
     page_issues: List[PageIssueItem] = Field(default_factory=list)
