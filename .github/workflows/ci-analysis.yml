@@ -31,7 +31,7 @@ jobs:
 
       - name: BE test and coverage creation
         env:
-          PYTHONPATH: .
+          PYTHONPATH: .:back/app
         run: |
           pytest --cov=back/app --cov-report=xml:back/app/coverage.xml tests/
 

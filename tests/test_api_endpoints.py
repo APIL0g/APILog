@@ -1,59 +1,86 @@
-# /tests/test_api_endpoints.py
+# /tests/test_api_endpoints.py (새로운 내용)
 
 import pytest
+import pandas as pd  # 모킹을 위해 pandas import
 from httpx import AsyncClient
-from back.app.main import app  # pytest.ini 설정 덕분에 import 가능
+from back.app.main import app
+from fastapi.routing import APIRoute
+from influxdb_client_3 import InfluxDBClient3  # <--- 모킹할 클래스 import
 
-# 이 파일의 모든 테스트는 '비동기'로 실행됨을 표시
-pytestmark = pytest.mark.asyncio
+# --- 1. 동적으로 모든 API 엔드포인트 수집 ---
 
+# FastAPI가 자동으로 생성하는 문서는 테스트에서 제외합니다.
+EXCLUDED_PATHS = ["/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"]
 
-async def test_read_main_root():
+def collect_api_routes():
     """
-    back/app/main.py의 기본 '/' 엔드포인트를 테스트합니다.
-    (실제 엔드포인트가 존재한다고 가정)
+    FastAPI 'app' 객체에서 모든 엔드포인트 경로와 메서드를 수집합니다.
     """
-    # 'async with'를 사용하여 FastAPI 앱을 테스트하는 비동기 클라이언트 생성
+    routes_to_test = []
+    for route in app.routes:
+        # route가 'APIRoute' 타입인지 명시적으로 확인하고, Mount 객체는 무시합니다.
+        if isinstance(route, APIRoute) and route.path not in EXCLUDED_PATHS:
+            for method in route.methods:
+                routes_to_test.append(
+                    (method, route.path)
+                )
+    return routes_to_test
+
+# --- 2. (신규) InfluxDB 연결 모킹 Fixture ---
+
+@pytest.fixture(autouse=True)
+def mock_influx_query(monkeypatch):
+    """
+    모든 API 테스트가 실행되기 전, InfluxDBClient3.query 함수를
+    자동으로 모킹(Mocking)합니다.
+    (autouse=True: 이 파일의 모든 테스트에 자동으로 적용됨)
+    """
+    
+    # 이것이 InfluxDBClient3.query를 대체할 가짜 함수입니다.
+    def mock_query(*args, **kwargs):
+        print(f"MOCK INFLUXDB QUERY CALLED (mode={kwargs.get('mode')})")
+        
+        # 에러 로그에서 'mode="pandas"'를 사용하는 것을 확인했습니다.
+        if kwargs.get('mode') == 'pandas':
+            return pd.DataFrame()  # 빈 Pandas DataFrame을 반환
+        
+        # 기본 (mode='all' 등)
+        return []
+
+    # monkeypatch를 사용해 InfluxDBClient3 클래스의 'query' 메서드를
+    # 우리가 만든 'mock_query' 함수로 덮어씁니다.
+    monkeypatch.setattr(InfluxDBClient3, "query", mock_query)
+
+
+# --- 3. 파라미터화된 테스트 함수 (변경 없음) ---
+
+@pytest.mark.parametrize("method, path", collect_api_routes())
+@pytest.mark.asyncio
+async def test_api_smoke_test(method, path):
+    """
+    수집된 모든 엔드포인트에 대해 '스모크 테스트'를 실행합니다.
+    - 404 (Not Found)가 뜨지 않는지 확인합니다.
+    - 500 (Server Error)이 뜨지 않는지 확인합니다.
+    """
     async with AsyncClient(app=app, base_url="http://test") as ac:
-        response = await ac.get("/")
+        
+        response = None
+        if method == "GET":
+            response = await ac.get(path)
+        elif method == "POST":
+            # POST 요청은 Pydantic 스키마 검증이 필요할 수 있습니다.
+            # 422 (Unprocessable Entity)는 '성공'으로 간주합니다.
+            response = await ac.post(path, json={})
+        elif method == "PUT":
+            response = await ac.put(path, json={})
+        elif method == "DELETE":
+            response = await ac.delete(path)
+        else:
+            pytest.skip(f"Method {method} not tested in smoke test")
 
-    # HTTP 상태 코드가 200 (OK)인지 확인
-    assert response.status_code == 200
-    # (선택) 실제 반환되는 JSON 값을 확인
-    # assert response.json() == {"message": "Hello World"}
-
-
-async def test_ingest_router():
-    """
-    back/app/ingest/router.py의 엔드포인트를 테스트합니다.
-    (예: '/ingest/data'라는 엔드포인트가 있다고 가정)
-    """
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        # FastAPI 라우터에 설정된 실제 경로로 변경해야 합니다.
-        response = await ac.get("/ingest/data") # <- 실제 경로로 수정
-
-    # (가정) 이 엔드포인트도 200 (OK)를 반환해야 함
-    assert response.status_code == 200
-    # assert response.json() == {"status": "received"}
-
-
-async def test_plugins_ai_insights_router():
-    """
-    back/app/plugins/widgets/ai_insights/router.py의 엔드포인트를 테스트합니다.
-    (예: '/plugins/widgets/ai_insights/explain'이 있다고 가정)
-    """
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        # POST 요청 및 JSON 본문 전송 예시
-        test_payload = {
-            "query": "test query"
-        }
-        response = await ac.post("/plugins/widgets/ai_insights/explain", json=test_payload) # <- 실제 경로로 수정
-
-    assert response.status_code == 200
-    # assert "explanation" in response.json()
-
-
-# --- 아래에 다른 모든 라우터와 엔드포인트에 대한 테스트를 추가하세요 ---
-# 예: test_plugins_ai_report_router()
-# 예: test_plugins_browser_share_router()
-# ...
+        print(f"Testing {method} {path}: Got {response.status_code}")
+        
+        # 404: 엔드포인트가 존재하지 않음 (실패)
+        # 500: 코드 실행 중 서버 내부 오류 발생 (실패)
+        assert response.status_code != 404, f"API {method} {path} not found (404)."
+        assert response.status_code < 500, f"API {method} {path} returned server error ({response.status_code})."

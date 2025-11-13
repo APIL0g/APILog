@@ -1,0 +1,4 @@
+pytest
+pytest-cov
+pytest-asyncio
+httpx[asgi]==0.27.0
