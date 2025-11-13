@@ -35,7 +35,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { CopyPlus, LayoutGrid, PenLine, Plus, Save, Trash2, ChevronsUpDown, Check, X } from "lucide-react"
+import {
+  CopyPlus,
+  LayoutGrid,
+  PenLine,
+  Plus,
+  Save,
+  Trash2,
+  ChevronsUpDown,
+  Check,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getAiInsightsCopy } from "@plugins/widgets/ai_insights/locales"
 import { getBrowserShareCopy } from "@plugins/widgets/browser_share/locales"
@@ -50,6 +62,12 @@ import { getTopButtonsByPageCopy } from "@plugins/widgets/top_buttons_by_page_wi
 import { getTopButtonsGlobalCopy } from "@plugins/widgets/top_buttons_global_widget/locales"
 import { getTopPagesCopy } from "@plugins/widgets/top_pages/locales"
 import { getVisitorsStatCopy } from "@plugins/widgets/visitors_stat/locales"
+import tutorialGifStep1En from "@/assets/dashboard-tutorial-1_en.gif"
+import tutorialGifStep2En from "@/assets/dashboard-tutorial-2_en.gif"
+import tutorialGifStep3En from "@/assets/dashboard-tutorial-3_en.gif"
+import tutorialGifStep1Kr from "@/assets/dashboard-tutorial-1_kr.gif"
+import tutorialGifStep2Kr from "@/assets/dashboard-tutorial-2_kr.gif"
+import tutorialGifStep3Kr from "@/assets/dashboard-tutorial-3_kr.gif"
 
 const ReactGridLayout = WidthProvider(RGL)
 
@@ -62,6 +80,11 @@ const DEFAULT_WIDGET_W = 4
 const DEFAULT_WIDGET_H = 8
 const APPROX_COL_WIDTH_PX = 120
 const RESIZE_HANDLES: NonNullable<Layout["resizeHandles"]> = ["s", "n", "e", "w", "se", "sw", "ne", "nw"]
+const DASHBOARD_TUTORIAL_STORAGE_KEY = "apilog-dashboard-tutorial-seen"
+const tutorialGifSourcesByLanguage = {
+  en: [tutorialGifStep1En, tutorialGifStep2En, tutorialGifStep3En] as const,
+  ko: [tutorialGifStep1Kr, tutorialGifStep2Kr, tutorialGifStep3Kr] as const,
+}
 
 interface WidgetLayoutState {
   x: number
@@ -126,6 +149,20 @@ interface DashboardCopy {
   cancelEdit: string
 }
 
+interface TutorialStepCopy {
+  title: string
+  description: string
+  details: string
+}
+
+interface TutorialDialogCopy {
+  title: string
+  subtitle: string
+  primaryCta: string
+  imageAlt: string
+  steps: TutorialStepCopy[]
+}
+
 interface EditSnapshot {
   dashboard: DashboardConfig | null
   activePresetId: string | null
@@ -188,6 +225,55 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     saveLayout: "저장",
     aiReport: "AI 리포트",
     cancelEdit: "취소",
+  },
+}
+
+const tutorialDialogCopy: Record<LanguageCode, TutorialDialogCopy> = {
+  en: {
+    title: "First-time Tutorial",
+    subtitle: "Follow these three quick steps whenever you start a dashboard layout.",
+    primaryCta: "Start building",
+    imageAlt: "Animated preview for arranging widgets on the dashboard",
+    steps: [
+      {
+        title: "Create a new layout & pick widgets",
+        description: "Begin with a fresh layout, then select the widgets that matter to your team.",
+        details: "Use the New Layout button or choose an existing preset as a base. Press “Add Widget” to drop analytics cards you want to monitor first.",
+      },
+      {
+        title: "Arrange and resize widgets",
+        description: "Drag cards to the right spot and use resize handles to fine-tune their dimensions.",
+        details: "Use the drag handle to reposition cards and resize handles to adjust the grid footprint. Tweak until KPIs feel balanced and scannable.",
+      },
+      {
+        title: "Save, edit, or delete layouts",
+        description: "Turn the layout into a preset, revisit it later, or clean it up when it is no longer needed.",
+        details: "Give the layout a clear name, then save. You can reopen it to edit, duplicate promising variations, or delete presets you don’t need.",
+      },
+    ],
+  },
+  ko: {
+    title: "대시보드 튜토리얼",
+    subtitle: "처음 진입 시 아래 3단계만 따라 하면 레이아웃을 금방 완성할 수 있어요.",
+    primaryCta: "대시보드 시작하기",
+    imageAlt: "위젯 배치 과정을 담은 더미 튜토리얼 GIF",
+    steps: [
+      {
+        title: "새 레이아웃 만들고 위젯 선택",
+        description: "새 레이아웃을 만든 뒤 필요한 위젯을 골라 배치 준비를 마치세요.",
+        details: "“새 레이아웃” 버튼을 누르거나 기존 프리셋을 복제한 뒤, 추가 버튼으로 가장 중요한 위젯부터 채워 넣어 보세요.",
+      },
+      {
+        title: "위젯 배치와 크기 조절",
+        description: "드래그와 리사이즈 핸들로 위젯 위치와 크기를 자유롭게 조정하세요.",
+        details: "카드 상단을 잡아 옮기고 모서리 핸들로 크기를 바꾸면 열·행 단위로 딱 맞게 정렬됩니다. 한눈에 읽기 좋게 간격을 맞춰 주세요.",
+      },
+      {
+        title: "레이아웃 저장 · 편집 · 삭제",
+        description: "만족스러운 구성이면 저장해두고, 필요할 때 다시 편집하거나 삭제할 수 있습니다.",
+        details: "레이아웃 이름을 붙여 저장한 뒤, 나중에 다시 열어 수정하거나 복제·삭제할 수 있어요. 팀별 프리셋을 만들어 두면 더 편리합니다.",
+      },
+    ],
   },
 }
 
@@ -395,6 +481,8 @@ export default function DashboardPage() {
   const [isNewPresetDraft, setIsNewPresetDraft] = useState(false)
   const [language, setLanguage] = useState<LanguageCode>("en")
   const [editSnapshot, setEditSnapshot] = useState<EditSnapshot | null>(null)
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false)
+  const [activeTutorialIndex, setActiveTutorialIndex] = useState(0)
 
   const captureEditSnapshot = () => {
     setEditSnapshot({
@@ -415,6 +503,19 @@ export default function DashboardPage() {
   const legacyStorageKey = `dashboard-config-${dashboardId}`
   const activePreset = presets.find((preset) => preset.id === activePresetId) ?? presets[0]
   const copy = dashboardCopy[language]
+  const tutorialContent = tutorialDialogCopy[language]
+  const tutorialGifSources = tutorialGifSourcesByLanguage[language] ?? tutorialGifSourcesByLanguage.en
+  const tutorialSlides = useMemo(
+    () =>
+      tutorialContent.steps.map((step, index) => ({
+        ...step,
+        gif: tutorialGifSources[index % tutorialGifSources.length],
+      })),
+    [tutorialContent, tutorialGifSources],
+  )
+  const activeTutorialSlide = tutorialSlides[activeTutorialIndex] ?? tutorialSlides[0]
+  const activeTutorialImage = activeTutorialSlide?.gif ?? tutorialGifSources[0]
+  const totalTutorialSlides = tutorialSlides.length
   const presetButtonLabel = activePreset?.name ?? dashboard?.name ?? copy.presetButtonPlaceholder
 
   // Load dashboard configuration & presets
@@ -520,6 +621,43 @@ export default function DashboardPage() {
     if (typeof window === "undefined") return
     window.localStorage?.setItem(LANGUAGE_STORAGE_KEY, language)
   }, [language])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const hasSeenTutorial = window.localStorage?.getItem(DASHBOARD_TUTORIAL_STORAGE_KEY)
+    if (!hasSeenTutorial) {
+      setIsTutorialOpen(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (totalTutorialSlides === 0) return
+    if (activeTutorialIndex >= totalTutorialSlides) {
+      setActiveTutorialIndex(0)
+    }
+  }, [activeTutorialIndex, totalTutorialSlides])
+
+  const dismissTutorial = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage?.setItem(DASHBOARD_TUTORIAL_STORAGE_KEY, "1")
+    }
+    setIsTutorialOpen(false)
+  }
+
+  const handleTutorialStepClick = (index: number) => {
+    if (index < 0 || index >= totalTutorialSlides) return
+    setActiveTutorialIndex(index)
+  }
+
+  const goToPreviousTutorialSlide = () => {
+    if (totalTutorialSlides === 0) return
+    setActiveTutorialIndex((prev) => (prev - 1 + totalTutorialSlides) % totalTutorialSlides)
+  }
+
+  const goToNextTutorialSlide = () => {
+    if (totalTutorialSlides === 0) return
+    setActiveTutorialIndex((prev) => (prev + 1) % totalTutorialSlides)
+  }
 
   const saveDashboardAsNewPreset = (source: DashboardConfig, nameOverride?: string) => {
     const fallbackName =
@@ -1063,6 +1201,102 @@ export default function DashboardPage() {
           </Dialog>
         </>
       )}
+
+      <Dialog
+        open={isTutorialOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            dismissTutorial()
+          }
+        }}
+      >
+        <DialogContent className="flex w-[min(90vw,1200px)] max-h-[90vh] max-w-none flex-col overflow-hidden sm:max-w-none">
+          <DialogHeader>
+            <DialogTitle>{tutorialContent.title}</DialogTitle>
+            <DialogDescription>{tutorialContent.subtitle}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-1 flex-col gap-6 overflow-hidden">
+            <div className="flex-1 rounded-xl border bg-muted/20 p-4">
+              <div className="mb-4 flex flex-wrap items-center justify-center gap-3">
+                {tutorialSlides.map((step, index) => {
+                  const isActive = index === activeTutorialIndex
+                  return (
+                    <button
+                      key={`${step.title}-${index}`}
+                      type="button"
+                      className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${
+                        isActive
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border/70 bg-background text-muted-foreground hover:border-primary/40"
+                      }`}
+                      onClick={() => handleTutorialStepClick(index)}
+                    >
+                      <span
+                        className={`flex h-8 w-8 items-center justify-center rounded-full text-base font-semibold ${
+                          isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {index + 1}
+                      </span>
+                      <span className="hidden text-left sm:block">{step.title}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="relative flex h-full min-h-[55vh] items-center justify-center rounded-lg bg-background shadow-lg">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={goToPreviousTutorialSlide}
+                  disabled={totalTutorialSlides === 0}
+                  aria-label="Previous tutorial preview"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-background/80 shadow-lg backdrop-blur"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+                <img
+                  src={activeTutorialImage}
+                  alt={`${tutorialContent.imageAlt} - ${activeTutorialSlide?.title ?? ""}`}
+                  className="max-h-full max-w-full object-contain"
+                  style={{ aspectRatio: "16 / 9" }}
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={goToNextTutorialSlide}
+                  disabled={totalTutorialSlides === 0}
+                  aria-label="Next tutorial preview"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-background/80 shadow-lg backdrop-blur"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+            <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-background/90 p-5 shadow-inner">
+              <div>
+                <p className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full border border-primary bg-background text-lg text-primary">
+                    {activeTutorialIndex + 1}
+                  </span>
+                  {activeTutorialSlide?.title}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">{activeTutorialSlide?.description}</p>
+                {activeTutorialSlide?.details && (
+                  <p className="mt-2 text-sm text-muted-foreground opacity-90">{activeTutorialSlide.details}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <span className="text-sm text-muted-foreground">
+                  {totalTutorialSlides > 0 ? `${activeTutorialIndex + 1} / ${totalTutorialSlides}` : null}
+                </span>
+                <Button variant="default" onClick={dismissTutorial} className="whitespace-nowrap">
+                  {tutorialContent.primaryCta}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isFinishPresetDialogOpen} onOpenChange={setIsFinishPresetDialogOpen}>
         <DialogContent className="sm:max-w-md">
