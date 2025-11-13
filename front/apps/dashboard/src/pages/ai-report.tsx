@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -86,6 +86,27 @@ type RadarScore = {
   commentary?: string
 }
 
+type ReportTrendMeta = {
+  label?: string
+  change_pct?: number
+  momentum_pct?: number
+  days?: number
+  last?: number
+}
+
+type ReportMeta = {
+  mode?: string
+  provider?: string
+  model?: string
+  time?: { from?: string; to?: string; bucket?: string }
+  site_id?: string | null
+  widgets?: string[]
+  missing_widgets?: string[]
+  trend?: ReportTrendMeta
+  fallback?: boolean
+  [key: string]: any
+}
+
 type Report = {
   generated_at: string
   title: string
@@ -99,15 +120,61 @@ type Report = {
   metrics_to_track?: MetricWatch[]
   predictions?: Prediction[]
   radar_scores?: RadarScore[]
-  meta?: Record<string, any>
+  meta?: ReportMeta
 }
 
 const RADAR_AXIS_LABELS: Record<string, string> = {
-  performance: "성능",
-  experience: "사용자 경험",
-  growth: "성장/전환",
-  search: "검색 노출",
-  stability: "기술 안정성",
+  performance: "Performance",
+  experience: "User Experience",
+  growth: "Growth / Conversion",
+  search: "Search Visibility",
+  stability: "Technical Stability",
+}
+
+type RadarAxisKey = keyof typeof RADAR_AXIS_LABELS
+
+const RADAR_AXIS_KEYS = Object.keys(RADAR_AXIS_LABELS) as RadarAxisKey[]
+
+// Allow LLM responses that localize axis labels to still map onto our canonical axes.
+const RADAR_AXIS_NORMALIZERS: Array<{ key: RadarAxisKey; matches: string[] }> = [
+  {
+    key: "performance",
+    matches: ["performance", "perf", "speed", RADAR_AXIS_LABELS.performance],
+  },
+  {
+    key: "experience",
+    matches: ["experience", "ux", RADAR_AXIS_LABELS.experience, "ux/ui"],
+  },
+  {
+    key: "growth",
+    matches: ["growth", "acquisition", RADAR_AXIS_LABELS.growth],
+  },
+  {
+    key: "search",
+    matches: ["search", "seo", RADAR_AXIS_LABELS.search],
+  },
+  {
+    key: "stability",
+    matches: ["stability", "reliability", RADAR_AXIS_LABELS.stability],
+  },
+]
+
+function normalizeRadarAxis(value?: string): RadarAxisKey | null {
+  if (!value) return null
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return null
+  for (const { key, matches } of RADAR_AXIS_NORMALIZERS) {
+    if (
+      matches.some((token) => {
+        const tokenValue = token?.trim().toLowerCase()
+        if (!tokenValue) return false
+        return normalized === tokenValue || normalized.includes(tokenValue)
+      })
+    ) {
+      return key
+    }
+  }
+  return null
 }
 
 const SEVERITY_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -143,7 +210,7 @@ export default function AIReportPage() {
         body: JSON.stringify({
           time: { from: defaultRange.from, to: defaultRange.to, bucket: defaultRange.bucket },
           prompt,
-          language: "ko",
+          language: "en",
           audience: "dev",
           word_limit: 700,
         }),
@@ -152,11 +219,11 @@ export default function AIReportPage() {
       const data = (await res.json()) as Report
       setReport(data)
     } catch (e: any) {
-      setError(e?.message || "리포트 생성 중 오류가 발생했습니다.")
+      setError(e?.message || "Failed to generate the report. Please try again.")
       setReport({
         generated_at: nowIso(),
-        title: "AI 리포트",
-        summary: "기본 리포트를 표시합니다. 서버 로그를 확인해 주세요.",
+        title: "AI Traffic Diagnosis Report",
+        summary: "Widget data is unavailable, so we are showing a sample. Please verify the log pipeline and try again.",
         diagnostics: [],
         page_issues: [],
         interaction_insights: [],
@@ -164,12 +231,19 @@ export default function AIReportPage() {
         tech_recommendations: [],
         priorities: [],
         metrics_to_track: [
-          { metric: "페이지별 이탈 비율", widget: "page_exit_rate", reason: "이탈 감소 여부 확인" },
-          { metric: "페이지별 체류 시간", widget: "time_top_pages", reason: "UX 개선 검증" },
+          { metric: "Page exit rate", widget: "page_exit_rate", reason: "Confirms whether exits decrease" },
+          { metric: "Top page dwell time", widget: "time_top_pages", reason: "Validates UX improvements" },
         ],
         predictions: [],
         radar_scores: [],
-        meta: { fallback: true },
+        meta: {
+          fallback: true,
+          mode: "fallback",
+          provider: "insight-engine",
+          model: "sample",
+          trend: { label: "unknown" },
+          missing_widgets: [],
+        },
       })
     } finally {
       setLoading(false)
@@ -184,13 +258,13 @@ export default function AIReportPage() {
             <img src="/dashboard-logo.png" alt="ApiLog" className="h-8" />
             <div className="h-6 w-px bg-border" />
             <div>
-              <h1 className="text-xl font-semibold text-foreground">AI 리포트</h1>
-              <p className="text-sm text-muted-foreground">위젯 데이터를 기반으로 진단 · 인사이트 · 실행안을 제공합니다.</p>
+              <h1 className="text-xl font-semibold text-foreground">AI Diagnostic Report</h1>
+              <p className="text-sm text-muted-foreground">Synthesises live widget data to flag issues and recommend decisive actions.</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => (globalThis.location.hash = "#/")}>
-              대시보드로
+              Back to dashboard
             </Button>
           </div>
         </div>
@@ -199,28 +273,28 @@ export default function AIReportPage() {
       <main className="mx-auto max-w-7xl space-y-6 p-6">
         <Card>
           <CardHeader>
-            <CardTitle>리포트 생성</CardTitle>
+            <CardTitle>Generate Report</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="space-y-2 md:col-span-2">
-                <label className="text-sm text-muted-foreground">사용자 메모 (선택 반영)</label>
+                <label className="text-sm text-muted-foreground">Analyst note (optional)</label>
                 <Textarea
-                  placeholder="예: 모바일 Chrome 이탈 원인을 진단하고, 성능 개선 방안을 우선 제안해줘."
+                  placeholder="Ex: Diagnose mobile Chrome exits first and list performance quick wins."
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   className="min-h-24"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm text-muted-foreground">기간</label>
+                <label className="text-sm text-muted-foreground">Time range</label>
                 <div className="rounded-md border bg-muted/30 p-3 text-sm">
                   <div>From: {defaultRange.from}</div>
                   <div>To: {defaultRange.to}</div>
                   <div>Bucket: {defaultRange.bucket}</div>
                 </div>
                 <Button onClick={handleGenerate} disabled={loading} className="w-full">
-                  {loading ? "생성 중..." : "리포트 생성"}
+                  {loading ? "Generating..." : "Generate Report"}
                 </Button>
                 {error && <div className="text-sm text-destructive">{error}</div>}
               </div>
@@ -242,8 +316,19 @@ export default function AIReportPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="text-sm text-muted-foreground">생성 시각: {report.generated_at}</div>
+                  <div className="text-sm text-muted-foreground">Generated at: {report.generated_at}</div>
                   {report.summary && <p className="whitespace-pre-wrap leading-7">{report.summary}</p>}
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    {formatTimeWindow(report.meta) && <div>{formatTimeWindow(report.meta)}</div>}
+                    {report.meta?.trend && (
+                      <div>
+                        Traffic trend: {report.meta.trend.label || "-"} ({formatPercentDelta(report.meta.trend.change_pct)})
+                      </div>
+                    )}
+                    {report.meta?.missing_widgets?.length ? (
+                      <div>Missing widgets: {report.meta.missing_widgets.join(", ")}</div>
+                    ) : null}
+                  </div>
                 </CardContent>
               </Card>
 
@@ -251,11 +336,11 @@ export default function AIReportPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>환경 진단</CardTitle>
+                  <CardTitle>Environment diagnostics</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {(report.diagnostics || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">표시할 진단이 없습니다.</div>
+                    <div className="text-sm text-muted-foreground">No diagnostics available.</div>
                   )}
                   {(report.diagnostics || []).map((diag, i) => (
                     <div key={`${diag.focus}-${i}`} className="rounded-md border p-3 space-y-2">
@@ -265,8 +350,8 @@ export default function AIReportPage() {
                       </div>
                       <div className="text-sm">{diag.finding}</div>
                       <div className="text-xs text-muted-foreground">
-                        근거 위젯: {diag.widget}
-                        {diag.share ? ` · 비중 ${diag.share}` : ""}
+                        Source widget: {diag.widget}
+                        {diag.share ? ` - Share ${diag.share}` : ""}
                       </div>
                       {diag.insight && <div className="text-xs text-muted-foreground">{diag.insight}</div>}
                     </div>
@@ -276,11 +361,11 @@ export default function AIReportPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>문제성 페이지</CardTitle>
+                  <CardTitle>Problem pages</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {(report.page_issues || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">체류/이탈 이상 징후가 없습니다.</div>
+                    <div className="text-sm text-muted-foreground">No dwell/exit anomalies.</div>
                   )}
                   {(report.page_issues || []).map((page, i) => (
                     <div key={`${page.page}-${i}`} className="rounded-md border p-3 space-y-1.5">
@@ -290,7 +375,7 @@ export default function AIReportPage() {
                       </div>
                       <div className="text-sm">{page.issue}</div>
                       <div className="text-xs text-muted-foreground">
-                        체류: {page.dwell_time || "-"} · 이탈: {page.exit_rate || "-"}
+                        Dwell: {page.dwell_time || "-"} - Exit: {page.exit_rate || "-"}
                       </div>
                       {page.insight && <div className="text-xs text-muted-foreground">{page.insight}</div>}
                     </div>
@@ -300,11 +385,11 @@ export default function AIReportPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>상호작용 & 히트맵 인사이트</CardTitle>
+                  <CardTitle>Interaction & heatmap insights</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {(report.interaction_insights || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">클릭/히트맵 이상 징후가 없습니다.</div>
+                    <div className="text-sm text-muted-foreground">No interaction anomalies.</div>
                   )}
                   {(report.interaction_insights || []).map((insight, i) => (
                     <div key={`${insight.area}-${i}`} className="rounded-md border p-3 space-y-1.5">
@@ -313,7 +398,7 @@ export default function AIReportPage() {
                         {insight.widget && <Badge variant="outline">{insight.widget}</Badge>}
                       </div>
                       <div className="text-sm">{insight.insight}</div>
-                      {insight.action && <div className="text-xs text-muted-foreground">조치: {insight.action}</div>}
+                      {insight.action && <div className="text-xs text-muted-foreground">Action: {insight.action}</div>}
                     </div>
                   ))}
                 </CardContent>
@@ -321,11 +406,11 @@ export default function AIReportPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>실질적 해결 방안</CardTitle>
+                  <CardTitle>Actionable recommendations</CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-2">
-                  <RecommendationColumn title="디자인 · UX" items={report.ux_recommendations || []} />
-                  <RecommendationColumn title="성능 · 기술" items={report.tech_recommendations || []} />
+                  <RecommendationColumn title="Design / UX" items={report.ux_recommendations || []} />
+                  <RecommendationColumn title="Performance / Engineering" items={report.tech_recommendations || []} />
                 </CardContent>
               </Card>
             </div>
@@ -333,11 +418,11 @@ export default function AIReportPage() {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>우선순위 및 영향도</CardTitle>
+                  <CardTitle>Priorities & impact</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {(report.priorities || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">우선순위가 없습니다.</div>
+                    <div className="text-sm text-muted-foreground">No prioritized actions.</div>
                   )}
                   {(report.priorities || []).map((p, i) => (
                     <div key={`${p.title}-${i}`} className="rounded-md border p-3 space-y-1.5">
@@ -347,12 +432,12 @@ export default function AIReportPage() {
                       </div>
                       <div className="text-sm">{p.impact}</div>
                       <div className="text-xs text-muted-foreground">
-                        노력도: {p.effort || "-"}
-                        {p.business_outcome ? ` · ${p.business_outcome}` : ""}
+                        Effort: {p.effort || "-"}
+                        {p.business_outcome ? ` - ${p.business_outcome}` : ""}
                       </div>
                       {p.expected_metric_change && (
                         <div className="text-xs text-muted-foreground">
-                          목표 지표: {p.expected_metric_change.metric || "-"} {p.expected_metric_change.target || ""}
+                          Target metric: {p.expected_metric_change.metric || "-"} {p.expected_metric_change.target || ""}
                           {p.expected_metric_change.period ? ` / ${p.expected_metric_change.period}` : ""}
                         </div>
                       )}
@@ -363,11 +448,11 @@ export default function AIReportPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>성과 측정 지표</CardTitle>
+                  <CardTitle>Metrics to watch</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {(report.metrics_to_track || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">추적할 지표가 없습니다.</div>
+                    <div className="text-sm text-muted-foreground">No metrics defined.</div>
                   )}
                   {(report.metrics_to_track || []).map((metric, i) => (
                     <div key={`${metric.metric}-${i}`} className="rounded-md border p-3 space-y-1">
@@ -376,7 +461,7 @@ export default function AIReportPage() {
                         {metric.target_change && <Badge variant="outline">{metric.target_change}</Badge>}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        위젯: {metric.widget} {metric.timeframe ? `· 기간 ${metric.timeframe}` : ""}
+                        Widget: {metric.widget} {metric.timeframe ? ` - Period ${metric.timeframe}` : ""}
                       </div>
                       <div className="text-sm">{metric.reason}</div>
                     </div>
@@ -386,11 +471,11 @@ export default function AIReportPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>데이터 기반 예측치</CardTitle>
+                  <CardTitle>Data-backed projections</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {(report.predictions || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">예상치를 계산할 데이터가 부족합니다.</div>
+                    <div className="text-sm text-muted-foreground">Not enough data to project.</div>
                   )}
                   {(report.predictions || []).map((pred, i) => (
                     <div key={`${pred.metric}-${i}`} className="rounded-md border p-3 space-y-1">
@@ -401,8 +486,8 @@ export default function AIReportPage() {
                         </Badge>
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        현재 {formatNumber(pred.baseline)}
-                        {pred.unit || ""} → 예상 {formatNumber(pred.expected)}
+                        Now {formatNumber(pred.baseline)}
+                        {pred.unit || ""} -&gt; Expected {formatNumber(pred.expected)}
                         {pred.unit || ""}
                       </div>
                       {pred.narrative && <div className="text-sm">{pred.narrative}</div>}
@@ -424,19 +509,33 @@ function RecommendationColumn({ title, items }: { title: string; items: Recommen
   return (
     <div className="space-y-3">
       <div className="text-sm font-semibold">{title}</div>
-      {items.length === 0 && <div className="text-sm text-muted-foreground">추천 항목이 없습니다.</div>}
+      {items.length === 0 && <div className="text-sm text-muted-foreground">No recommendations available.</div>}
       {items.map((item, i) => (
         <div key={`${item.suggestion}-${i}`} className="rounded-md border p-3 space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">{item.category}</span>
           </div>
           <div className="text-sm">{item.suggestion}</div>
-          {item.rationale && <div className="text-xs text-muted-foreground">근거: {item.rationale}</div>}
-          {item.validation && <div className="text-xs text-muted-foreground">검증: {item.validation}</div>}
+        {item.rationale && <div className="text-xs text-muted-foreground">Rationale: {item.rationale}</div>}
+        {item.validation && <div className="text-xs text-muted-foreground">Validation: {item.validation}</div>}
         </div>
       ))}
     </div>
   )
+}
+
+function formatTimeWindow(meta?: ReportMeta) {
+  if (!meta?.time) return null
+  const from = meta.time.from || "-"
+  const to = meta.time.to || "-"
+  const bucket = meta.time.bucket ? ` | Bucket ${meta.time.bucket}` : ""
+  return `Analysis window: ${from} -> ${to}${bucket}`
+}
+
+function formatPercentDelta(value?: number) {
+  if (typeof value !== "number" || Number.isNaN(value)) return "-"
+  const sign = value > 0 ? "+" : ""
+  return `${sign}${value.toFixed(1)}%`
 }
 
 function severityVariant(level?: string) {
@@ -466,9 +565,9 @@ function buildPredictionSeries(report: Report | null) {
   const expected = typeof target?.expected === "number" ? target.expected : baseline * 1.05
   const midpoint = baseline + (expected - baseline) * 0.5
   const data = [
-    { name: "현재", baseline, projected: baseline },
-    { name: "+1주", baseline, projected: Math.round(midpoint * 10) / 10 },
-    { name: "+2주", baseline, projected: Math.round(expected * 10) / 10 },
+    { name: "Now", baseline, projected: baseline },
+    { name: "+1 wk", baseline, projected: Math.round(midpoint * 10) / 10 },
+    { name: "+2 wk", baseline, projected: Math.round(expected * 10) / 10 },
   ]
   return { data, metricLabel: unit ? `${metricLabel} (${unit})` : metricLabel, delta: expected - baseline }
 }
@@ -480,16 +579,16 @@ function ImpactChart({ report }: { report: Report | null }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>데이터 기반 영향 예측</CardTitle>
+        <CardTitle>Impact KPI forecast</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="text-xs text-muted-foreground">
-          {metricLabel} 기준으로 2주 내 예상 변화 추세 · Δ {improvement}
+          {metricLabel} Two-week delta {improvement}
         </div>
         <ChartContainer
           config={{
-            baseline: { label: "현재 추세", color: "hsl(var(--muted-foreground))" },
-            projected: { label: "실행 시 예측", color: "hsl(var(--primary))" },
+            baseline: { label: "Current trend", color: "hsl(var(--muted-foreground))" },
+            projected: { label: "Projected after action", color: "hsl(var(--primary))" },
           }}
           className="w-full"
         >
@@ -508,25 +607,35 @@ function ImpactChart({ report }: { report: Report | null }) {
 }
 
 function RadarPentagon({ scores }: { scores?: RadarScore[] }) {
-  const axes = Object.keys(RADAR_AXIS_LABELS)
-  const data = axes.map((axis) => {
-    const found = (scores || []).find((item) => item.axis?.toLowerCase() === axis)
+  const normalizedScores = useMemo(() => {
+    const map: Partial<Record<RadarAxisKey, RadarScore>> = {}
+    for (const item of scores || []) {
+      const axisKey = normalizeRadarAxis(item.axis)
+      if (axisKey) {
+        map[axisKey] = item
+      }
+    }
+    return map
+  }, [scores])
+
+  const data = RADAR_AXIS_KEYS.map((axis) => {
+    const found = normalizedScores[axis]
     return {
       axis: RADAR_AXIS_LABELS[axis],
-      score: found?.score ?? 50,
-      commentary: found?.commentary || "데이터 부족",
+      score: typeof found?.score === "number" ? found.score : 50,
+      commentary: found?.commentary || "Insufficient data",
     }
   })
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>5각형 분포 점수</CardTitle>
+        <CardTitle>Radar distribution scores</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <ChartContainer
           config={{
-            score: { label: "점수", color: "hsl(var(--primary))" },
+            score: { label: "Score", color: "hsl(var(--primary))" },
           }}
           className="h-[320px] w-full"
         >

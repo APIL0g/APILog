@@ -119,6 +119,8 @@ services:
       AI_INSIGHTS_EXPLAIN_CACHE_TTL: ${AI_INSIGHTS_EXPLAIN_CACHE_TTL}
       AI_REPORT_FETCH_BASE: ${AI_REPORT_FETCH_BASE}
       TARGET_SITE_BASE_URL: http://dummy-frontend:3000
+      LLM_API_KEY: ${LLM_API_KEY}
+
 
     depends_on:
       - influxdb3-core
@@ -126,8 +128,8 @@ services:
 
     # Only exposed inside the compose network (Nginx proxies this)
     # compose 내부에서만 노출 (Nginx가 프록시)
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"
 
     volumes:
       # Store generated heatmap snapshots
