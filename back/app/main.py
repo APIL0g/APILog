@@ -31,7 +31,7 @@ app.include_router(ingest_router)
 app.include_router(plugins_router)
 
 # Snapshot routers
-SNAPSHOT_STORAGE_ROOT = "/snapshots"
+SNAPSHOT_STORAGE_ROOT = os.getenv("SNAPSHOT_STORAGE_ROOT", os.path.join(os.getcwd(), "snapshots"))
 os.makedirs(SNAPSHOT_STORAGE_ROOT, exist_ok=True)
 app.mount("/api/snapshots", StaticFiles(directory=SNAPSHOT_STORAGE_ROOT), name="snapshots")
 
