@@ -47,6 +47,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Wand2,
 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getAiInsightsCopy } from "@plugins/widgets/ai_insights/locales"
@@ -85,6 +86,8 @@ const tutorialGifSourcesByLanguage = {
   en: [tutorialGifStep1En, tutorialGifStep2En, tutorialGifStep3En] as const,
   ko: [tutorialGifStep1Kr, tutorialGifStep2Kr, tutorialGifStep3Kr] as const,
 }
+
+type AutoLayoutMode = "compact" | "two-column" | "three-column"
 
 interface WidgetLayoutState {
   x: number
@@ -147,6 +150,14 @@ interface DashboardCopy {
   saveLayout: string
   aiReport: string
   cancelEdit: string
+  autoLayout: string
+  autoLayoutTitle: string
+  autoLayoutCompact: string
+  autoLayoutCompactDescription: string
+  autoLayoutTwoColumn: string
+  autoLayoutTwoColumnDescription: string
+  autoLayoutThreeColumn: string
+  autoLayoutThreeColumnDescription: string
 }
 
 interface TutorialStepCopy {
@@ -197,6 +208,14 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     saveLayout: "Save",
     aiReport: "AI Report",
     cancelEdit: "Cancel",
+    autoLayout: "Auto Arrange",
+    autoLayoutTitle: "Auto arrange widgets",
+    autoLayoutCompact: "Compact grid",
+    autoLayoutCompactDescription: "Pack widgets tightly while keeping their preferred sizes.",
+    autoLayoutTwoColumn: "Two-column focus",
+    autoLayoutTwoColumnDescription: "Give every widget the same width for a clean, report-like layout.",
+    autoLayoutThreeColumn: "Three-column mosaic",
+    autoLayoutThreeColumnDescription: "Great for many small cards—splits the canvas into three equal columns.",
   },
   ko: {
     tagline: "프리셋으로 레이아웃을 저장하고 다시 불러올 수 있어요.",
@@ -225,6 +244,14 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     saveLayout: "저장",
     aiReport: "AI 리포트",
     cancelEdit: "취소",
+    autoLayout: "자동 정렬",
+    autoLayoutTitle: "위젯 자동 정렬",
+    autoLayoutCompact: "콤팩트 그리드",
+    autoLayoutCompactDescription: "위젯 기본 크기를 유지하면서 빈 공간 없이 촘촘하게 배치합니다.",
+    autoLayoutTwoColumn: "2열 균등 배치",
+    autoLayoutTwoColumnDescription: "모든 위젯을 두 열에 맞춰 같은 너비로 정렬합니다.",
+    autoLayoutThreeColumn: "3열 모자이크",
+    autoLayoutThreeColumnDescription: "작은 카드가 많을 때 3열로 나눠 빠르게 훑어볼 수 있게 합니다.",
   },
 }
 
@@ -458,6 +485,52 @@ function sanitizeLayout(layout: Partial<WidgetLayoutState> | undefined, fallback
   const rawY = Number.isFinite(candidate.y) ? (candidate.y as number) : fallback.y
   const y = Math.max(0, Math.round(rawY))
   return { x, y, w, h }
+}
+
+function flowLayouts(items: { id: string; w: number; h: number }[]): Record<string, WidgetLayoutState> {
+  let cursorX = 0
+  let cursorY = 0
+  let rowHeight = 0
+  const placements: Record<string, WidgetLayoutState> = {}
+
+  items.forEach(({ id, w, h }) => {
+    const width = clamp(Math.round(w) || MIN_WIDGET_W, MIN_WIDGET_W, GRID_COLS)
+    const height = Math.max(MIN_WIDGET_H, Math.round(h) || MIN_WIDGET_H)
+
+    if (cursorX + width > GRID_COLS) {
+      cursorY += rowHeight
+      cursorX = 0
+      rowHeight = 0
+    }
+
+    placements[id] = { x: cursorX, y: cursorY, w: width, h: height }
+    cursorX += width
+    rowHeight = Math.max(rowHeight, height)
+  })
+
+  return placements
+}
+
+function autoLayoutWidgets(widgets: Widget[], mode: AutoLayoutMode): Record<string, WidgetLayoutState> {
+  if (!Array.isArray(widgets) || widgets.length === 0) {
+    return {}
+  }
+
+  const columnOverride = mode === "compact" ? null : mode === "two-column" ? 2 : 3
+
+  const items = widgets.map((widget, index) => {
+    const meta = widgetMetadata[widget.type]
+    const fallback = createFallbackLayout(index, widget.width ?? meta?.defaultWidth, widget.height ?? meta?.defaultHeight)
+    const base = sanitizeLayout(widget.layout, fallback)
+    let width = base.w
+    if (columnOverride && columnOverride > 0) {
+      const columnWidth = clamp(Math.floor(GRID_COLS / columnOverride) || MIN_WIDGET_W, MIN_WIDGET_W, GRID_COLS)
+      width = columnWidth
+    }
+    return { id: widget.id, w: width, h: base.h }
+  })
+
+  return flowLayouts(items)
 }
 
 export default function DashboardPage() {
@@ -953,6 +1026,40 @@ export default function DashboardPage() {
     setHasUnsavedChanges(true)
   }
 
+  const handleAutoLayout = (mode: AutoLayoutMode) => {
+    if (!dashboard || !isEditMode || dashboard.widgets.length === 0) return
+
+    const placements = autoLayoutWidgets(dashboard.widgets, mode)
+    if (!placements || Object.keys(placements).length === 0) return
+
+    const nextWidgets = dashboard.widgets.map((widget) => {
+      const layout = placements[widget.id]
+      if (!layout) return widget
+
+      return {
+        ...widget,
+        layout,
+        position: layout.y * GRID_COLS + layout.x,
+      }
+    })
+
+    const orderedWidgets = [...nextWidgets].sort((a, b) => {
+      const layoutA = a.layout
+      const layoutB = b.layout
+      if (layoutA && layoutB) {
+        if (layoutA.y !== layoutB.y) return layoutA.y - layoutB.y
+        if (layoutA.x !== layoutB.x) return layoutA.x - layoutB.x
+      }
+      return a.position - b.position
+    })
+
+    setDashboard({
+      ...dashboard,
+      widgets: orderedWidgets,
+    })
+    setHasUnsavedChanges(true)
+  }
+
   if (!dashboard) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -1066,6 +1173,62 @@ export default function DashboardPage() {
                   <X className="h-4 w-4 mr-2" />
                   {copy.cancelEdit}
                 </Button>
+              )}
+
+              {isEditMode && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={dashboard.widgets.length === 0}
+                      className="gap-2"
+                    >
+                      <Wand2 className="h-4 w-4" />
+                      {copy.autoLayout}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-72">
+                    <DropdownMenuLabel>{copy.autoLayoutTitle}</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={dashboard.widgets.length === 0}
+                      onSelect={(event) => {
+                        event.preventDefault()
+                        handleAutoLayout("compact")
+                      }}
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{copy.autoLayoutCompact}</p>
+                        <p className="text-xs text-muted-foreground">{copy.autoLayoutCompactDescription}</p>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={dashboard.widgets.length === 0}
+                      onSelect={(event) => {
+                        event.preventDefault()
+                        handleAutoLayout("two-column")
+                      }}
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{copy.autoLayoutTwoColumn}</p>
+                        <p className="text-xs text-muted-foreground">{copy.autoLayoutTwoColumnDescription}</p>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={dashboard.widgets.length === 0}
+                      onSelect={(event) => {
+                        event.preventDefault()
+                        handleAutoLayout("three-column")
+                      }}
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{copy.autoLayoutThreeColumn}</p>
+                        <p className="text-xs text-muted-foreground">{copy.autoLayoutThreeColumnDescription}</p>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
 
               <Button variant={isEditMode ? "default" : "outline"} size="sm" onClick={handleToggleEditMode}>
