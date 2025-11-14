@@ -82,6 +82,35 @@ LLM_TEMPERATURE: float = _as_float(_raw_llm_temperature, 0.2)
 _raw_llm_timeout_s = os.getenv("LLM_TIMEOUT_S")
 LLM_TIMEOUT_S: float = _as_float(_raw_llm_timeout_s, 60.0)
 
+# AI Report specific LLM overrides (falls back to global LLM_* when unset)
+_raw_report_llm_provider = os.getenv("AI_REPORT_LLM_PROVIDER")
+AI_REPORT_LLM_PROVIDER: str = _clean_str(_raw_report_llm_provider, LLM_PROVIDER)
+
+_raw_report_llm_endpoint = os.getenv("AI_REPORT_LLM_ENDPOINT")
+AI_REPORT_LLM_ENDPOINT: str = _clean_str(
+    _raw_report_llm_endpoint, LLM_ENDPOINT
+).rstrip("/")
+
+_raw_report_llm_model = os.getenv("AI_REPORT_LLM_MODEL")
+AI_REPORT_LLM_MODEL: str = _clean_str(_raw_report_llm_model, LLM_MODEL)
+
+_raw_report_llm_api_key = os.getenv("AI_REPORT_LLM_API_KEY")
+AI_REPORT_LLM_API_KEY: str = _clean_str(_raw_report_llm_api_key, LLM_API_KEY)
+
+_raw_report_llm_max_tokens = os.getenv("AI_REPORT_LLM_MAX_TOKENS")
+AI_REPORT_LLM_MAX_TOKENS: int = _as_int(
+    _raw_report_llm_max_tokens, LLM_MAX_TOKENS
+)
+
+_raw_report_llm_temperature = os.getenv("AI_REPORT_LLM_TEMPERATURE")
+AI_REPORT_LLM_TEMPERATURE: float = _as_float(
+    _raw_report_llm_temperature, LLM_TEMPERATURE
+)
+
+_raw_report_llm_timeout_s = os.getenv("AI_REPORT_LLM_TIMEOUT_S")
+AI_REPORT_LLM_TIMEOUT_S: float = _as_float(
+    _raw_report_llm_timeout_s, LLM_TIMEOUT_S
+)
 
 # AI cache knobs
 _raw_ai_insights_cache_ttl = os.getenv("AI_INSIGHTS_CACHE_TTL")
