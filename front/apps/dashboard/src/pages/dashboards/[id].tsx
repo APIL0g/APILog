@@ -214,7 +214,7 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     autoLayoutCompactDescription: "Pack widgets tightly while keeping their preferred sizes.",
     autoLayoutTwoColumn: "Two-column focus",
     autoLayoutTwoColumnDescription: "Give every widget the same width for a clean, report-like layout.",
-    autoLayoutThreeColumn: "Three-column mosaic",
+    autoLayoutThreeColumn: "Three-column balance",
     autoLayoutThreeColumnDescription: "Great for many small cards—splits the canvas into three equal columns.",
   },
   ko: {
@@ -250,7 +250,7 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     autoLayoutCompactDescription: "위젯 기본 크기를 유지하면서 빈 공간 없이 촘촘하게 배치합니다.",
     autoLayoutTwoColumn: "2열 균등 배치",
     autoLayoutTwoColumnDescription: "모든 위젯을 두 열에 맞춰 같은 너비로 정렬합니다.",
-    autoLayoutThreeColumn: "3열 모자이크",
+    autoLayoutThreeColumn: "3열 균등 배치",
     autoLayoutThreeColumnDescription: "작은 카드가 많을 때 3열로 나눠 빠르게 훑어볼 수 있게 합니다.",
   },
 }
