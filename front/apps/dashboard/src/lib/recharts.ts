@@ -7,6 +7,8 @@ export {
   CartesianGrid,
   LineChart,
   Line,
+  AreaChart,
+  Area,
   Tooltip,
   LabelList,
   PieChart,

@@ -1,5 +1,7 @@
 import { registerWidget, widgetMetadata, widgetRegistry } from "./registry"
 import type { WidgetComponent, WidgetMeta } from "./registry"
+import { fetchDynamicWidgetSpecs } from "@/plugins/widgets/dynamic/api"
+import { registerDynamicWidget } from "@/plugins/widgets/dynamic/factory"
 
 type WidgetModule = {
   default?: WidgetComponent
@@ -21,7 +23,7 @@ function widgetIdFromPath(path: string) {
     .replace(/\//g, "-")
 }
 
-export function initializeWidgets() {
+export async function initializeWidgets() {
   Object.keys(widgetRegistry).forEach((key) => {
     delete widgetRegistry[key]
   })
@@ -48,4 +50,17 @@ export function initializeWidgets() {
 
     registerWidget(widgetId, component, { ...meta, id: widgetId })
   })
+
+  try {
+    const specs = await fetchDynamicWidgetSpecs()
+    specs.forEach((spec) => {
+      try {
+        registerDynamicWidget(spec)
+      } catch (error) {
+        console.warn(`[widgets] Failed to register dynamic widget ${spec.id}`, error)
+      }
+    })
+  } catch (error) {
+    console.warn("[widgets] Failed to fetch dynamic widgets", error)
+  }
 }

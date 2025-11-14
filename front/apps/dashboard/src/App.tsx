@@ -1,19 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react"
 
-import { initializeWidgets } from '@/core/init-widgets'
-import DashboardPage from '@/pages/dashboards/[id]'
-import AIReportPage from '@/pages/ai-report'
+import { initializeWidgets } from "@/core/init-widgets"
+import DashboardPage from "@/pages/dashboards/[id]"
+import AIReportPage from "@/pages/ai-report"
 
 export default function App() {
   const [initialized, setInitialized] = useState(false)
   const [route, setRoute] = useState<string>(globalThis?.location?.hash || '#/')
 
   useEffect(() => {
+    let disposed = false
     initializeWidgets()
-    setInitialized(true)
+      .catch((error) => {
+        console.error("[widgets] Failed to initialize", error)
+      })
+      .finally(() => {
+        if (!disposed) {
+          setInitialized(true)
+        }
+      })
     const onHash = () => setRoute(globalThis?.location?.hash || '#/')
     window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
+    return () => {
+      disposed = true
+      window.removeEventListener('hashchange', onHash)
+    }
   }, [])
 
   if (!initialized) {
