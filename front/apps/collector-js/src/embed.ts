@@ -15,9 +15,6 @@
   interface InitConfig {
     siteId: string;
     ingestUrl: string;
-    pageVariant?: string;
-    utmSource?: string;
-    utmCampaign?: string;
   }
 
   interface ApilogStub {
@@ -98,9 +95,6 @@
     return {
       siteId: el.getAttribute("data-site-id") || "",
       ingestUrl: el.getAttribute("data-ingest-url") || "",
-      pageVariant: el.getAttribute("data-page-variant") || "",
-      utmSource: el.getAttribute("data-utm-source") || "",
-      utmCampaign: el.getAttribute("data-utm-campaign") || "",
     };
   }
 

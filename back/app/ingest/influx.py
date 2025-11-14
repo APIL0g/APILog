@@ -88,17 +88,17 @@ def write_events(events: List[Dict[str, Any]]) -> None:
     수집된 이벤트를 `events` 측정값에 저장합니다.
 
     Tags:
-        site_id, path, page_variant, event_name, element_hash,
-        device_type, browser_family, country_code, utm_source, utm_campaign
-        사이트, 경로, 페이지 변형, 이벤트 이름, 요소 해시,
-        디바이스 유형, 브라우저 패밀리, 국가 코드, UTM 소스, UTM 캠페인
+        site_id, path, event_name, element_hash,
+        device_type, browser_family, country_code
+        사이트, 경로, 이벤트 이름, 요소 해시,
+        디바이스 유형, 브라우저 패밀리, 국가 코드
 
     Fields:
         count, session_id, user_hash, dwell_ms, scroll_pct,
         click_x, click_y, viewport_w, viewport_h,
-        funnel_step, error_flag, bot_score, extra_json
+        error_flag, extra_json
         수량, 세션 ID, 사용자 해시, 체류 시간, 스크롤 비율,
-        클릭 좌표, 뷰포트 크기, 유입 단계, 오류 플래그, 봇 점수, 추가 정보
+        클릭 좌표, 뷰포트 크기, 오류 플래그, 추가 정보
     """
     points: List[Point] = []
 
@@ -113,14 +113,11 @@ def write_events(events: List[Dict[str, Any]]) -> None:
             # 태그는 빠른 그룹화를 위한 저카디널리티 차원을 설명합니다.
             .tag("site_id", _safe_tag_str(event.get("site_id")))
             .tag("path", _safe_tag_str(event.get("path")))
-            .tag("page_variant", _safe_tag_str(event.get("page_variant")))
             .tag("event_name", _safe_tag_str(event.get("event_name")))
             .tag("element_hash", _safe_tag_str(event.get("element_hash")))
             .tag("device_type", _safe_tag_str(event.get("device_type")))
             .tag("browser_family", _safe_tag_str(event.get("browser_family")))
             .tag("country_code", _safe_tag_str(event.get("country_code")))
-            .tag("utm_source", _safe_tag_str(event.get("utm_source")))
-            .tag("utm_campaign", _safe_tag_str(event.get("utm_campaign")))
             # Fields hold the high-cardinality metrics we query over time.
             # 필드는 시간에 따라 조회할 고카디널리티 지표를 저장합니다.
             .field("count", _safe_int(event.get("count"), 1) or 1)
@@ -132,9 +129,7 @@ def write_events(events: List[Dict[str, Any]]) -> None:
             .field("click_y", _safe_float(event.get("click_y"), 0.0) or 0.0)
             .field("viewport_w", _safe_int(event.get("viewport_w"), 0) or 0)
             .field("viewport_h", _safe_int(event.get("viewport_h"), 0) or 0)
-            .field("funnel_step", _safe_str(event.get("funnel_step")))
             .field("error_flag", _safe_bool(event.get("error_flag"), False) or False)
-            .field("bot_score", _safe_float(event.get("bot_score"), 0.0) or 0.0)
             .field("extra_json", _safe_str(event.get("extra_json")))
         )
 

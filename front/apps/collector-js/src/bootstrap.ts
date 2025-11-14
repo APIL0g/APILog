@@ -23,9 +23,6 @@
   interface InitConfig {
     siteId: string;
     ingestUrl: string;
-    pageVariant?: string;
-    utmSource?: string;
-    utmCampaign?: string;
   }
 
   interface ApilogAPIStub {
@@ -188,15 +185,6 @@
     if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) return "Safari";
     if (/Chrome/i.test(ua)) return "Chrome";
     return "Other";
-  }
-
-  function getUtmParam(key: string): string | null {
-    try {
-      const url = new URL(window.location.href);
-      return url.searchParams.get(key);
-    } catch {
-      return null;
-    }
   }
 
   function normalizePath(pathname: string): string {
@@ -706,9 +694,6 @@
   interface CollectorOpts {
     siteId: string;
     ingestUrl: string;
-    pageVariant?: string;
-    utmSource?: string | null;
-    utmCampaign?: string | null;
   }
 
   class ApiLogCollector {
@@ -869,14 +854,11 @@
       return {
         site_id: this.opts.siteId,
         path,
-        page_variant: this.opts.pageVariant || "default",
         event_name: eventName,
         element_hash: elementHash || null,
         device_type: detectDeviceType(),
         browser_family: detectBrowserFamily(),
         country_code: this.countryCode,
-        utm_source: this.opts.utmSource ?? getUtmParam("utm_source"),
-        utm_campaign: this.opts.utmCampaign ?? getUtmParam("utm_campaign"),
       };
     }
 
@@ -896,9 +878,7 @@
         click_y: null as number | null,
         viewport_w: vw,
         viewport_h: vh,
-        funnel_step: null as string | null,
         error_flag: null as boolean | null,
-        bot_score: null as number | null,
         extra_json: null as string | null,
       };
     }
@@ -984,16 +964,7 @@
     }
 
     markFunnelStep(stepName: string) {
-      const rec = Object.assign(
-        {},
-        this.baseTags("funnel_step", null),
-        this.baseFields(),
-        {
-          funnel_step: stepName,
-          ts: now(),
-        }
-      );
-      this.pushRecord(rec);
+      // funnel tracking has been disabled
     }
 
     markError(info: unknown) {
@@ -1029,9 +1000,6 @@
     __apilog_singleton = new ApiLogCollector({
       siteId: opts.siteId,
       ingestUrl: opts.ingestUrl,
-      pageVariant: opts.pageVariant,
-      utmSource: opts.utmSource ?? null,
-      utmCampaign: opts.utmCampaign ?? null,
     });
 
     return __apilog_singleton;
