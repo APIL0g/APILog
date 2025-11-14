@@ -130,8 +130,8 @@ export const widgetMeta: WidgetMeta = {
   id: "browser_share",
   name: "Browser Share",
   description: "원형(도넛) 차트로 브라우저별 세션 비율",
-  defaultWidth: 620,
-  defaultHeight: 360,
+  defaultWidth: 520,
+  defaultHeight: 300,
   previewImage,
   tags: ["audience"],
   localizations: {

@@ -190,7 +190,7 @@ export const widgetMeta: WidgetMeta = {
   name: "Top Pages",
   description: "인기 페이지 Top 5를 가로 막대로 표시",
   defaultWidth: 520,
-  defaultHeight: 360,
+  defaultHeight: 300,
   previewImage,
   tags: ["traffic"],
   localizations: {

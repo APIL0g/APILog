@@ -130,8 +130,8 @@ export const widgetMeta: WidgetMeta = {
   id: "top-buttons-global-widget",
   name: "Top Button Clicks (Global)",
   description: "Ranked button clicks across all pages",
-  defaultWidth: 420,
-  defaultHeight: 360,
+  defaultWidth: 520,
+  defaultHeight: 300,
   previewImage,
   tags: ["conversion"],
   localizations: {

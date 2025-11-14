@@ -296,7 +296,7 @@ export const widgetMeta: WidgetMeta = {
   name: "Visitor Statistics",
   description: "Show total, returning, and new visitors with a 7-day trend chart",
   defaultWidth: 520,
-  defaultHeight: 280,
+  defaultHeight: 300,
   previewImage,
   tags: ["audience"],
   localizations: {

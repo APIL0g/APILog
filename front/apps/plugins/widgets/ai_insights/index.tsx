@@ -134,7 +134,7 @@ export const widgetMeta: WidgetMeta = {
   name: "AI Insights",
   description: "로그 집계 기반 AI 설명 위젯",
   defaultWidth: 520,
-  defaultHeight: 360,
+  defaultHeight: 300,
   previewImage,
   tags: ["ai"],
   localizations: {
