@@ -775,11 +775,12 @@
 
           if (!interactiveEl) {
             this.q.push({
-              ...this.baseTags("dead_click", DEAD_CLICK_LABEL),
+              ...this.baseTags("click", DEAD_CLICK_LABEL),
               ...this.baseFields(),
               click_x: x_pct,
               click_y: y_pct,
               scroll_pct: this.maxScrollSeen,
+              extra_json: JSON.stringify({ dead_click: true }),
               ts: now(),
             });
             return;
