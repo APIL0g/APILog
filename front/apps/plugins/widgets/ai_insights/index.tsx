@@ -5,6 +5,7 @@ import type { Digest, InsightsResp } from "./types";
 import { fetchDigest, explain, type ApiError } from "./api";
 import { getCommonWidgetCopy, resolveWidgetLanguage } from "../i18n";
 import { getAiInsightsCopy, type AiInsightsCopy } from "./locales";
+import previewImage from "./preview.png";
 
 function sevClass(s?: string) {
   switch (s) {
@@ -119,12 +120,32 @@ function AiInsightsWidget({ timeRange, language }: WidgetProps) {
   );
 }
 
+export default AiInsightsWidget;
+
+
+const aiInsightsLocales = {
+  en: getAiInsightsCopy("en"),
+  ko: getAiInsightsCopy("ko"),
+};
+
+
 export const widgetMeta: WidgetMeta = {
   id: "ai_insights",
   name: "AI Insights",
   description: "로그 집계 기반 AI 설명 위젯",
   defaultWidth: 520,
   defaultHeight: 360,
+  previewImage,
+  tags: ["ai"],
+  localizations: {
+    en: {
+      title: aiInsightsLocales.en.title,
+      previewDescription: aiInsightsLocales.en.previewDescription,
+    },
+    ko: {
+      title: aiInsightsLocales.ko.title,
+      previewDescription: aiInsightsLocales.ko.previewDescription,
+    },
+  },
 };
 
-export default AiInsightsWidget;

@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { getCommonWidgetCopy } from "../i18n"
 import { getTopButtonsByPageCopy } from "./locales"
+import previewImage from "./preview.png"
 
 type Row = { site_id: string; element_text: string; count: number }
 type PathOption = { path: string; count: number }
@@ -250,10 +251,28 @@ export default function TopButtonsByPageWidget({ timeRange, language }: WidgetPr
   )
 }
 
+const topButtonsByPageLocales = {
+  en: getTopButtonsByPageCopy("en"),
+  ko: getTopButtonsByPageCopy("ko"),
+}
+
 export const widgetMeta: WidgetMeta = {
   id: "top-buttons-by-page-widget",
   name: "Top Button Clicks by Page",
   description: "Ranked button clicks grouped by page",
   defaultWidth: 420,
   defaultHeight: 360,
+  previewImage,
+  tags: ["conversion"],
+  localizations: {
+    en: {
+      title: topButtonsByPageLocales.en.title,
+      previewDescription: topButtonsByPageLocales.en.previewDescription,
+    },
+    ko: {
+      title: topButtonsByPageLocales.ko.title,
+      previewDescription: topButtonsByPageLocales.ko.previewDescription,
+    },
+  },
 }
+

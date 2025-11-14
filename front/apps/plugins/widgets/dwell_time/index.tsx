@@ -3,6 +3,7 @@ import { CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
 import { getCommonWidgetCopy } from "../i18n"
 import { getDwellTimeCopy } from "./locales"
+import previewImage from "./preview.png"
 
 type Row = { path: string; avgSeconds: number; sessions?: number }
 
@@ -107,10 +108,28 @@ export default function DwellTimeWidget({ language }: WidgetProps) {
   )
 }
 
+const dwellTimeLocales = {
+  en: getDwellTimeCopy("en"),
+  ko: getDwellTimeCopy("ko"),
+}
+
 export const widgetMeta: WidgetMeta = {
   id: "dwell-time",
   name: "Top Dwell Time",
   description: "페이지별 평균 체류시간 Top 10",
   defaultWidth: 520,
   defaultHeight: 360,
+  previewImage,
+  tags: ["behavior"],
+  localizations: {
+    en: {
+      title: dwellTimeLocales.en.title,
+      previewDescription: dwellTimeLocales.en.previewDescription,
+    },
+    ko: {
+      title: dwellTimeLocales.ko.title,
+      previewDescription: dwellTimeLocales.ko.previewDescription,
+    },
+  },
 }
+

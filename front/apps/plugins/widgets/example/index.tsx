@@ -2,7 +2,8 @@ import { CardContent, CardHeader, CardTitle, CardDescription } from "@/component
 import { Sparkles } from "@/components/icons"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
 import dayjs from "dayjs"
-import { exampleCopy, resolveExampleLanguage } from "./locales"
+import { exampleCopy, getExampleCopy, resolveExampleLanguage } from "./locales"
+import previewImage from "./preview.png"
 
 // Example widget showcasing how to build custom plugin widgets
 export default function ExampleWidget({ timeRange, language }: WidgetProps) {
@@ -36,10 +37,28 @@ export default function ExampleWidget({ timeRange, language }: WidgetProps) {
   )
 }
 
+const exampleLocales = {
+  en: getExampleCopy("en"),
+  ko: getExampleCopy("ko"),
+}
+
 export const widgetMeta: WidgetMeta = {
   id: "example",
   name: "Example Widget",
   description: "Starter widget registered automatically from the plugins directory.",
   defaultWidth: 420,
   defaultHeight: 320,
+  previewImage,
+  tags: ["samples"],
+  localizations: {
+    en: {
+      title: exampleLocales.en.headerTitle,
+      previewDescription: exampleLocales.en.previewDescription,
+    },
+    ko: {
+      title: exampleLocales.ko.headerTitle,
+      previewDescription: exampleLocales.ko.previewDescription,
+    },
+  },
 }
+

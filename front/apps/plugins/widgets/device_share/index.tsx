@@ -4,6 +4,7 @@ import type { WidgetMeta, WidgetProps } from "@/core/registry"
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "@/lib/recharts"
 import { getCommonWidgetCopy } from "../i18n"
 import { getDeviceShareCopy } from "./locales"
+import previewImage from "./preview.png"
 
 type Row = { device: string; sessions: number; pct?: number }
 
@@ -145,10 +146,28 @@ export default function DeviceShareWidget({ timeRange, language }: WidgetProps) 
   )
 }
 
+const deviceShareLocales = {
+  en: getDeviceShareCopy("en"),
+  ko: getDeviceShareCopy("ko"),
+}
+
 export const widgetMeta: WidgetMeta = {
   id: "device_share",
   name: "Device Share",
   description: "디바이스 유형별 사용자 수와 비중(원형 그래프)",
   defaultWidth: 403,
   defaultHeight: 452,
+  previewImage,
+  tags: ["audience"],
+  localizations: {
+    en: {
+      title: deviceShareLocales.en.title,
+      previewDescription: deviceShareLocales.en.previewDescription,
+    },
+    ko: {
+      title: deviceShareLocales.ko.title,
+      previewDescription: deviceShareLocales.ko.previewDescription,
+    },
+  },
 }
+

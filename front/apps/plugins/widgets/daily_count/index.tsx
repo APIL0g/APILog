@@ -12,6 +12,7 @@ import {
 } from "@/lib/recharts"
 import { getCommonWidgetCopy } from "../i18n"
 import { getDailyCountCopy } from "./locales"
+import previewImage from "./preview.png"
 
 type Row = { date: string; cnt: number }
 
@@ -147,11 +148,28 @@ export default function DailyCountWidget({ timeRange, language }: WidgetProps) {
   )
 }
 
+const dailyCountLocales = {
+  en: getDailyCountCopy("en"),
+  ko: getDailyCountCopy("ko"),
+}
+
 export const widgetMeta: WidgetMeta = {
   id: "daily_count",
   name: "Daily Log Count",
   description: "최근 1주일 일자별 로그 합계를 막대 그래프로 표시",
   defaultWidth: 520,
   defaultHeight: 360,
+  previewImage,
+  tags: ["traffic"],
+  localizations: {
+    en: {
+      title: dailyCountLocales.en.title,
+      previewDescription: dailyCountLocales.en.previewDescription,
+    },
+    ko: {
+      title: dailyCountLocales.ko.title,
+      previewDescription: dailyCountLocales.ko.previewDescription,
+    },
+  },
 }
 

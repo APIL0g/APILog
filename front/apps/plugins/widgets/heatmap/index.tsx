@@ -21,6 +21,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ChevronDown, Smartphone, Tablet } from "lucide-react"
 import { getCommonWidgetCopy } from "../i18n"
 import { getHeatmapCopy, type HeatmapKnownError } from "./locales"
+import previewImage from "./preview.png"
 
 // deck.gl imports
 import { HeatmapLayer } from "@deck.gl/aggregation-layers"
@@ -507,6 +508,10 @@ export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
 }
 
 // --- Widget Metadata ---
+const heatmapLocales = {
+  en: getHeatmapCopy("en"),
+  ko: getHeatmapCopy("ko"),
+}
 
 export const widgetMeta: WidgetMeta = {
   id: "heatmap",
@@ -514,4 +519,17 @@ export const widgetMeta: WidgetMeta = {
   description: "Displays click heatmap overlayed on page snapshots using deck.gl",
   defaultWidth: 600,
   defaultHeight: 700,
+  previewImage,
+  tags: ["behavior"],
+  localizations: {
+    en: {
+      title: heatmapLocales.en.title,
+      previewDescription: heatmapLocales.en.previewDescription,
+    },
+    ko: {
+      title: heatmapLocales.ko.title,
+      previewDescription: heatmapLocales.ko.previewDescription,
+    },
+  },
 }
+

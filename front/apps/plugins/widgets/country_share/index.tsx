@@ -4,6 +4,7 @@ import type { WidgetMeta, WidgetProps } from "@/core/registry"
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "@/lib/recharts"
 import { getCommonWidgetCopy } from "../i18n"
 import { getCountryShareCopy } from "./locales"
+import previewImage from "./preview.png"
 
 type Row = { code: string; label: string; sessions: number }
 type ApiResponse = { rows?: Row[]; total?: number }
@@ -146,10 +147,28 @@ export default function CountryShareWidget({ timeRange: _timeRange, language }: 
   )
 }
 
+const countryShareLocales = {
+  en: getCountryShareCopy("en"),
+  ko: getCountryShareCopy("ko"),
+}
+
 export const widgetMeta: WidgetMeta = {
   id: "country_share",
   name: "Sessions by Country",
   description: "Top countries by session share (pie)",
   defaultWidth: 620,
   defaultHeight: 360,
+  previewImage,
+  tags: ["audience"],
+  localizations: {
+    en: {
+      title: countryShareLocales.en.title,
+      previewDescription: countryShareLocales.en.previewDescription,
+    },
+    ko: {
+      title: countryShareLocales.ko.title,
+      previewDescription: countryShareLocales.ko.previewDescription,
+    },
+  },
 }
+

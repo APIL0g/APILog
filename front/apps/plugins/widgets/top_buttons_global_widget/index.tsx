@@ -7,6 +7,7 @@ import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@
 import { ChevronDown } from "lucide-react"
 import { getCommonWidgetCopy } from "../i18n"
 import { getTopButtonsGlobalCopy } from "./locales"
+import previewImage from "./preview.png"
 
 type Row = { element_text: string; count: number }
 
@@ -120,10 +121,28 @@ export default function TopButtonsGlobalWidget({ timeRange, language }: WidgetPr
   )
 }
 
+const topButtonsGlobalLocales = {
+  en: getTopButtonsGlobalCopy("en"),
+  ko: getTopButtonsGlobalCopy("ko"),
+}
+
 export const widgetMeta: WidgetMeta = {
   id: "top-buttons-global-widget",
   name: "Top Button Clicks (Global)",
   description: "Ranked button clicks across all pages",
   defaultWidth: 420,
   defaultHeight: 360,
+  previewImage,
+  tags: ["conversion"],
+  localizations: {
+    en: {
+      title: topButtonsGlobalLocales.en.title,
+      previewDescription: topButtonsGlobalLocales.en.previewDescription,
+    },
+    ko: {
+      title: topButtonsGlobalLocales.ko.title,
+      previewDescription: topButtonsGlobalLocales.ko.previewDescription,
+    },
+  },
 }
+

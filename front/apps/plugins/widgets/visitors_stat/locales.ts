@@ -2,6 +2,7 @@ import { resolveWidgetLanguage, type WidgetLanguage } from "../i18n"
 
 export interface VisitorsStatCopy {
   title: string
+  previewDescription: string
   metrics: {
     total: string
     returning: string
@@ -13,6 +14,7 @@ export interface VisitorsStatCopy {
 const visitorsStatCopy: Record<WidgetLanguage, VisitorsStatCopy> = {
   en: {
     title: "Visitor Overview",
+    previewDescription: "Trend of total, returning, and new visitors.",
     metrics: {
       total: "Total Visitors",
       returning: "Returning Visitors",
@@ -22,6 +24,7 @@ const visitorsStatCopy: Record<WidgetLanguage, VisitorsStatCopy> = {
   },
   ko: {
     title: "방문자 개요",
+    previewDescription: "전체·재방문·신규 방문자 추이를 한눈에 보여줘요.",
     metrics: {
       total: "총 방문자",
       returning: "재방문자",

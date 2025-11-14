@@ -2,6 +2,7 @@ import { resolveWidgetLanguage, type WidgetLanguage } from "../i18n"
 
 interface TopButtonsGlobalCopy {
   title: string
+  previewDescription: string
   range7: string
   range30: string
   noOptions: string
@@ -12,6 +13,7 @@ interface TopButtonsGlobalCopy {
 const topButtonsGlobalCopy: Record<WidgetLanguage, TopButtonsGlobalCopy> = {
   en: {
     title: "Top Button Clicks (Global)",
+    previewDescription: "Most clicked CTA buttons across the whole site.",
     range7: "Last 7 days",
     range30: "Last 30 days",
     noOptions: "No options",
@@ -20,6 +22,7 @@ const topButtonsGlobalCopy: Record<WidgetLanguage, TopButtonsGlobalCopy> = {
   },
   ko: {
     title: "전체 버튼 클릭 Top",
+    previewDescription: "사이트 전체에서 가장 많이 클릭된 CTA 버튼을 확인해요.",
     range7: "최근 7일",
     range30: "최근 30일",
     noOptions: "선택지가 없습니다",

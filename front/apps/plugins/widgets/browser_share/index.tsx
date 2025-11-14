@@ -4,6 +4,7 @@ import type { WidgetMeta, WidgetProps } from "@/core/registry"
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "@/lib/recharts"
 import { getCommonWidgetCopy } from "../i18n"
 import { getBrowserShareCopy } from "./locales"
+import previewImage from "./preview.png"
 
 type Row = { browser: string; sessions: number }
 
@@ -120,6 +121,10 @@ export default function BrowserShareWidget({ timeRange, language }: WidgetProps)
     </>
   )
 }
+const browserShareLocales = {
+  en: getBrowserShareCopy("en"),
+  ko: getBrowserShareCopy("ko"),
+}
 
 export const widgetMeta: WidgetMeta = {
   id: "browser_share",
@@ -127,4 +132,16 @@ export const widgetMeta: WidgetMeta = {
   description: "원형(도넛) 차트로 브라우저별 세션 비율",
   defaultWidth: 620,
   defaultHeight: 360,
+  previewImage,
+  tags: ["audience"],
+  localizations: {
+    en: {
+      title: browserShareLocales.en.title,
+      previewDescription: browserShareLocales.en.previewDescription,
+    },
+    ko: {
+      title: browserShareLocales.ko.title,
+      previewDescription: browserShareLocales.ko.previewDescription,
+    },
+  },
 }

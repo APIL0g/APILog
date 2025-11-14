@@ -8,6 +8,7 @@ import { WidgetHost } from "@/core/WidgetHost"
 import { widgetMetadata } from "@/core/registry"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog,
   DialogContent,
@@ -25,8 +26,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,25 +51,13 @@ import {
   Wand2,
 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { getAiInsightsCopy } from "@plugins/widgets/ai_insights/locales"
-import { getBrowserShareCopy } from "@plugins/widgets/browser_share/locales"
-import { getCountryShareCopy } from "@plugins/widgets/country_share/locales"
-import { getDailyCountCopy } from "@plugins/widgets/daily_count/locales"
-import { getDeviceShareCopy } from "@plugins/widgets/device_share/locales"
-import { getDwellTimeCopy } from "@plugins/widgets/dwell_time/locales"
-import { getHeatmapCopy } from "@plugins/widgets/heatmap/locales"
-import { getPageExitCopy } from "@plugins/widgets/page_exit/locales"
-import { getTimeTopPagesCopy } from "@plugins/widgets/time_top_pages/locales"
-import { getTopButtonsByPageCopy } from "@plugins/widgets/top_buttons_by_page_widget/locales"
-import { getTopButtonsGlobalCopy } from "@plugins/widgets/top_buttons_global_widget/locales"
-import { getTopPagesCopy } from "@plugins/widgets/top_pages/locales"
-import { getVisitorsStatCopy } from "@plugins/widgets/visitors_stat/locales"
 import tutorialGifStep1En from "@/assets/dashboard-tutorial-1_en.gif"
 import tutorialGifStep2En from "@/assets/dashboard-tutorial-2_en.gif"
 import tutorialGifStep3En from "@/assets/dashboard-tutorial-3_en.gif"
 import tutorialGifStep1Kr from "@/assets/dashboard-tutorial-1_kr.gif"
 import tutorialGifStep2Kr from "@/assets/dashboard-tutorial-2_kr.gif"
 import tutorialGifStep3Kr from "@/assets/dashboard-tutorial-3_kr.gif"
+import examplePreviewFallback from "@plugins/widgets/example/preview.png"
 
 const ReactGridLayout = WidthProvider(RGL)
 
@@ -135,6 +124,10 @@ interface DashboardCopy {
   addWidgetConfirm: string
   addWidgetCancel: string
   addWidgetButtonAria: string
+  addWidgetFilterAll: string
+  addWidgetFilterEmpty: string
+  widgetTagLabels: Record<string, string>
+  widgetTagDescriptions: Record<string, string>
   languageLabel: string
   presetButtonPlaceholder: string
   presetMenuTitle: string
@@ -193,6 +186,26 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     addWidgetConfirm: "Add",
     addWidgetCancel: "Cancel",
     addWidgetButtonAria: "Add widget",
+    addWidgetFilterAll: "All widgets",
+    addWidgetFilterEmpty: "No widgets in this category yet.",
+    widgetTagLabels: {
+      ai: "AI Assist",
+      audience: "Audience",
+      traffic: "Traffic",
+      behavior: "On-site Behavior",
+      conversion: "Conversion",
+      samples: "Examples",
+      others: "Other Widgets",
+    },
+    widgetTagDescriptions: {
+      ai: "Automations that summarize your data for you.",
+      audience: "Who your visitors are and where they come from.",
+      traffic: "When traffic spikes and which pages lead the way.",
+      behavior: "How visitors interact with each screen.",
+      conversion: "CTA and button performance at a glance.",
+      samples: "Starter experiences you can duplicate or extend.",
+      others: "Additional widgets that don't fit a single category.",
+    },
     languageLabel: "Language",
     presetButtonPlaceholder: "Select preset",
     presetMenuTitle: "Presets",
@@ -229,6 +242,26 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     addWidgetConfirm: "추가",
     addWidgetCancel: "취소",
     addWidgetButtonAria: "위젯 추가",
+    addWidgetFilterAll: "전체",
+    addWidgetFilterEmpty: "이 분류에는 아직 위젯이 없어요.",
+    widgetTagLabels: {
+      ai: "AI 도구",
+      audience: "방문자 통계",
+      traffic: "트래픽 흐름",
+      behavior: "사이트 행동",
+      conversion: "전환/CTA",
+      samples: "예시/도구",
+      others: "기타 위젯",
+    },
+    widgetTagDescriptions: {
+      ai: "AI가 데이터를 요약해 통찰을 제공합니다.",
+      audience: "방문자가 누구인지, 어디서 오는지 보여줘요.",
+      traffic: "트래픽이 언제, 어디서 몰리는지 확인해요.",
+      behavior: "사용자가 화면에서 어떻게 행동하는지 살펴봐요.",
+      conversion: "CTA·버튼 성과를 한눈에 파악하세요.",
+      samples: "복제해 확장할 수 있는 예시 위젯들입니다.",
+      others: "다른 카테고리에 속하지 않은 위젯 모음이에요.",
+    },
     languageLabel: "언어",
     presetButtonPlaceholder: "프리셋 선택",
     presetMenuTitle: "프리셋",
@@ -304,31 +337,17 @@ const tutorialDialogCopy: Record<LanguageCode, TutorialDialogCopy> = {
   },
 }
 
-const widgetTitleProviders: Record<string, (language: LanguageCode) => string> = {
-  ai_insights: (language) => getAiInsightsCopy(language).title,
-  browser_share: (language) => getBrowserShareCopy(language).title,
-  country_share: (language) => getCountryShareCopy(language).title,
-  daily_count: (language) => getDailyCountCopy(language).title,
-  device_share: (language) => getDeviceShareCopy(language).title,
-  "dwell-time": (language) => getDwellTimeCopy(language).title,
-  heatmap: (language) => getHeatmapCopy(language).title,
-  page_exit: (language) => getPageExitCopy(language).title,
-  time_top_pages: (language) => getTimeTopPagesCopy(language).title,
-  "top-buttons-by-page-widget": (language) => getTopButtonsByPageCopy(language).title,
-  "top-buttons-global-widget": (language) => getTopButtonsGlobalCopy(language).title,
-  top_pages: (language) => getTopPagesCopy(language).title,
-  visitor_stat: (language) => getVisitorsStatCopy(language).title,
+const SUPPORTED_LANGUAGES: LanguageCode[] = ["en", "ko"]
+
+const widgetTagOrder = ["ai", "audience", "traffic", "behavior", "conversion", "samples", "others"] as const
+const DEFAULT_WIDGET_TAG = "others"
+
+const widgetDescriptionFallback: Record<LanguageCode, string> = {
+  en: "Description coming soon.",
+  ko: "곧 설명이 추가될 예정이에요.",
 }
 
-const localizedWidgetNames: Record<LanguageCode, Record<string, string>> = {
-  en: {},
-  ko: {},
-}
-
-Object.entries(widgetTitleProviders).forEach(([widgetId, getTitle]) => {
-  localizedWidgetNames.en[widgetId] = getTitle("en")
-  localizedWidgetNames.ko[widgetId] = getTitle("ko")
-})
+const defaultWidgetPreview = examplePreviewFallback
 
 const LANGUAGE_STORAGE_KEY = "dashboard-language"
 
@@ -539,6 +558,7 @@ export default function DashboardPage() {
   const [isHydrated, setIsHydrated] = useState(false)
   const [isAddingWidget, setIsAddingWidget] = useState(false)
   const [selectedWidgetType, setSelectedWidgetType] = useState<string>("")
+  const [widgetTagFilter, setWidgetTagFilter] = useState<string>("all")
   const timeRange = "12h"
   const [isEditMode, setIsEditMode] = useState(false)
   const [presets, setPresets] = useState<DashboardConfig[]>([])
@@ -572,10 +592,91 @@ export default function DashboardPage() {
     if (b.id === "example") return -1
     return 0
   })
+  const { localizedNames, localizedDescriptions } = useMemo(() => {
+    const names: Record<LanguageCode, Record<string, string>> = {
+      en: {},
+      ko: {},
+    }
+    const descriptions: Record<LanguageCode, Record<string, string>> = {
+      en: {},
+      ko: {},
+    }
+
+    Object.values(widgetMetadata).forEach((meta) => {
+      SUPPORTED_LANGUAGES.forEach((lang) => {
+        const localized = meta.localizations?.[lang]
+        if (localized?.title) {
+          names[lang][meta.id] = localized.title
+        }
+        if (localized?.previewDescription) {
+          descriptions[lang][meta.id] = localized.previewDescription
+        }
+      })
+
+      if (!names.en[meta.id]) {
+        names.en[meta.id] = meta.name ?? meta.id
+      }
+
+      if (!descriptions.en[meta.id] && meta.description) {
+        descriptions.en[meta.id] = meta.description
+      }
+    })
+
+    SUPPORTED_LANGUAGES.forEach((lang) => {
+      Object.keys(names.en).forEach((widgetId) => {
+        if (!names[lang][widgetId]) {
+          names[lang][widgetId] = names.en[widgetId]
+        }
+      })
+      Object.keys(descriptions.en).forEach((widgetId) => {
+        if (!descriptions[lang][widgetId] && descriptions.en[widgetId]) {
+          descriptions[lang][widgetId] = descriptions.en[widgetId]
+        }
+      })
+    })
+
+    return { localizedNames: names, localizedDescriptions: descriptions }
+  }, [widgetMetadataKey])
+  const localizedWidgetNames = localizedNames
+  const localizedWidgetDescriptions = localizedDescriptions
+  const widgetSections = useMemo<{ tag: string; widgets: typeof sortedAvailableWidgets }[]>(() => {
+    const groups: Record<string, typeof sortedAvailableWidgets> = {}
+    sortedAvailableWidgets.forEach((meta) => {
+      const primaryTag = meta.tags?.[0] ?? DEFAULT_WIDGET_TAG
+      if (!groups[primaryTag]) {
+        groups[primaryTag] = []
+      }
+      groups[primaryTag].push(meta)
+    })
+
+    const ordered = widgetTagOrder
+      .map<{ tag: string; widgets: typeof sortedAvailableWidgets }>((tag) => ({
+        tag,
+        widgets: groups[tag] ?? [],
+      }))
+      .filter((section) => section.widgets.length > 0)
+
+    const knownTags = new Set<string>(widgetTagOrder as readonly string[])
+    Object.entries(groups).forEach(([tag, widgets]) => {
+      if (!knownTags.has(tag) && widgets.length > 0) {
+        ordered.push({ tag, widgets })
+      }
+    })
+
+    return ordered
+  }, [sortedAvailableWidgets])
+
+  const visibleWidgetSections = widgetTagFilter === "all" ? widgetSections : widgetSections.filter((section) => section.tag === widgetTagFilter)
   const presetStorageKey = `dashboard-presets-${dashboardId}`
   const legacyStorageKey = `dashboard-config-${dashboardId}`
   const activePreset = presets.find((preset) => preset.id === activePresetId) ?? presets[0]
   const copy = dashboardCopy[language]
+  const fallbackTagLabels = dashboardCopy.en.widgetTagLabels
+  const fallbackTagDescriptions = dashboardCopy.en.widgetTagDescriptions
+  const widgetFilterOptions = widgetSections.map((section) => ({
+    tag: section.tag,
+    label: copy.widgetTagLabels[section.tag] ?? fallbackTagLabels[section.tag] ?? section.tag,
+  }))
   const tutorialContent = tutorialDialogCopy[language]
   const tutorialGifSources = tutorialGifSourcesByLanguage[language] ?? tutorialGifSourcesByLanguage.en
   const tutorialSlides = useMemo(
@@ -1323,28 +1424,131 @@ export default function DashboardPage() {
               setIsAddingWidget(open)
               if (!open) {
                 setSelectedWidgetType("")
+                setWidgetTagFilter("all")
               }
             }}
           >
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="w-full max-w-[80vw] xl:max-w-[1200px]">
               <DialogHeader>
                 <DialogTitle>{copy.addWidgetTitle}</DialogTitle>
                 <DialogDescription>{copy.addWidgetDescription}</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
-                <Select value={selectedWidgetType} onValueChange={setSelectedWidgetType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={copy.addWidgetSelectPlaceholder} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sortedAvailableWidgets.map((meta) => (
-                      <SelectItem key={meta.id} value={meta.id}>
-                        {localizedWidgetNames[language]?.[meta.id] ?? meta.name ?? meta.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex gap-2">
+                <p className="text-sm text-muted-foreground">{copy.addWidgetSelectPlaceholder}</p>
+                <div className="flex flex-wrap gap-2 overflow-x-auto pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setWidgetTagFilter("all")}
+                          className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+                      widgetTagFilter === "all"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-background text-muted-foreground hover:border-primary/50"
+                    }`}
+                  >
+                    {copy.addWidgetFilterAll}
+                  </button>
+                  {widgetFilterOptions.map((option) => (
+                    <button
+                      key={`filter-${option.tag}`}
+                      type="button"
+                      onClick={() => setWidgetTagFilter(option.tag)}
+                    className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+                        widgetTagFilter === option.tag
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/50"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <ScrollArea className="h-[55vh] pr-2">
+                  <div className="space-y-8">
+                    {visibleWidgetSections.length === 0 && (
+                      <div className="text-sm text-muted-foreground">{copy.addWidgetFilterEmpty}</div>
+                    )}
+                    {visibleWidgetSections.map(({ tag, widgets }) => {
+                      const sectionLabel = copy.widgetTagLabels[tag] ?? fallbackTagLabels[tag] ?? tag
+                      const sectionDescription = copy.widgetTagDescriptions[tag] ?? fallbackTagDescriptions[tag]
+                      return (
+                        <section key={`widget-tag-${tag}`} className="space-y-4">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between">
+                              <p className="text-base font-semibold text-foreground">{sectionLabel}</p>
+                              <span className="text-sm text-muted-foreground">{widgets.length}</span>
+                            </div>
+                            {sectionDescription && (
+                              <p className="text-sm text-muted-foreground">{sectionDescription}</p>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            {widgets.map((meta) => {
+                              const widgetId = meta.id
+                              const displayName = localizedWidgetNames[language]?.[widgetId] ?? meta.name ?? widgetId
+                              const description =
+                                localizedWidgetDescriptions[language]?.[widgetId] ??
+                                meta.description ??
+                                widgetDescriptionFallback[language]
+                              const previewImage = meta.previewImage ?? defaultWidgetPreview
+                              const isSelected = widgetId === selectedWidgetType
+                              const widgetTags = meta.tags ?? []
+                              return (
+                                <button
+                                  key={widgetId}
+                                  type="button"
+                                  onClick={() => setSelectedWidgetType(widgetId)}
+                                  className="text-left w-full"
+                                  aria-pressed={isSelected}
+                                >
+                                  <div
+                                    className={`flex h-full flex-col gap-3 rounded-2xl border bg-card/80 p-3 transition hover:border-primary/70 hover:shadow-lg ${
+                                      isSelected ? "border-primary ring-2 ring-primary ring-offset-2 ring-offset-background" : "border-border"
+                                    }`}
+                                  >
+                                    <div className="relative overflow-hidden rounded-xl border bg-background/60 h-65">
+                                      <img
+                                        src={previewImage}
+                                        alt={`${displayName} preview`}
+                                        className="h-full w-full object-contain"
+                                        loading="lazy"
+                                      />
+                                      <div className="absolute inset-x-4 bottom-3 rounded-full bg-background/70 px-4 py-1.5 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                                        {widgetId.replace(/-/g, " ")}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <p className="text-base font-semibold text-foreground">{displayName}</p>
+                                        <p className="text-sm text-muted-foreground">{widgetId}</p>
+                                      </div>
+                                      {isSelected && <Check className="h-5 w-5 text-primary" />}
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">{description}</p>
+                                    {widgetTags.length > 0 && (
+                                      <div className="flex flex-wrap gap-2 text-xs uppercase text-muted-foreground">
+                                        {widgetTags.map((tagValue) => (
+                                          <span
+                                            key={`${widgetId}-${tagValue}`}
+                                            className="rounded-full border border-border/70 px-2 py-0.5"
+                                          >
+                                            {copy.widgetTagLabels[tagValue] ??
+                                              fallbackTagLabels[tagValue] ??
+                                              tagValue}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </section>
+                      )
+                    })}
+                  </div>
+                </ScrollArea>
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <Button onClick={handleAddWidget} disabled={!selectedWidgetType} className="flex-1">
                     {copy.addWidgetConfirm}
                   </Button>
@@ -1373,7 +1577,7 @@ export default function DashboardPage() {
           }
         }}
       >
-        <DialogContent className="flex w-[min(90vw,1200px)] max-h-[90vh] max-w-none flex-col overflow-hidden sm:max-w-none">
+        <DialogContent className="flex w-[min(50vw,600px)] max-h-[90vh] max-w-none flex-col overflow-hidden sm:max-w-none">
           <DialogHeader>
             <DialogTitle>{tutorialContent.title}</DialogTitle>
             <DialogDescription>{tutorialContent.subtitle}</DialogDescription>

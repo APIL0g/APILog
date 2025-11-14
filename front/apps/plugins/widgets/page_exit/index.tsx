@@ -7,6 +7,7 @@ import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@
 import { ChevronDown } from "lucide-react"
 import { getCommonWidgetCopy } from "../i18n"
 import { getPageExitCopy } from "./locales"
+import previewImage from "./preview.png"
 
 type Row = { path: string; views: number; exits: number; exit_rate: number }
 
@@ -135,10 +136,28 @@ export default function PageExitWidget({ timeRange, language }: WidgetProps) {
   )
 }
 
+const pageExitLocales = {
+  en: getPageExitCopy("en"),
+  ko: getPageExitCopy("ko"),
+}
+
 export const widgetMeta: WidgetMeta = {
   id: "page_exit",
   name: "Page Exit Rate",
   description: "페이지별 세션 종료 비율 Top 10",
   defaultWidth: 520,
   defaultHeight: 360,
+  previewImage,
+  tags: ["behavior"],
+  localizations: {
+    en: {
+      title: pageExitLocales.en.title,
+      previewDescription: pageExitLocales.en.previewDescription,
+    },
+    ko: {
+      title: pageExitLocales.ko.title,
+      previewDescription: pageExitLocales.ko.previewDescription,
+    },
+  },
 }
+

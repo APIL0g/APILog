@@ -8,6 +8,7 @@ interface HighlightTemplate {
 interface ExampleCopy {
   headerTitle: string
   headerDescription: string
+  previewDescription: string
   highlights: HighlightTemplate[]
 }
 
@@ -15,6 +16,7 @@ export const exampleCopy: Record<ExampleLanguage, ExampleCopy> = {
   en: {
     headerTitle: "Example Widget",
     headerDescription: "Use this as a template for building real widgets.",
+    previewDescription: "Starter template that demonstrates how widgets are built.",
     highlights: [
       {
         title: "Getting Started",
@@ -38,6 +40,7 @@ export const exampleCopy: Record<ExampleLanguage, ExampleCopy> = {
   ko: {
     headerTitle: "예시 위젯",
     headerDescription: "이 템플릿을 사용해 실제 위젯을 만들어 보세요.",
+    previewDescription: "위젯 제작 방식을 보여주는 예시 템플릿이에요.",
     highlights: [
       {
         title: "시작하기",
@@ -61,4 +64,8 @@ export const exampleCopy: Record<ExampleLanguage, ExampleCopy> = {
 
 export function resolveExampleLanguage(language?: string): ExampleLanguage {
   return language?.toLowerCase() === "ko" ? "ko" : "en"
+}
+
+export function getExampleCopy(language?: string): ExampleCopy {
+  return exampleCopy[resolveExampleLanguage(language)]
 }
