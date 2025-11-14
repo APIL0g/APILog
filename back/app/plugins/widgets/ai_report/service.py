@@ -12,13 +12,13 @@ import httpx
 
 from config import (
     AI_REPORT_FETCH_BASE,
-    LLM_API_KEY,
-    LLM_ENDPOINT,
-    LLM_MAX_TOKENS,
-    LLM_MODEL,
-    LLM_PROVIDER,
-    LLM_TEMPERATURE,
-    LLM_TIMEOUT_S,
+    AI_REPORT_LLM_API_KEY,
+    AI_REPORT_LLM_ENDPOINT,
+    AI_REPORT_LLM_MAX_TOKENS,
+    AI_REPORT_LLM_MODEL,
+    AI_REPORT_LLM_PROVIDER,
+    AI_REPORT_LLM_TEMPERATURE,
+    AI_REPORT_LLM_TIMEOUT_S,
     is_running_in_docker,
 )
 from .schemas import ReportResponse
@@ -64,9 +64,9 @@ def _now_iso() -> str:
 
 
 def _resolved_provider() -> str:
-    provider = (LLM_PROVIDER or "").strip().lower()
-    api_key = (LLM_API_KEY or "").strip()
-    endpoint = (LLM_ENDPOINT or "").strip().lower()
+    provider = (AI_REPORT_LLM_PROVIDER or "").strip().lower()
+    api_key = (AI_REPORT_LLM_API_KEY or "").strip()
+    endpoint = (AI_REPORT_LLM_ENDPOINT or "").strip().lower()
 
     if provider in {"", "auto"}:
         if api_key:
@@ -93,19 +93,23 @@ def _resolved_provider() -> str:
 
 
 def _call_openai_compatible(messages: List[Dict[str, str]]) -> str:
-    base = (LLM_ENDPOINT or "https://api.openai.com").rstrip("/")
+    base = (AI_REPORT_LLM_ENDPOINT or "https://api.openai.com").rstrip("/")
     url = base + "/v1/chat/completions"
     headers = {"Content-Type": "application/json"}
-    api_key = (LLM_API_KEY or "").strip()
+    api_key = (AI_REPORT_LLM_API_KEY or "").strip()
     if not api_key:
         raise RuntimeError("OpenAI-compatible provider requires LLM_API_KEY")
     headers["Authorization"] = f"Bearer {api_key}"
-    payload: Dict[str, Any] = {"model": LLM_MODEL, "messages": messages, "response_format": {"type": "json_object"}}
-    if LLM_TEMPERATURE not in (None, ""):
-        payload["temperature"] = float(LLM_TEMPERATURE)
-    if LLM_MAX_TOKENS:
-        payload["max_tokens"] = int(LLM_MAX_TOKENS)
-    timeout_seconds = max(5.0, float(LLM_TIMEOUT_S or 60.0))
+    payload: Dict[str, Any] = {
+        "model": AI_REPORT_LLM_MODEL,
+        "messages": messages,
+        "response_format": {"type": "json_object"},
+    }
+    if AI_REPORT_LLM_TEMPERATURE not in (None, ""):
+        payload["temperature"] = float(AI_REPORT_LLM_TEMPERATURE)
+    if AI_REPORT_LLM_MAX_TOKENS:
+        payload["max_tokens"] = int(AI_REPORT_LLM_MAX_TOKENS)
+    timeout_seconds = max(5.0, float(AI_REPORT_LLM_TIMEOUT_S or 60.0))
     timeout = httpx.Timeout(timeout_seconds, connect=min(10.0, timeout_seconds / 2))
     with httpx.Client(timeout=timeout) as client:
         response = client.post(url, headers=headers, json=payload)
@@ -118,14 +122,14 @@ def _call_openai_compatible(messages: List[Dict[str, str]]) -> str:
 
 def _call_ollama_resilient(messages: List[Dict[str, str]]) -> str:
     candidates: List[str] = []
-    if LLM_ENDPOINT:
-        candidates.append(LLM_ENDPOINT)
+    if AI_REPORT_LLM_ENDPOINT:
+        candidates.append(AI_REPORT_LLM_ENDPOINT)
     if is_running_in_docker():
         candidates.append("http://ollama:11434")
     candidates.append("http://localhost:11434")
 
     last_err: Optional[Exception] = None
-    timeout_seconds = max(10.0, float(LLM_TIMEOUT_S or 60.0))
+    timeout_seconds = max(10.0, float(AI_REPORT_LLM_TIMEOUT_S or 60.0))
     timeout = httpx.Timeout(timeout_seconds, connect=min(15.0, timeout_seconds / 2))
     for endpoint in candidates:
         base = (endpoint or "").rstrip("/")
@@ -133,7 +137,7 @@ def _call_ollama_resilient(messages: List[Dict[str, str]]) -> str:
             continue
         url = base + "/api/chat"
         for json_mode in (True, False):
-            payload: Dict[str, Any] = {"model": LLM_MODEL, "messages": messages, "stream": False}
+            payload: Dict[str, Any] = {"model": AI_REPORT_LLM_MODEL, "messages": messages, "stream": False}
             if json_mode:
                 payload["format"] = "json"
             try:
@@ -422,7 +426,7 @@ def _fetch_json(client: httpx.Client, url: str, params: Optional[Dict[str, Any]]
 def _collect_widget_data() -> Dict[str, Any]:
     base = FETCH_BASE.rstrip("/") + "/api/query"
     data: Dict[str, Any] = {"_meta": {"base": base}}
-    timeout_seconds = max(5.0, float(LLM_TIMEOUT_S or 60.0))
+    timeout_seconds = max(5.0, float(AI_REPORT_LLM_TIMEOUT_S or 60.0))
     timeout = httpx.Timeout(timeout_seconds, connect=min(10.0, timeout_seconds / 2))
     with httpx.Client(timeout=timeout) as client:
         discovered = _discover_query_endpoints()
@@ -796,8 +800,8 @@ def _finalize_report(payload: Dict[str, Any], mode: str) -> Dict[str, Any]:
     meta = payload.get("meta")
     if not isinstance(meta, dict):
         meta = {}
-    meta.setdefault("provider", LLM_PROVIDER or "unknown")
-    meta.setdefault("model", LLM_MODEL or "unknown")
+        meta.setdefault("provider", AI_REPORT_LLM_PROVIDER or "unknown")
+        meta.setdefault("model", AI_REPORT_LLM_MODEL or "unknown")
     meta.setdefault("prompt_version", "v2")
     meta.setdefault("source", "router_scan")
     meta["mode"] = mode
