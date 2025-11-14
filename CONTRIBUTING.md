@@ -14,6 +14,197 @@
 2. Keep branches focused—one logical change per pull request.
 3. Follow the coding conventions used in each package (Prettier/ESLint for frontend, Ruff/Black style for Python).
 
+## ✨ Portlet (Widget) Contribution Guide
+
+This guide is for contributors who want to build portlets (widgets) on top of the APILog system. It explains how the system is structured and what you need to know to contribute effectively.
+
+## 🏗️ 1. Overview & System Architecture
+
+Widget development usually involves **both Frontend (FE)** and **Backend (BE)** work. Before you start, please make sure you understand the end-to-end data flow and collaboration rules.
+
+### Data Flow Architecture
+
+The widget data pipeline is:
+
+**API Collector → InfluxDB Storage → FastAPI Widget API → Vite/React Dashboard**
+
+| Step | Component | Role | Location & Reference |
+| --- | --- | --- | --- |
+| 1 | **API Collector** | Collect user event data | `back/app/main.py` (lines 13–40) |
+| 2 | **InfluxDB** | Store collected time-series data | Docker environment |
+| 3 | **FastAPI Widget API** | Query & process data | `back/app/plugins/widgets/` |
+| 4 | **Vite/React Dashboard** | Render widgets | `front/apps/dashboard/` |
+
+### Collaboration Rules
+
+- **Code style & conventions**: Branch naming, commit types, TypeScript/Python style, etc. are defined in
+    
+    [<a href="CONTRIBUTING.md"><strong>APILog/CONTRIBUTING.md</strong></a>](lines 12-181).
+    
+- **Pull Requests**: FE and BE changes **must be submitted as separate PRs**. In each PR description, clearly state the area (**FE or BE**) and the **widget name** for easier review.
+    - e.g. `[FEAT] BE – "<WidgetName> + short description"`
+
+---
+
+## 🛠️ 2. Environment & Tooling
+
+How to set up your development environment and tools.
+
+### Dev Environment Setup
+
+- **Integrated stack**: Use `docker-compose.dev.yml` (lines 7–200) to bring up InfluxDB, Ollama, Dummy Frontend, etc. as a **single shared dev stack**. We recommend testing in this integrated environment by default.
+    - **Run locally**:
+        
+        ```bash
+        docker compose -f docker-compose.dev.yml up --build
+        ```
+        
+- **Backend (Python)**:
+    - **Version**: Python 3.11+
+    - **Install dependencies**:
+        
+        ```bash
+        pip install -r back/app/requirements.tx
+        ```
+        
+- **Frontend (Node/TS)**:
+    - **Version**: Node 18+ and one of PNPM/NPM
+    - **Collector bundle**: Uses a separate Rollup config (`front/apps/collector-js/package.json`, lines 16–32). Only the built `dist/` output is shipped.
+
+### Frontend Dashboard – How to Run (Important)
+
+There are two ways to run the dashboard depending on your purpose:
+
+| Purpose | Command | URL | Note |
+| --- | --- | --- | --- |
+| **Development (hot reload)** | `npm run dev` | `http://localhost:5173` | Use this during development. Runs Vite dev server with hot reload for fast feedback. |
+| **Check production-like flow** | `npm run build` then Docker Compose | `http://localhost:10000` | After `npm run build`, the built assets are served via Nginx (configured in `docker-compose.dev.yml`), mirroring the real deployment flow. |
+
+### Environment Variables & Settings
+
+| Type | Description | Reference |
+| --- | --- | --- |
+| **Env vars** | Required/optional keys and defaults. When adding a new variable, you **must update both `.env.example` and your real `.env`** and add a short description. | `APILog/.env.example` (lines 8–53) |
+| **Runtime config** | Default runtime values such as widget caching, LLM parameters, etc. | `back/app/config.py` (lines 47–135) |
+
+---
+
+## 💻 3. Frontend (FE) Work Points
+
+These are key points for the dashboard and collector-related work.
+
+| Topic | Description | Reference |
+| --- | --- | --- |
+| **App root** | Dashboard app root | `front/apps/dashboard` |
+| **Auto-registration** | Every widget is auto-registered when `front/apps/plugins/widgets/**/index.tsx` exports both a **default React component** and **`widgetMeta`**. (Required) | `front/apps/dashboard/src/core/init-widgets.ts` (lines 9–50) |
+| **Path aliases** | Use Vite aliases (`@` and `@plugins`) consistently for imports. | `front/apps/dashboard/tsconfig.json` (lines 20–23) |
+| **API & state** | Use React hooks for API calls and state management. Follow the standard examples. | `front/apps/plugins/widgets/page_exit/index.tsx` (lines 1–144) |
+| **i18n** | Common UI text is managed via `i18n.ts`. When adding new languages or strings, follow the patterns in this file and each widget’s `locales.ts`. | `front/apps/plugins/widgets/i18n.ts` (lines 1–28) |
+| **AI Report** | When adding new data structures, align the types and rendering patterns with the AI Report page and sync with backend schemas. | `front/apps/dashboard/src/pages/ai-report.tsx` (lines 1–200) |
+| **Collector** | When using DOM APIs, keep the code browser-only and **tree-shaking friendly** to keep bundle size under control. | `front/apps/collector-js/src/bootstrap.ts` (line 1) |
+
+---
+
+## 🖥️ 4. Backend (BE) Work Points
+
+Key points for data querying, processing, and API routing.
+
+### FastAPI & Routing
+
+- **Main entry**: New **top-level routers** must be added following the order defined in `back/app/main.py` (lines 13–39).
+- **Widget API auto-scan**: `back/app/plugins/router.py` (lines 13–49) automatically scans `plugins/widgets/*/router.py`.
+    - **Rule**: For each new portlet, create a `plugins/widgets/<widget>` directory with both **`router.py`** and **`service.py`**.
+        
+        In `router.py`, you **must** define `router = APIRouter()` and expose that router object.
+        
+- **Ingest API**: Changes to event tag/field formats affect both the Collector and the rest of the dataflow, so **they must be documented**.
+    - **Files**: `back/app/ingest/router.py` (lines 12–20) and `back/app/ingest/influx.py` (lines 1–155).
+
+### Logic & Schemas
+
+- **Business logic**: Influx SQL queries and data transformation logic should live in the **service layer (`service.py`)**. Shared configuration is read from `config.py`.
+    - **Example**: `back/app/plugins/widgets/page_exit/service.py` (lines 1–99)
+- **Response schemas**: For non-trivial responses, define Pydantic models and keep them **in sync with frontend types**. It is recommended to use `response_model` in FastAPI routes.
+    - **Example**: `back/app/plugins/widgets/ai_report/schemas.py` (lines 1–115)
+- **External calls**: Use `httpx` and reuse the timeout/error logging patterns from the existing AI Report service. Relevant settings come from `AI_REPORT_*` environment variables.
+    - **Example**: `back/app/plugins/widgets/ai_report/service.py` (lines 1–120)
+
+---
+
+## 🚀 5. Steps to Create a New Widget/Portlet
+
+Step-by-step guide to building a new widget.
+
+1. **Check data source**
+    
+    Confirm whether the data required for your widget is already available in InfluxDB.
+    
+    - **If not**: extend the pipeline `Collector (front/apps/collector-js/src/bootstrap.ts) → Ingest (back/app/ingest/influx.py)` to capture the new events.
+2. **Implement backend service**
+    - Create `back/app/plugins/widgets/<widget>` directory.
+    - Implement your Influx SQL queries or external API calls in **`service.py`**, along with input validation and basic metadata.
+3. **Define backend router**
+    - In the same folder, create **`router.py`** and define your FastAPI routes under `/<your-endpoint>`, exposing a `router = APIRouter()` object.
+    - **Note**: The higher-level `plugins.router` automatically mounts all widget routers under `/api/query`, so you **must not** manually prefix `/api/query` inside each widget’s `router.py`.
+        
+        (See: `back/app/plugins/widgets/page_exit/router.py`, lines 12–38)
+        
+4. **Implement frontend widget**
+    - Create `front/apps/plugins/widgets/<widget>/index.tsx`.
+    - Implement a component that accepts `WidgetProps`, calls the API, renders the UI, and exports **`widgetMeta`**.
+        
+        (See: `front/apps/plugins/widgets/page_exit/index.tsx`, lines 37–144)
+        
+5. **i18n & placement**
+    - If needed, add `front/apps/plugins/widgets/<widget>/locales.ts` for translations.
+    - Place the widget in the dashboard pages (e.g. `front/apps/dashboard/src/pages/*`) or layout.
+        
+        (See: `front/apps/dashboard/src/pages/ai-report.tsx`, lines 190–200)
+        
+
+---
+
+## ✅ 6. Validation & PR Checklist
+
+Things to verify before opening a PR.
+
+### Code Validation
+
+- **Frontend**:
+    - Run `npm run build` to validate types and bundle.
+    - Ensure all lint rules are satisfied (see [<a href="CONTRIBUTING.md"><strong>APILog/CONTRIBUTING.md</strong></a>], lines 69–106).
+- **Backend**:
+    - Run at least basic unit/integration tests via `pytest` (see [<a href="CONTRIBUTING.md"><strong>APILog/CONTRIBUTING.md</strong></a>], lines 17–21).
+    - Validate Influx queries against **real data** in the Docker environment.
+
+### Git & Pull Request
+
+- **Branch naming**: Use the format `<type>/<scope>-<description>`.
+    
+    (See [<a href="CONTRIBUTING.md"><strong>APILog/CONTRIBUTING.md</strong></a>], lines 42–66)
+    
+- **Commit messages**: Commit types must follow the table in
+    
+    [CONTRIBUTING.md]([<a href="CONTRIBUTING.md"><strong>APILog/CONTRIBUTING.md</strong></a>], lines 145–162).
+    
+- **PR body must include**:
+    - Impacted areas (**FE, BE, Collector**)
+    - Whether new env vars were added (ref: `APILog/.env.example`, lines 8–53)
+    - Test results
+    - **Screenshot or GIF** for any UI change
+
+### Final Checks
+
+- **Full integration rehearsal**:
+    
+    Run `docker compose -f docker-compose.dev.yml up --build`and verify that all components work together.
+    
+- **.env & docs**:
+    
+    Confirm `.env` and docs are up to date using the checklist in
+    
+   [<a href="CONTRIBUTING.md"><strong>APILog/CONTRIBUTING.md</strong></a>], lines 168–177.
+
 ## Testing
 - Backend: add or update pytest coverage and run pytest before submitting.
 - Collector & Dashboard: run 
