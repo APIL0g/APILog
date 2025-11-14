@@ -6,9 +6,6 @@
 export interface InitConfig {
   siteId: string;
   ingestUrl: string;
-  pageVariant?: string;
-  utmSource?: string;
-  utmCampaign?: string;
 }
 
 // Track whether the collector has already been initialised.
