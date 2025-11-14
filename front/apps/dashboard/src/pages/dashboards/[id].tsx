@@ -557,7 +557,7 @@ export default function DashboardPage() {
   const [dashboard, setDashboard] = useState<DashboardConfig | null>(null)
   const [isHydrated, setIsHydrated] = useState(false)
   const [isAddingWidget, setIsAddingWidget] = useState(false)
-  const [selectedWidgetType, setSelectedWidgetType] = useState<string>("")
+  const [selectedWidgetIds, setSelectedWidgetIds] = useState<string[]>([])
   const [widgetTagFilter, setWidgetTagFilter] = useState<string>("all")
   const timeRange = "12h"
   const [isEditMode, setIsEditMode] = useState(false)
@@ -768,17 +768,9 @@ export default function DashboardPage() {
   }, [activePresetId, isHydrated, legacyStorageKey, presetStorageKey, presets])
 
   useEffect(() => {
-    if (!selectedWidgetType) {
-      if (sortedAvailableWidgets.length > 0) {
-        setSelectedWidgetType(sortedAvailableWidgets[0].id)
-      }
-    }
-  }, [selectedWidgetType, widgetMetadataKey])
-
-  useEffect(() => {
     if (!isEditMode && isAddingWidget) {
       setIsAddingWidget(false)
-      setSelectedWidgetType("")
+      setSelectedWidgetIds([])
     }
   }, [isEditMode, isAddingWidget])
 
@@ -1019,36 +1011,51 @@ export default function DashboardPage() {
   }
 
   const handleAddWidget = () => {
-    if (!selectedWidgetType || !dashboard) return
+    if (!dashboard || selectedWidgetIds.length === 0) return
 
-    const meta = widgetMetadata[selectedWidgetType]
-    const fallbackLayout = createFallbackLayout(
-      dashboard.widgets.length,
-      meta?.defaultWidth ?? 400,
-      meta?.defaultHeight ?? 300,
-    )
-    const nextY = dashboard.widgets.reduce(
+    const createdAt = Date.now()
+    const startingPosition = dashboard.widgets.length
+    let nextY = dashboard.widgets.reduce(
       (max, widget) => Math.max(max, (widget.layout?.y ?? 0) + (widget.layout?.h ?? DEFAULT_WIDGET_H)),
       0,
     )
-    const layout = sanitizeLayout({ ...fallbackLayout, y: nextY }, fallbackLayout)
 
-    const newWidget: Widget = {
-      id: `widget-${Date.now()}`,
-      type: selectedWidgetType,
-      position: dashboard.widgets.length,
-      layout,
-      config: meta?.defaultConfig,
-    }
+    const newWidgets = selectedWidgetIds.map((widgetId, index) => {
+      const meta = widgetMetadata[widgetId]
+      const fallbackLayout = createFallbackLayout(
+        startingPosition + index,
+        meta?.defaultWidth ?? 400,
+        meta?.defaultHeight ?? 300,
+      )
+      const layout = sanitizeLayout({ ...fallbackLayout, y: nextY }, fallbackLayout)
+      nextY = layout.y + layout.h
+
+      return {
+        id: `widget-${createdAt + index}`,
+        type: widgetId,
+        position: startingPosition + index,
+        layout,
+        config: meta?.defaultConfig,
+      } as Widget
+    })
 
     setDashboard({
       ...dashboard,
-      widgets: [...dashboard.widgets, newWidget],
+      widgets: [...dashboard.widgets, ...newWidgets],
     })
 
     setIsAddingWidget(false)
-    setSelectedWidgetType("")
+    setSelectedWidgetIds([])
     setHasUnsavedChanges(true)
+  }
+
+  const toggleWidgetSelection = (widgetId: string) => {
+    setSelectedWidgetIds((prev) => {
+      if (prev.includes(widgetId)) {
+        return prev.filter((id) => id !== widgetId)
+      }
+      return [...prev, widgetId]
+    })
   }
 
   const handleRemoveWidget = (widgetId: string) => {
@@ -1423,7 +1430,7 @@ export default function DashboardPage() {
             onOpenChange={(open) => {
               setIsAddingWidget(open)
               if (!open) {
-                setSelectedWidgetType("")
+                setSelectedWidgetIds([])
                 setWidgetTagFilter("all")
               }
             }}
@@ -1490,13 +1497,13 @@ export default function DashboardPage() {
                                 meta.description ??
                                 widgetDescriptionFallback[language]
                               const previewImage = meta.previewImage ?? defaultWidgetPreview
-                              const isSelected = widgetId === selectedWidgetType
+                              const isSelected = selectedWidgetIds.includes(widgetId)
                               const widgetTags = meta.tags ?? []
                               return (
                                 <button
                                   key={widgetId}
                                   type="button"
-                                  onClick={() => setSelectedWidgetType(widgetId)}
+                                  onClick={() => toggleWidgetSelection(widgetId)}
                                   className="text-left w-full"
                                   aria-pressed={isSelected}
                                 >
@@ -1549,13 +1556,15 @@ export default function DashboardPage() {
                   </div>
                 </ScrollArea>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button onClick={handleAddWidget} disabled={!selectedWidgetType} className="flex-1">
-                    {copy.addWidgetConfirm}
+                  <Button onClick={handleAddWidget} disabled={selectedWidgetIds.length === 0} className="flex-1">
+                    {selectedWidgetIds.length > 0
+                      ? `${copy.addWidgetConfirm} (${selectedWidgetIds.length})`
+                      : copy.addWidgetConfirm}
                   </Button>
                   <Button
                     onClick={() => {
                       setIsAddingWidget(false)
-                      setSelectedWidgetType("")
+                      setSelectedWidgetIds([])
                     }}
                     variant="outline"
                     className="flex-1"
