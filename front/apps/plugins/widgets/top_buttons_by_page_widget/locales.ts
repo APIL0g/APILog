@@ -2,6 +2,7 @@ import { resolveWidgetLanguage, type WidgetLanguage } from "../i18n"
 
 interface TopButtonsByPageCopy {
   title: string
+  previewDescription: string
   range7: string
   range30: string
   noOptions: string
@@ -16,6 +17,7 @@ interface TopButtonsByPageCopy {
 const topButtonsByPageCopy: Record<WidgetLanguage, TopButtonsByPageCopy> = {
   en: {
     title: "Top Button Clicks by Page",
+    previewDescription: "CTA performance for any selected page.",
     range7: "Last 7 days",
     range30: "Last 30 days",
     noOptions: "No options",
@@ -28,6 +30,7 @@ const topButtonsByPageCopy: Record<WidgetLanguage, TopButtonsByPageCopy> = {
   },
   ko: {
     title: "페이지별 버튼 클릭 Top",
+    previewDescription: "선택한 페이지의 CTA 버튼 클릭 순위를 보여줘요.",
     range7: "최근 7일",
     range30: "최근 30일",
     noOptions: "선택지가 없습니다",

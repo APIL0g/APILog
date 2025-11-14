@@ -13,6 +13,7 @@ import {
 import type { TooltipProps } from "recharts"
 import { getCommonWidgetCopy } from "../i18n"
 import { getVisitorsStatCopy } from "./locales"
+import previewImage from "./preview.png"
 
 interface VisitorHistoryEntry {
   date: string
@@ -285,10 +286,28 @@ function HistoryTooltip({ active, payload }: TooltipProps<number, string>) {
   )
 }
 
+const visitorsStatLocales = {
+  en: getVisitorsStatCopy("en"),
+  ko: getVisitorsStatCopy("ko"),
+}
+
 export const widgetMeta: WidgetMeta = {
   id: "visitor_stat",
   name: "Visitor Statistics",
   description: "Show total, returning, and new visitors with a 7-day trend chart",
   defaultWidth: 520,
   defaultHeight: 280,
+  previewImage,
+  tags: ["audience"],
+  localizations: {
+    en: {
+      title: visitorsStatLocales.en.title,
+      previewDescription: visitorsStatLocales.en.previewDescription,
+    },
+    ko: {
+      title: visitorsStatLocales.ko.title,
+      previewDescription: visitorsStatLocales.ko.previewDescription,
+    },
+  },
 }
+

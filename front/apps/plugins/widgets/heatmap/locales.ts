@@ -11,6 +11,7 @@ export type HeatmapKnownError =
 
 interface HeatmapCopy {
   title: string
+  previewDescription: string
   pagePlaceholder: string
   deviceLabel: {
     desktop: string
@@ -23,6 +24,7 @@ interface HeatmapCopy {
 const heatmapCopy: Record<WidgetLanguage, HeatmapCopy> = {
   en: {
     title: "Page Heatmap",
+    previewDescription: "Page snapshot with a click-density heat overlay.",
     pagePlaceholder: "Select page",
     deviceLabel: {
       desktop: "Desktop",
@@ -41,6 +43,7 @@ const heatmapCopy: Record<WidgetLanguage, HeatmapCopy> = {
   },
   ko: {
     title: "페이지 히트맵",
+    previewDescription: "페이지 스냅샷 위에 클릭 히트맵을 겹쳐 보여줘요.",
     pagePlaceholder: "페이지를 선택하세요",
     deviceLabel: {
       desktop: "데스크톱",

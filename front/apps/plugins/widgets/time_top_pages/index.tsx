@@ -3,6 +3,7 @@ import { CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import type { WidgetMeta, WidgetProps } from "@/core/registry"
 import { getCommonWidgetCopy } from "../i18n"
 import { getTimeTopPagesCopy } from "./locales"
+import previewImage from "./preview.png"
 
 type Row = { path: string; total_views: number }
 type Bucket = { bucket: string; rows: Row[] }
@@ -112,11 +113,29 @@ export default function TimeTopPagesWidget({ language }: WidgetProps) {
   )
 }
 
+const timeTopPagesLocales = {
+  en: getTimeTopPagesCopy("en"),
+  ko: getTimeTopPagesCopy("ko"),
+}
+
 export const widgetMeta: WidgetMeta = {
   id: "time_top_pages",
   name: "Time Top Pages",
   description: "시간대(6h/12h) 버킷별 Top 페이지",
   defaultWidth: 520,
   defaultHeight: 400,
+  previewImage,
+  tags: ["traffic"],
+  localizations: {
+    en: {
+      title: timeTopPagesLocales.en.title,
+      previewDescription: timeTopPagesLocales.en.previewDescription,
+    },
+    ko: {
+      title: timeTopPagesLocales.ko.title,
+      previewDescription: timeTopPagesLocales.ko.previewDescription,
+    },
+  },
 }
+
 

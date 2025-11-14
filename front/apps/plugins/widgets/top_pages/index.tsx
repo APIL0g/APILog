@@ -12,6 +12,7 @@ import {
 } from "@/lib/recharts"
 import { getCommonWidgetCopy } from "../i18n"
 import { getTopPagesCopy } from "./locales"
+import previewImage from "./preview.png"
 
 type Row = { path: string; total_views: number }
 
@@ -114,14 +115,6 @@ export default function TopPagesWidget({ timeRange, language }: WidgetProps) {
   )
 }
 
-export const widgetMeta: WidgetMeta = {
-  id: "top_pages",
-  name: "Top Pages",
-  description: "인기 페이지 Top 5를 가로 막대로 표시",
-  defaultWidth: 520,
-  defaultHeight: 360,
-}
-
 // 분리: 긴 경로 라벨 측정 및 차트 렌더
 type ChartDatum = { label: string; value: number }
 function measureTextPx(text: string, font = "12px sans-serif"): number {
@@ -185,4 +178,29 @@ function TopPagesChart({ chartData, xMax, xTicks }: { chartData: ChartDatum[]; x
       </BarChart>
     </ResponsiveContainer>
   )
+}
+
+const topPagesLocales = {
+  en: getTopPagesCopy("en"),
+  ko: getTopPagesCopy("ko"),
+}
+
+export const widgetMeta: WidgetMeta = {
+  id: "top_pages",
+  name: "Top Pages",
+  description: "인기 페이지 Top 5를 가로 막대로 표시",
+  defaultWidth: 520,
+  defaultHeight: 360,
+  previewImage,
+  tags: ["traffic"],
+  localizations: {
+    en: {
+      title: topPagesLocales.en.title,
+      previewDescription: topPagesLocales.en.previewDescription,
+    },
+    ko: {
+      title: topPagesLocales.ko.title,
+      previewDescription: topPagesLocales.ko.previewDescription,
+    },
+  },
 }

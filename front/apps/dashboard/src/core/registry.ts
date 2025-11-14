@@ -8,6 +8,11 @@ export interface WidgetProps {
 
 export type WidgetComponent = ComponentType<WidgetProps>
 
+export interface WidgetLocalization {
+  title?: string
+  previewDescription?: string
+}
+
 export interface WidgetMeta {
   id: string
   name?: string
@@ -15,6 +20,9 @@ export interface WidgetMeta {
   defaultWidth?: number
   defaultHeight?: number
   defaultConfig?: Record<string, any>
+  previewImage?: string
+  tags?: string[]
+  localizations?: Record<string, WidgetLocalization>
 }
 
 // Widget registry - plugins register themselves here
@@ -40,6 +48,9 @@ export function registerWidget(id: string, component: WidgetComponent, meta?: Pa
     defaultWidth: meta?.defaultWidth,
     defaultHeight: meta?.defaultHeight,
     defaultConfig: meta?.defaultConfig,
+    previewImage: meta?.previewImage,
+    tags: meta?.tags ?? [],
+    localizations: meta?.localizations,
   }
 }
 

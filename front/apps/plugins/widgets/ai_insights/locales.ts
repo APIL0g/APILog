@@ -11,6 +11,7 @@ interface AiInsightsErrors {
 
 export interface AiInsightsCopy {
   title: string
+  previewDescription: string
   generateButton: string
   timeWindowLabel: string
   bucketLabel: string
@@ -22,6 +23,7 @@ export interface AiInsightsCopy {
 const aiInsightsCopy: Record<WidgetLanguage, AiInsightsCopy> = {
   en: {
     title: "AI Insights",
+    previewDescription: "AI summarizes your logs to highlight the most important insights.",
     generateButton: "Generate",
     timeWindowLabel: "Time window",
     bucketLabel: "Bucket",
@@ -38,6 +40,7 @@ const aiInsightsCopy: Record<WidgetLanguage, AiInsightsCopy> = {
   },
   ko: {
     title: "AI 인사이트",
+    previewDescription: "AI가 로그 데이터를 분석해 가장 중요한 인사이트를 알려줘요.",
     generateButton: "생성",
     timeWindowLabel: "기간",
     bucketLabel: "버킷",
