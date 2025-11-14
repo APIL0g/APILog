@@ -158,7 +158,7 @@ export const widgetMeta: WidgetMeta = {
   name: "Daily Log Count",
   description: "최근 1주일 일자별 로그 합계를 막대 그래프로 표시",
   defaultWidth: 520,
-  defaultHeight: 360,
+  defaultHeight: 300,
   previewImage,
   tags: ["traffic"],
   localizations: {

@@ -123,7 +123,7 @@ export const widgetMeta: WidgetMeta = {
   name: "Time Top Pages",
   description: "시간대(6h/12h) 버킷별 Top 페이지",
   defaultWidth: 520,
-  defaultHeight: 400,
+  defaultHeight: 300,
   previewImage,
   tags: ["traffic"],
   localizations: {

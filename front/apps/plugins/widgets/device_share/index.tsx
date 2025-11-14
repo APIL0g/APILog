@@ -155,8 +155,8 @@ export const widgetMeta: WidgetMeta = {
   id: "device_share",
   name: "Device Share",
   description: "디바이스 유형별 사용자 수와 비중(원형 그래프)",
-  defaultWidth: 403,
-  defaultHeight: 452,
+  defaultWidth: 520,
+  defaultHeight: 300,
   previewImage,
   tags: ["audience"],
   localizations: {

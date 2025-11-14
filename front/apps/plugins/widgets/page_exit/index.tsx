@@ -146,7 +146,7 @@ export const widgetMeta: WidgetMeta = {
   name: "Page Exit Rate",
   description: "페이지별 세션 종료 비율 Top 10",
   defaultWidth: 520,
-  defaultHeight: 360,
+  defaultHeight: 300,
   previewImage,
   tags: ["behavior"],
   localizations: {

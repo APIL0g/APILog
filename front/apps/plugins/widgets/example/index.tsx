@@ -46,8 +46,8 @@ export const widgetMeta: WidgetMeta = {
   id: "example",
   name: "Example Widget",
   description: "Starter widget registered automatically from the plugins directory.",
-  defaultWidth: 420,
-  defaultHeight: 320,
+  defaultWidth: 520,
+  defaultHeight: 300,
   previewImage,
   tags: ["samples"],
   localizations: {

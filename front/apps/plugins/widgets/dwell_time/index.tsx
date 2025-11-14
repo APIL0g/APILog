@@ -118,7 +118,7 @@ export const widgetMeta: WidgetMeta = {
   name: "Top Dwell Time",
   description: "페이지별 평균 체류시간 Top 10",
   defaultWidth: 520,
-  defaultHeight: 360,
+  defaultHeight: 300,
   previewImage,
   tags: ["behavior"],
   localizations: {
