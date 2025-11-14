@@ -50,7 +50,7 @@ jobs:
       - name: FE test coverage creation
         run: |
           cd front/apps/dashboard
-          npm test -- --coverage
+          npm run coverage
           cd ../../..
 
       - name: SonarQube 
