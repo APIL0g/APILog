@@ -1577,7 +1577,7 @@ export default function DashboardPage() {
           }
         }}
       >
-        <DialogContent className="flex w-[min(50vw,600px)] max-h-[90vh] max-w-none flex-col overflow-hidden sm:max-w-none">
+        <DialogContent className="flex w-[min(90vw,1200px)] max-h-[90vh] max-w-none flex-col overflow-hidden sm:max-w-none">
           <DialogHeader>
             <DialogTitle>{tutorialContent.title}</DialogTitle>
             <DialogDescription>{tutorialContent.subtitle}</DialogDescription>
