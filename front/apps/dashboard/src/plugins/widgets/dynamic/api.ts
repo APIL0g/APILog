@@ -5,7 +5,8 @@ import type {
   DynamicWidgetDataParams,
 } from "./types"
 
-const API_BASE = ""
+const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL
+const API_BASE = RAW_API_BASE && RAW_API_BASE.trim() ? RAW_API_BASE.replace(/\/$/, "") : "/api"
 
 async function readError(res: Response): Promise<string> {
   try {
