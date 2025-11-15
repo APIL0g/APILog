@@ -39,6 +39,8 @@ app.mount("/api/snapshots", StaticFiles(directory=SNAPSHOT_STORAGE_ROOT), name="
 # AI routers
 app.include_router(ai_insights_router)
 app.include_router(dynamic_widgets_router)
+# Expose dynamic widget APIs under both /widgets/dynamic (direct) and /api/widgets/dynamic (behind nginx)
+app.include_router(dynamic_widgets_router, prefix="/api")
 
 @app.get("/api/health")
 async def health() -> Dict[str, bool]:
@@ -47,4 +49,3 @@ async def health() -> Dict[str, bool]:
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
-
