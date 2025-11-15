@@ -7,19 +7,23 @@ import re
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 
 from config import (
+    AI_REPORT_LLM_PROVIDER,
     DYNAMIC_WIDGETS_PATH,
     LLM_PROVIDER,
 )
 from plugins.widgets.ai_insights.explain_service import (
     _call_ollama_resilient,
-    _call_openai_compatible,
+    _call_openai_compatible as _call_ai_insights_openai,
     _extract_json,
     _now_iso,
+)
+from plugins.widgets.ai_report.service import (
+    _call_openai_compatible as _call_ai_report_openai,
 )
 from plugins.widgets.ai_insights.service import _sql_query, _validate_site_id
 
@@ -110,16 +114,29 @@ def _safe_sql(sql: str) -> str:
 
 def _render_sql(template: str, from_ts: str, to_ts: str, bucket: str, site_id: Optional[str]) -> str:
     sql = template
+    bucket_interval = _bucket_interval_sql(bucket)
     replacements = {
         "{{from}}": from_ts,
         "{{to}}": to_ts,
         "{{bucket}}": bucket,
+        "{{bucket_interval}}": bucket_interval,
     }
     if site_id is not None:
         replacements["{{site_id}}"] = site_id
     for key, value in replacements.items():
         sql = sql.replace(key, value)
     return sql
+
+
+def _bucket_interval_sql(bucket: str) -> str:
+    s = (bucket or "").strip().lower()
+    match = re.fullmatch(r"(\d+)\s*([smhd])", s)
+    if not match:
+        return "INTERVAL '1 hour'"
+    value = match.group(1)
+    unit = match.group(2)
+    label = {"s": "second", "m": "minute", "h": "hour", "d": "day"}.get(unit, "hour")
+    return f"INTERVAL '{value} {label}'"
 
 
 def _default_time_range(bucket: str) -> tuple[str, str]:
@@ -146,16 +163,32 @@ def get_widget(widget_id: str) -> DynamicWidgetSpec:
     return spec
 
 
+def _resolve_widget_llm_provider() -> tuple[str, bool]:
+    """Returns (provider, use_ai_report_config)."""
+    primary = (LLM_PROVIDER or "").strip().lower()
+    if primary and primary not in {"disabled", "none"}:
+        return primary, False
+
+    fallback = (AI_REPORT_LLM_PROVIDER or "").strip().lower()
+    if fallback and fallback not in {"disabled", "none"}:
+        return fallback, True
+    return "", False
+
+
 def _call_llm(messages: List[Dict[str, str]]) -> Dict[str, Any]:
-    if not LLM_PROVIDER:
+    provider, use_ai_report_config = _resolve_widget_llm_provider()
+    if not provider:
         raise HTTPException(status_code=503, detail={"message": "LLM provider is not configured"})
     try:
-        if LLM_PROVIDER in ("vllm", "openai_compat", "openai"):
-            content = _call_openai_compatible(messages)
-        elif LLM_PROVIDER == "ollama":
+        if provider in ("vllm", "openai_compat", "openai"):
+            if use_ai_report_config:
+                content = _call_ai_report_openai(messages)
+            else:
+                content = _call_ai_insights_openai(messages)
+        elif provider == "ollama":
             content = _call_ollama_resilient(messages)
         else:
-            raise RuntimeError(f"Unsupported LLM provider: {LLM_PROVIDER}")
+            raise RuntimeError(f"Unsupported LLM provider: {provider}")
     except HTTPException:
         # Bubble up HTTPException from underlying helpers as-is
         raise
@@ -209,8 +242,8 @@ Rules for the SQL string:
   WHERE time >= TIMESTAMP '{{from}}' AND time < TIMESTAMP '{{to}}'
 - When you need to filter by site, use:
   AND site_id = '{{site_id}}'
-- You may use '{{bucket}}' inside time_bucket or window functions if needed.
-- Alias the time bucket column as t and the main metric as v for time-series charts.
+- For time bucketing, prefer functions like DATE_BIN({{bucket_interval}}, time) AS t (and alias the metric as v). Avoid unsupported helpers such as time_bucket.
+- '{{bucket_interval}}' is already a full INTERVAL literal (e.g. INTERVAL '1 hour'). Use '{{bucket}}' only when the raw string (like 1h) is needed outside of SQL intervals.
 - Do not include markdown fences or comments; output PURE JSON only.
 
 events tags (dimensions):
@@ -317,4 +350,3 @@ def query_widget_data(
         "chart": spec.chart.model_dump(mode="json"),
     }
     return DynamicWidgetData(rows=rows, meta=meta)
-
