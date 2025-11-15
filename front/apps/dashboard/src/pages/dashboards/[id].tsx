@@ -719,7 +719,7 @@ export default function DashboardPage() {
     }
 
     applyState([defaultPreset], defaultPreset.id)
-  }, [dashboardId, legacyStorageKey, presetStorageKey, widgetMetadataKey])
+  }, [dashboardId, legacyStorageKey, presetStorageKey])
 
   useEffect(() => {
     if (!isHydrated) return
@@ -994,36 +994,41 @@ export default function DashboardPage() {
   }
 
   const addWidgetByType = (widgetType?: string, overrideConfig?: Record<string, any>) => {
-    if (!widgetType || !dashboard) return false
+    if (!widgetType) return false
     const meta = widgetMetadata[widgetType]
     if (!meta) {
       console.warn("[dashboard] Unknown widget type:", widgetType)
       return false
     }
 
-    const fallbackLayout = createFallbackLayout(
-      dashboard.widgets.length,
-      meta?.defaultWidth ?? 400,
-      meta?.defaultHeight ?? 300,
-    )
-    const nextY = dashboard.widgets.reduce(
-      (max, widget) => Math.max(max, (widget.layout?.y ?? 0) + (widget.layout?.h ?? DEFAULT_WIDGET_H)),
-      0,
-    )
-    const layout = sanitizeLayout({ ...fallbackLayout, y: nextY }, fallbackLayout)
+    setDashboard((prev) => {
+      if (!prev) return prev
 
-    const newWidget: Widget = {
-      id: `widget-${Date.now()}`,
-      type: widgetType,
-      position: dashboard.widgets.length,
-      layout,
-      config: overrideConfig ?? meta?.defaultConfig,
-    }
+      const fallbackLayout = createFallbackLayout(
+        prev.widgets.length,
+        meta?.defaultWidth ?? 400,
+        meta?.defaultHeight ?? 300,
+      )
+      const nextY = prev.widgets.reduce(
+        (max, widget) => Math.max(max, (widget.layout?.y ?? 0) + (widget.layout?.h ?? DEFAULT_WIDGET_H)),
+        0,
+      )
+      const layout = sanitizeLayout({ ...fallbackLayout, y: nextY }, fallbackLayout)
 
-    setDashboard({
-      ...dashboard,
-      widgets: [...dashboard.widgets, newWidget],
+      const newWidget: Widget = {
+        id: `widget-${Date.now()}`,
+        type: widgetType,
+        position: prev.widgets.length,
+        layout,
+        config: overrideConfig ?? meta?.defaultConfig,
+      }
+
+      return {
+        ...prev,
+        widgets: [...prev.widgets, newWidget],
+      }
     })
+
     setHasUnsavedChanges(true)
     return true
   }
