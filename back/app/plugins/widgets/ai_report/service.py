@@ -539,8 +539,11 @@ def _build_messages(bundle: Dict[str, Any], prompt: str, language: str, audience
         "- `tech_recommendations`: 기술 조치와 추적 방법을 명시.\n"
         "- `priorities`: 노력 대비 효과 기준으로 High/Medium/Low 분류.\n"
         "- `metrics_to_track`: 개선 후 7일간 모니터링할 위젯과 목표 변화를 명확히 기재.\n"
-        "- `predictions`: 조치 실행 시 baseline 대비 expected 값을 숫자로 제시.\n"
+        "- `predictions`: 최소 2개 이상 반환하고, 조치 실행 시 baseline 대비 expected 값을 숫자로 제시.\n"
         "- `radar_scores`: five axes 0-100 점수, 서로 다른 지표 근거 사용.\n\n"
+        "예외 없이 `predictions` 배열의 모든 항목에는 `metric`(string), `baseline`(number), `expected`(number), "
+        "`unit`(string, %, sessions 등), `narrative`(string) 필드를 모두 포함하세요. "
+        "`expected` 값을 비워 두거나 생략하면 전체 응답이 거부됩니다.\n\n"
         "Respond with JSON only, conforming to this schema:\n"
         f"{json.dumps(schema_hint, ensure_ascii=False)}\n\n"
         f"WIDGET_API_BUNDLE:\n{json.dumps(bundle, ensure_ascii=False)}"
@@ -776,7 +779,12 @@ def _fallback_report(bundle: Dict[str, Any]) -> Dict[str, Any]:
     return report
 
 
-def _finalize_report(payload: Dict[str, Any], mode: str) -> Dict[str, Any]:
+def _finalize_report(
+    payload: Dict[str, Any],
+    mode: str,
+    provider_hint: Optional[str] = None,
+    model_hint: Optional[str] = None,
+) -> Dict[str, Any]:
     defaults = [
         "diagnostics",
         "page_issues",
@@ -800,8 +808,10 @@ def _finalize_report(payload: Dict[str, Any], mode: str) -> Dict[str, Any]:
     meta = payload.get("meta")
     if not isinstance(meta, dict):
         meta = {}
-        meta.setdefault("provider", AI_REPORT_LLM_PROVIDER or "unknown")
-        meta.setdefault("model", AI_REPORT_LLM_MODEL or "unknown")
+    resolved_provider = provider_hint or AI_REPORT_LLM_PROVIDER or "unknown"
+    resolved_model = model_hint or AI_REPORT_LLM_MODEL or "unknown"
+    meta.setdefault("provider", resolved_provider)
+    meta.setdefault("model", resolved_model)
     meta.setdefault("prompt_version", "v2")
     meta.setdefault("source", "router_scan")
     meta["mode"] = mode
@@ -843,11 +853,11 @@ def generate_report(
                 data = _extract_json(repaired)
         if not isinstance(data, dict) or not data:
             raise ValueError("invalid JSON from LLM")
-        return _finalize_report(data, mode="llm")
+        return _finalize_report(data, mode="llm", provider_hint=provider, model_hint=AI_REPORT_LLM_MODEL)
     except Exception as exc:
         log.warning("LLM failed, using fallback: %s", exc)
         fallback = _fallback_report(bundle)
-        return _finalize_report(fallback, mode="fallback")
+        return _finalize_report(fallback, mode="fallback", provider_hint=provider, model_hint=AI_REPORT_LLM_MODEL)
 
 
 def _safe_snippet(text: Any, limit: int = 1200) -> str:
@@ -862,4 +872,3 @@ def _safe_snippet(text: Any, limit: int = 1200) -> str:
     if len(sanitized) > limit:
         return sanitized[:limit] + "...(truncated)"
     return sanitized
-
