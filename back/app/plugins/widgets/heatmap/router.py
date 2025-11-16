@@ -1,5 +1,6 @@
 ﻿import os
-from fastapi import APIRouter, BackgroundTasks, Request, Query
+import json
+from fastapi import APIRouter, BackgroundTasks, Query
 from pydantic import BaseModel
 
 from typing import Any, Dict, List
@@ -8,7 +9,12 @@ from config import TARGET_SITE_BASE_URL
 # 1. (수정) snapshot_bot의 전체 경로를 import합니다.
 from .snapshot_bot import take_snapshot
 # 2. (수정) .service는 현재 디렉토리에 있으므로 상대 경로를 사용합니다.
-from .service import get_snapshot_filepath, get_click_data_from_influx, get_available_paths_from_influx
+from .service import (
+    get_snapshot_filepath,
+    get_snapshot_metadata_filepath,
+    get_click_data_from_influx,
+    get_available_paths_from_influx,
+)
 
 
 
@@ -21,6 +27,7 @@ router = APIRouter()
 class HeatmapData(BaseModel):
     snapshot_url: str | None # 이미지가 없으면 null
     clicks: List[Dict[str, Any]] # InfluxDB에서 가져온 클릭 데이터
+    element_metadata: Dict[str, Any] | None = None
 
 # --- API 엔드포인트 ---
 
@@ -51,11 +58,20 @@ async def get_heatmap_data(
     snapshot_exists = os.path.exists(snapshot_file_path)
     
     snapshot_url = None
+    metadata_payload: Dict[str, Any] | None = None
     if snapshot_exists:
         # 3. 파일이 존재하면, 프론트엔드가 접근할 수 있는 URL 경로로 변환
         filename = os.path.basename(snapshot_file_path)
         # (back/app/main.py에 마운트된 경로)
         snapshot_url = f"/api/snapshots/{filename}"
+
+        metadata_path = get_snapshot_metadata_filepath(site_id, path, deviceType)
+        if os.path.exists(metadata_path):
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as metadata_file:
+                    metadata_payload = json.load(metadata_file)
+            except Exception as metadata_error:
+                print(f"[API] Failed to load metadata for {metadata_path}: {metadata_error}")
     else:
         # 4. 파일이 없으면, 백그라운드에서 스냅샷 생성을 "유도"
         print(f"[API] Snapshot not found. Triggering background task for {snapshot_file_path}")
@@ -76,7 +92,8 @@ async def get_heatmap_data(
     # 6. 스냅샷 URL(있거나 null)과 클릭 데이터를 즉시 반환
     return HeatmapData(
         snapshot_url=snapshot_url,
-        clicks=clicks_data
+        clicks=clicks_data,
+        element_metadata=metadata_payload
     )
 
 @router.get("/heatmap/paths")

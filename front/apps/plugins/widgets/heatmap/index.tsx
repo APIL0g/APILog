@@ -30,14 +30,205 @@ import { Deck, OrthographicView, OrthographicViewState } from "@deck.gl/core"
 // --- Types ---
 
 interface ApiClickData {
-  x: number // percentage (0-100)
-  y: number // percentage (0-100)
+  x: number // normalized viewport ratio (0-1)
+  y: number // normalized viewport ratio (0-1)
   value: number
+  element_rel_x?: number | null
+  element_rel_y?: number | null
+  element_rect_x?: number | null
+  element_rect_y?: number | null
+  element_rect_w?: number | null
+  element_rect_h?: number | null
+  element_hash?: string | null
+}
+
+interface HeatmapElementMetadataEntry {
+  tag_name: string | null
+  id: string | null
+  classes: string | null
+  text: string | null
+  x: number
+  y: number
+  width: number
+  height: number
+  rel_x: number | null
+  rel_y: number | null
+  rel_width: number | null
+  rel_height: number | null
+  element_hash?: string | null
+}
+
+interface SnapshotElementMetadata {
+  doc_width: number
+  doc_height: number
+  viewport_width: number
+  viewport_height: number
+  screenshot_width?: number | null
+  screenshot_height?: number | null
+  selectors?: string
+  elements: HeatmapElementMetadataEntry[]
 }
 
 interface HeatmapData {
   snapshot_url: string | null
   clicks: ApiClickData[]
+  element_metadata?: SnapshotElementMetadata | null
+}
+
+const DEFAULT_RELATIVE_POSITION = 0.5
+
+function resolveBaseDimensions(metadata?: SnapshotElementMetadata | null) {
+  const baseWidth =
+    metadata?.screenshot_width ||
+    metadata?.viewport_width ||
+    metadata?.doc_width ||
+    null
+  const baseHeight =
+    metadata?.screenshot_height ||
+    metadata?.viewport_height ||
+    metadata?.doc_height ||
+    null
+  return { baseWidth, baseHeight }
+}
+
+function getElementMetric(value?: number | null, fallback?: number) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof fallback === "number" && Number.isFinite(fallback)) {
+    return fallback
+  }
+  return null
+}
+
+function matchElementForClick(
+  click: ApiClickData,
+  metadata?: SnapshotElementMetadata | null
+): HeatmapElementMetadataEntry | null {
+  if (!metadata?.elements || metadata.elements.length === 0) {
+    return null
+  }
+
+  const normalizedHash = (click.element_hash ?? "").trim()
+  let candidates = metadata.elements
+
+  if (normalizedHash && normalizedHash.toLowerCase() !== "unknown") {
+    const hashMatches = metadata.elements.filter(
+      (element) => (element.element_hash ?? "").trim() === normalizedHash
+    )
+    if (hashMatches.length === 1) {
+      return hashMatches[0]
+    }
+    if (hashMatches.length > 1) {
+      candidates = hashMatches
+    }
+  }
+
+  let bestElement: HeatmapElementMetadataEntry | null = null
+  let bestScore = Number.POSITIVE_INFINITY
+
+  for (const element of candidates) {
+    const diffs: number[] = []
+
+    const pairs: Array<[number | null | undefined, number | null | undefined]> = [
+      [click.element_rect_x, element.rel_x],
+      [click.element_rect_y, element.rel_y],
+      [click.element_rect_w, element.rel_width],
+      [click.element_rect_h, element.rel_height],
+    ]
+
+    for (const [clickValue, elementValue] of pairs) {
+      if (
+        typeof clickValue === "number" &&
+        Number.isFinite(clickValue) &&
+        typeof elementValue === "number" &&
+        Number.isFinite(elementValue)
+      ) {
+        diffs.push(Math.abs(clickValue - elementValue))
+      }
+    }
+
+    if (diffs.length === 0) {
+      continue
+    }
+
+    const score = diffs.reduce((sum, diff) => sum + diff, 0) / diffs.length
+    if (score < bestScore) {
+      bestScore = score
+      bestElement = element
+    }
+  }
+
+  if (bestElement) {
+    return bestElement
+  }
+
+  if (
+    normalizedHash &&
+    normalizedHash.toLowerCase() !== "unknown" &&
+    candidates.length > 0
+  ) {
+    return candidates[0]
+  }
+
+  return null
+}
+
+function projectClickToSnapshot(
+  click: ApiClickData,
+  metadata: SnapshotElementMetadata | null | undefined,
+  renderWidth: number,
+  renderHeight: number
+): [number, number] {
+  const { baseWidth, baseHeight } = resolveBaseDimensions(metadata)
+
+  if (
+    metadata &&
+    baseWidth &&
+    baseWidth > 0 &&
+    baseHeight &&
+    baseHeight > 0
+  ) {
+    const matchedElement = matchElementForClick(click, metadata)
+
+    if (matchedElement) {
+      const elementLeft =
+        getElementMetric(matchedElement.rel_x, matchedElement.x / baseWidth) ??
+        0
+      const elementTop =
+        getElementMetric(matchedElement.rel_y, matchedElement.y / baseHeight) ??
+        0
+      const elementWidth =
+        getElementMetric(
+          matchedElement.rel_width,
+          matchedElement.width / baseWidth
+        ) ?? 0
+      const elementHeight =
+        getElementMetric(
+          matchedElement.rel_height,
+          matchedElement.height / baseHeight
+        ) ?? 0
+
+      const offsetX =
+        getElementMetric(click.element_rel_x, DEFAULT_RELATIVE_POSITION) ??
+        DEFAULT_RELATIVE_POSITION
+      const offsetY =
+        getElementMetric(click.element_rel_y, DEFAULT_RELATIVE_POSITION) ??
+        DEFAULT_RELATIVE_POSITION
+
+      const snapshotX =
+        (elementLeft * baseWidth) + offsetX * elementWidth * baseWidth
+      const snapshotY =
+        (elementTop * baseHeight) + offsetY * elementHeight * baseHeight
+
+      const scaleX = renderWidth / baseWidth
+      const scaleY = renderHeight / baseHeight
+
+      return [snapshotX * scaleX, snapshotY * scaleY]
+    }
+  }
+
+  return [click.x * renderWidth, click.y * renderHeight]
 }
 
 // --- API Functions ---
@@ -112,8 +303,10 @@ export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const deckRef = useRef<Deck | null>(null)
+  const naturalImageSizeRef = useRef<{ width: number; height: number } | null>(null)
   const common = getCommonWidgetCopy(language)
   const copy = getHeatmapCopy(language)
+  const [isSnapshotReady, setIsSnapshotReady] = useState(false)
   const resolvedErrorMessage = error
     ? "code" in error
       ? error.details
@@ -157,6 +350,8 @@ export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
     setError(null)
     setData(null)
     setImageDimensions(null)
+    naturalImageSizeRef.current = null
+    setIsSnapshotReady(false)
     setIsGenerating(false)
 
     // Cleanup deck.gl instance
@@ -244,30 +439,66 @@ export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
   }, [selectedPage, selectedDevice, pollForSnapshot])
 
   // Handle image load and set dimensions
-  const handleImageLoad = (
-    event: React.SyntheticEvent<HTMLImageElement, Event>
-  ) => {
-    const img = event.currentTarget
-    const { naturalWidth, naturalHeight } = img
-
-    if (!containerRef.current || !data) return
-
-    // Get container width to scale image
+  const updateImageDimensions = useCallback(() => {
+    if (!containerRef.current || !naturalImageSizeRef.current) return
     const containerWidth = containerRef.current.offsetWidth
+    if (containerWidth === 0) return
+
+    const { width: naturalWidth, height: naturalHeight } = naturalImageSizeRef.current
     const scale = containerWidth / naturalWidth
     const scaledHeight = naturalHeight * scale
 
-    setImageDimensions({
-      width: containerWidth,
-      height: scaledHeight,
+    setImageDimensions((prev) => {
+      if (
+        prev &&
+        Math.abs(prev.width - containerWidth) < 0.5 &&
+        Math.abs(prev.height - scaledHeight) < 0.5
+      ) {
+        return prev
+      }
+      return {
+        width: containerWidth,
+        height: scaledHeight,
+      }
     })
-  }
+  }, [])
+
+  const handleImageLoad = useCallback(
+    (event: React.SyntheticEvent<HTMLImageElement, Event>) => {
+      const img = event.currentTarget
+      const { naturalWidth, naturalHeight } = img
+
+      naturalImageSizeRef.current = { width: naturalWidth, height: naturalHeight }
+      setIsSnapshotReady(true)
+      updateImageDimensions()
+    },
+    [updateImageDimensions]
+  )
+
+  useEffect(() => {
+    if (!isSnapshotReady || !naturalImageSizeRef.current) return
+    const el = containerRef.current
+    if (!el) return
+
+    const observer = new ResizeObserver(() => {
+      updateImageDimensions()
+    })
+
+    observer.observe(el)
+    const handleWindowResize = () => updateImageDimensions()
+    window.addEventListener("resize", handleWindowResize)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("resize", handleWindowResize)
+    }
+  }, [isSnapshotReady, updateImageDimensions])
 
   // Initialize deck.gl heatmap
   const initializeDeck = useCallback((
     width: number,
     height: number,
-    clicks: ApiClickData[]
+    clicks: ApiClickData[],
+    metadata?: SnapshotElementMetadata | null
   ) => {
     if (!canvasContainerRef.current) {
       console.log("Canvas container ref not available")
@@ -280,13 +511,13 @@ export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
     }
 
     // Convert percentage coordinates to pixel coordinates
-    const points = clicks.map((click) => ({
-      position: [click.x * width, click.y * height] as [
-        number,
-        number
-      ],
-      weight: click.value,
-    }))
+    const points = clicks.map((click) => {
+      const [x, y] = projectClickToSnapshot(click, metadata, width, height)
+      return {
+        position: [x, y] as [number, number],
+        weight: click.value,
+      }
+    })
 
     console.log("Initializing deck.gl with:", {
       width,
@@ -380,7 +611,12 @@ export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
 
     // Small delay to ensure DOM is ready
     const timer = setTimeout(() => {
-      initializeDeck(imageDimensions.width, imageDimensions.height, data.clicks)
+      initializeDeck(
+        imageDimensions.width,
+        imageDimensions.height,
+        data.clicks,
+        data.element_metadata
+      )
     }, 100)
 
     return () => clearTimeout(timer)
@@ -532,4 +768,3 @@ export const widgetMeta: WidgetMeta = {
     },
   },
 }
-
