@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { WidgetComponent, WidgetProps } from "@/core/registry"
 import {
   ResponsiveContainer,
@@ -20,6 +22,7 @@ import {
   AreaChart,
   Area,
 } from "@/lib/recharts"
+import { AlertTriangle, Info } from "lucide-react"
 
 import { fetchDynamicWidgetData } from "./api"
 import type {
@@ -134,27 +137,69 @@ function DynamicWidgetRenderer({ spec, config, language }: DynamicWidgetRenderer
   const chartType = (chartConfig.type ?? "line") as DynamicChartType
   const rowSeries = useMemo(() => buildSeries(rows, chartConfig), [rows, chartConfig])
   const stateCopy = buildCommonCopy(language)
+  const chartLabel = formatChartType(chartType)
+  const siteLabel = formatSiteLabel(
+    ensureString(queryParams.siteId) ?? ensureString(spec.site_id) ?? ensureString(data?.meta?.site_id),
+  )
+  const rangeLabel = formatRangeLabel(ensureString(data?.meta?.from), ensureString(data?.meta?.to))
+  const bucketLabel = formatBucketLabel(
+    ensureString(data?.meta?.bucket) ?? ensureString(spec.meta?.bucket) ?? ensureString(queryParams.bucket),
+  )
 
   return (
     <>
-      <CardHeader className="pb-2">
-        <CardTitle>{spec.title}</CardTitle>
-        {spec.description && <CardDescription>{spec.description}</CardDescription>}
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <CardTitle className="text-base font-semibold md:text-lg">{spec.title}</CardTitle>
+            {spec.description && (
+              <CardDescription className="text-sm text-muted-foreground line-clamp-2">
+                {spec.description}
+              </CardDescription>
+            )}
+          </div>
+          <Badge variant="secondary" className="uppercase tracking-wide text-[10px] md:text-xs">
+            {chartLabel}
+          </Badge>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+          {rangeLabel && <MetaBadge label="Range" value={rangeLabel} />}
+          {bucketLabel && <MetaBadge label="Bucket" value={bucketLabel} />}
+          {siteLabel && <MetaBadge label="Site" value={siteLabel} />}
+        </div>
       </CardHeader>
-      <CardContent className="pt-2" style={{ minHeight: 220 }}>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        {!error && isLoading && <p className="text-sm text-muted-foreground">{stateCopy.loading}</p>}
-        {!error && !isLoading && rows.length === 0 && (
-          <p className="text-sm text-muted-foreground">{stateCopy.noData}</p>
-        )}
-        {!error && !isLoading && rows.length > 0 && (
-          <DynamicChart
-            chartType={chartType}
-            chart={chartConfig}
-            data={rowSeries}
-            formatHint={chartConfig.value_format}
-          />
-        )}
+      <CardContent className="pt-2">
+        <div className="space-y-4">
+          {error && (
+            <StateMessage
+              variant="error"
+              title="데이터를 불러오지 못했습니다"
+              description={error}
+            />
+          )}
+          {!error && isLoading && (
+            <div className="rounded-xl border border-dashed bg-muted/20 p-6">
+              <Skeleton className="h-48 w-full rounded-lg" />
+            </div>
+          )}
+          {!error && !isLoading && rows.length === 0 && (
+            <StateMessage
+              variant="muted"
+              title={stateCopy.noData}
+              description="조건을 바꾸거나 다른 기간을 선택해 보세요."
+            />
+          )}
+          {!error && !isLoading && rows.length > 0 && (
+            <div className="rounded-xl border bg-background/70 p-2 md:p-3">
+              <DynamicChart
+                chartType={chartType}
+                chart={chartConfig}
+                data={rowSeries}
+                formatHint={chartConfig.value_format}
+              />
+            </div>
+          )}
+        </div>
       </CardContent>
     </>
   )
@@ -391,4 +436,86 @@ function buildCommonCopy(language?: string) {
     loading: "Loading data...",
     noData: "No data available.",
   }
+}
+
+function MetaBadge({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border bg-background/80 px-2 py-0.5 text-[10px] uppercase tracking-wide">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium normal-case text-foreground">{value}</span>
+    </span>
+  )
+}
+
+function StateMessage({
+  variant,
+  title,
+  description,
+}: {
+  variant: "error" | "muted"
+  title: string
+  description?: string
+}) {
+  const Icon = variant === "error" ? AlertTriangle : Info
+  return (
+    <div
+      className={`flex items-start gap-3 rounded-xl border p-4 ${
+        variant === "error" ? "border-destructive/40 bg-destructive/5 text-destructive" : "border-muted bg-muted/20 text-muted-foreground"
+      }`}
+    >
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+      <div className="space-y-1 text-sm">
+        <p className="font-medium">{title}</p>
+        {description && <p className="text-xs leading-relaxed">{description}</p>}
+      </div>
+    </div>
+  )
+}
+
+function formatChartType(type: DynamicChartType): string {
+  switch (type) {
+    case "bar":
+      return "Bar"
+    case "pie":
+      return "Pie"
+    case "table":
+      return "Table"
+    case "metric":
+      return "Metric"
+    case "area":
+      return "Area"
+    default:
+      return "Line"
+  }
+}
+
+function formatRangeLabel(from?: string, to?: string): string | undefined {
+  if (!from || !to) return undefined
+  const start = new Date(from)
+  const end = new Date(to)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return undefined
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  })
+  return `${formatter.format(start)} - ${formatter.format(end)}`
+}
+
+function formatBucketLabel(bucket?: string): string | undefined {
+  if (!bucket) return undefined
+  const match = bucket.match(/(\d+)([smhd])/i)
+  if (!match) return bucket
+  const value = match[1]
+  const unit = match[2].toLowerCase()
+  const label = { s: "sec", m: "min", h: "hour", d: "day" }[unit] ?? unit
+  return `${value} ${label}`
+}
+
+function formatSiteLabel(site?: string | null): string | undefined {
+  if (!site || site === "none") return undefined
+  return site
+}
+
+function ensureString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined
 }
