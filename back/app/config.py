@@ -134,3 +134,10 @@ _raw_target_site_base_url = os.getenv("TARGET_SITE_BASE_URL")
 TARGET_SITE_BASE_URL: str = _clean_str(
     _raw_target_site_base_url, "your-website-url"
 )
+
+
+# Dynamic widget storage path (JSON)
+_raw_dynamic_widgets_path = os.getenv("DYNAMIC_WIDGETS_PATH")
+DYNAMIC_WIDGETS_PATH: str = _clean_str(
+    _raw_dynamic_widgets_path, "/snapshots/dynamic_widgets.json"
+)
