@@ -183,6 +183,10 @@ interface DashboardCopy {
   aiWidgetCancel: string
   aiWidgetErrorPrefix: string
   aiWidgetChartOptions: { value: DynamicChartType; label: string }[]
+  aiWidgetLibraryTitle: string
+  aiWidgetLibraryEmpty: string
+  aiWidgetAddToLayout: string
+  aiWidgetRemove: string
 }
 
 interface TutorialStepCopy {
@@ -203,6 +207,12 @@ interface EditSnapshot {
   dashboard: DashboardConfig | null
   activePresetId: string | null
   isNewPresetDraft: boolean
+}
+
+interface AiGeneratedWidgetListItem {
+  type: string
+  title: string
+  description?: string
 }
 
 const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
@@ -284,6 +294,10 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       { value: "table", label: "Table" },
       { value: "metric", label: "Metric" },
     ],
+    aiWidgetLibraryTitle: "Saved AI widgets",
+    aiWidgetLibraryEmpty: "No AI widgets yet. Generate one to see it here.",
+    aiWidgetAddToLayout: "Add to layout",
+    aiWidgetRemove: "Remove",
   },
   ko: {
     tagline: "프리셋으로 레이아웃을 저장하고 다시 불러올 수 있어요.",
@@ -362,6 +376,10 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       { value: "table", label: "표" },
       { value: "metric", label: "지표 카드" },
     ],
+    aiWidgetLibraryTitle: "AI 위젯 목록",
+    aiWidgetLibraryEmpty: "아직 생성된 AI 위젯이 없어요. 새로 만들면 여기에서 확인할 수 있습니다.",
+    aiWidgetAddToLayout: "레이아웃에 추가",
+    aiWidgetRemove: "삭제",
   },
 }
 
@@ -667,6 +685,8 @@ export default function DashboardPage() {
   const [isGeneratingAiWidget, setIsGeneratingAiWidget] = useState(false)
   const [aiWidgetError, setAiWidgetError] = useState<string | null>(null)
   const [selectedWidgetIds, setSelectedWidgetIds] = useState<string[]>([])
+  const [aiGeneratedWidgets, setAiGeneratedWidgets] = useState<AiGeneratedWidgetListItem[]>([])
+  const [hiddenAiWidgetTypes, setHiddenAiWidgetTypes] = useState<string[]>([])
   const [widgetTagFilter, setWidgetTagFilter] = useState<string>("all")
   const timeRange = "12h"
   const [isEditMode, setIsEditMode] = useState(false)
@@ -701,6 +721,14 @@ export default function DashboardPage() {
     if (b.id === "example") return -1
     return 0
   })
+  const staticWidgetMetas = useMemo(
+    () => sortedAvailableWidgets.filter((meta) => !meta.id.startsWith("dynamic:")),
+    [sortedAvailableWidgets],
+  )
+  const dynamicWidgetMetas = useMemo(
+    () => sortedAvailableWidgets.filter((meta) => meta.id.startsWith("dynamic:")),
+    [sortedAvailableWidgets],
+  )
   const { localizedNames, localizedDescriptions } = useMemo(() => {
     const names: Record<LanguageCode, Record<string, string>> = {
       en: {},
@@ -762,9 +790,49 @@ export default function DashboardPage() {
 
     return merged
   }, [localizedNames])
+  useEffect(() => {
+    const metaMap = new Map(dynamicWidgetMetas.map((meta) => [meta.id, meta]))
+    setAiGeneratedWidgets((prev) => {
+      const existing = new Set(prev.map((item) => item.type))
+      const hiddenSet = new Set(hiddenAiWidgetTypes)
+      let changed = false
+      const next = prev.map((item) => {
+        const meta = metaMap.get(item.type)
+        if (!meta) {
+          return item
+        }
+        const nextTitle = localizedWidgetNames[language]?.[meta.id] ?? meta.name ?? meta.id
+        const nextDescription =
+          localizedWidgetDescriptions[language]?.[meta.id] ?? meta.description ?? undefined
+        if (item.title !== nextTitle || item.description !== nextDescription) {
+          changed = true
+          return { ...item, title: nextTitle, description: nextDescription }
+        }
+        return item
+      })
+      metaMap.forEach((meta, id) => {
+        if (hiddenSet.has(id) || existing.has(id)) {
+          return
+        }
+        next.push({
+          type: id,
+          title: localizedWidgetNames[language]?.[id] ?? meta.name ?? id,
+          description: localizedWidgetDescriptions[language]?.[id] ?? meta.description ?? undefined,
+        })
+        changed = true
+      })
+      return changed ? next : prev
+    })
+  }, [
+    dynamicWidgetMetas,
+    hiddenAiWidgetTypes,
+    language,
+    localizedWidgetDescriptions,
+    localizedWidgetNames,
+  ])
   const widgetSections = useMemo<{ tag: string; widgets: typeof sortedAvailableWidgets }[]>(() => {
     const groups: Record<string, typeof sortedAvailableWidgets> = {}
-    sortedAvailableWidgets.forEach((meta) => {
+    staticWidgetMetas.forEach((meta) => {
       const primaryTag = meta.tags?.[0] ?? DEFAULT_WIDGET_TAG
       if (!groups[primaryTag]) {
         groups[primaryTag] = []
@@ -787,7 +855,7 @@ export default function DashboardPage() {
     })
 
     return ordered
-  }, [sortedAvailableWidgets])
+  }, [staticWidgetMetas])
 
   const visibleWidgetSections = widgetTagFilter === "all" ? widgetSections : widgetSections.filter((section) => section.tag === widgetTagFilter)
   const presetStorageKey = `dashboard-presets-${dashboardId}`
@@ -1233,12 +1301,19 @@ export default function DashboardPage() {
         preferred_chart: (aiPreferredChart || undefined) as DynamicChartType | undefined,
       })
       const widgetType = registerDynamicWidget(spec)
-      const added = appendWidgets([{ type: widgetType }])
-      if (!added) {
-        setAiWidgetError(copy.aiWidgetErrorPrefix)
-        return
-      }
-      setIsAiWidgetDialogOpen(false)
+      setHiddenAiWidgetTypes((prev) => prev.filter((id) => id !== widgetType))
+      setAiGeneratedWidgets((prev) => {
+        const next = prev.filter((item) => item.type !== widgetType)
+        return [
+          ...next,
+          {
+            type: widgetType,
+            title: spec.title ?? widgetType,
+            description: spec.description ?? undefined,
+          },
+        ]
+      })
+      setAiWidgetError(null)
       setAiRequirement("")
       setAiPreferredChart("")
       if (spec.site_id) {
@@ -1250,6 +1325,18 @@ export default function DashboardPage() {
     } finally {
       setIsGeneratingAiWidget(false)
     }
+  }
+
+  const handleAddAiWidgetFromLibrary = (widgetType: string) => {
+    const added = appendWidgets([{ type: widgetType }])
+    if (!added) {
+      setAiWidgetError(copy.aiWidgetErrorPrefix)
+    }
+  }
+
+  const handleRemoveAiWidgetFromLibrary = (widgetType: string) => {
+    setAiGeneratedWidgets((prev) => prev.filter((widget) => widget.type !== widgetType))
+    setHiddenAiWidgetTypes((prev) => (prev.includes(widgetType) ? prev : [...prev, widgetType]))
   }
 
   const handleRemoveWidget = (widgetId: string) => {
@@ -1794,65 +1881,122 @@ export default function DashboardPage() {
               }
             }}
           >
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-3xl">
               <DialogHeader>
                 <DialogTitle>{copy.aiWidgetTitle}</DialogTitle>
                 <DialogDescription>{copy.aiWidgetDescription}</DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">{copy.aiWidgetRequirementLabel}</label>
-                  <Textarea
-                    value={aiRequirement}
-                    onChange={(event) => setAiRequirement(event.target.value)}
-                    placeholder={copy.aiWidgetRequirementPlaceholder}
-                    rows={4}
-                  />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+                <div className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-sm font-medium">{copy.aiWidgetSiteLabel}</label>
-                    <Input
-                      value={aiSiteId}
-                      onChange={(event) => setAiSiteId(event.target.value)}
-                      placeholder={copy.aiWidgetSitePlaceholder}
+                    <label className="text-sm font-medium">{copy.aiWidgetRequirementLabel}</label>
+                    <Textarea
+                      value={aiRequirement}
+                      onChange={(event) => setAiRequirement(event.target.value)}
+                      placeholder={copy.aiWidgetRequirementPlaceholder}
+                      rows={4}
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">{copy.aiWidgetChartLabel}</label>
-                    <Select
-                      value={aiPreferredChart || "auto"}
-                      onValueChange={(value) => setAiPreferredChart(value === "auto" ? "" : value)}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium">{copy.aiWidgetSiteLabel}</label>
+                      <Input
+                        value={aiSiteId}
+                        onChange={(event) => setAiSiteId(event.target.value)}
+                        placeholder={copy.aiWidgetSitePlaceholder}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium">{copy.aiWidgetChartLabel}</label>
+                      <Select
+                        value={aiPreferredChart || "auto"}
+                        onValueChange={(value) => setAiPreferredChart(value === "auto" ? "" : value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={copy.aiWidgetChartPlaceholder} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">{copy.aiWidgetChartPlaceholder}</SelectItem>
+                          {copy.aiWidgetChartOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {aiWidgetError && <p className="text-sm text-destructive">{aiWidgetError}</p>}
+                  <div className="flex gap-2">
+                    <Button onClick={handleGenerateAiWidget} disabled={isGeneratingAiWidget} className="flex-1">
+                      {isGeneratingAiWidget ? copy.aiWidgetGenerating : copy.aiWidgetGenerate}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        setIsAiWidgetDialogOpen(false)
+                        setAiWidgetError(null)
+                      }}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder={copy.aiWidgetChartPlaceholder} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto">{copy.aiWidgetChartPlaceholder}</SelectItem>
-                        {copy.aiWidgetChartOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      {copy.aiWidgetCancel}
+                    </Button>
                   </div>
                 </div>
-                {aiWidgetError && <p className="text-sm text-destructive">{aiWidgetError}</p>}
-                <div className="flex gap-2">
-                  <Button onClick={handleGenerateAiWidget} disabled={isGeneratingAiWidget} className="flex-1">
-                    {isGeneratingAiWidget ? copy.aiWidgetGenerating : copy.aiWidgetGenerate}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => {
-                      setIsAiWidgetDialogOpen(false)
-                      setAiWidgetError(null)
-                    }}
-                  >
-                    {copy.aiWidgetCancel}
-                  </Button>
+
+                <div className="space-y-3 rounded-xl border bg-muted/10 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{copy.aiWidgetLibraryTitle}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {copy.aiWidgetHint}
+                      </p>
+                    </div>
+                    {aiGeneratedWidgets.length > 0 && (
+                      <Badge variant="secondary">{aiGeneratedWidgets.length}</Badge>
+                    )}
+                  </div>
+                  {aiGeneratedWidgets.length === 0 ? (
+                    <div className="rounded-lg border border-dashed bg-background/60 p-4 text-sm text-muted-foreground">
+                      {copy.aiWidgetLibraryEmpty}
+                    </div>
+                  ) : (
+                    <ScrollArea className="max-h-[360px] pr-2">
+                      <div className="space-y-3">
+                        {aiGeneratedWidgets.map((widget) => (
+                          <div key={widget.type} className="rounded-xl border bg-card/80 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">{widget.title}</p>
+                                <p className="text-xs text-muted-foreground">{widget.type}</p>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-muted-foreground hover:text-destructive"
+                                onClick={() => handleRemoveAiWidgetFromLibrary(widget.type)}
+                                aria-label={copy.aiWidgetRemove}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            {widget.description && (
+                              <p className="mt-2 text-xs text-muted-foreground">{widget.description}</p>
+                            )}
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="mt-3 w-full"
+                              onClick={() => handleAddAiWidgetFromLibrary(widget.type)}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              {copy.aiWidgetAddToLayout}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  )}
                 </div>
               </div>
             </DialogContent>
