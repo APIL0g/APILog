@@ -84,6 +84,7 @@ LLM_ENDPOINT=http://ollama:11434
 LLM_MODEL=llama3:8b
 LLM_TEMPERATURE=0.2
 LLM_TIMEOUT_S=60
+LLM_MAX_TOKENS=1024
 # Disable insights cache while testing (0 = off)
 AI_INSIGHTS_EXPLAIN_CACHE_TTL=0
 ```
