@@ -174,8 +174,6 @@ interface DashboardCopy {
   aiWidgetDescription: string
   aiWidgetRequirementLabel: string
   aiWidgetRequirementPlaceholder: string
-  aiWidgetSiteLabel: string
-  aiWidgetSitePlaceholder: string
   aiWidgetChartLabel: string
   aiWidgetChartPlaceholder: string
   aiWidgetGenerate: string
@@ -278,8 +276,6 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       "Describe the metric or audience you want to analyze. ApiLog will design the query, chart, and layout.",
     aiWidgetRequirementLabel: "What should the widget analyze?",
     aiWidgetRequirementPlaceholder: "e.g. Compare mobile vs desktop bounce rate for the last 7 days",
-    aiWidgetSiteLabel: "Site ID (optional)",
-    aiWidgetSitePlaceholder: "main-site",
     aiWidgetChartLabel: "Preferred chart type",
     aiWidgetChartPlaceholder: "Auto detect",
     aiWidgetGenerate: "Generate widget",
@@ -360,8 +356,6 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     aiWidgetDescription: "보고 싶은 지표나 비교를 한국어 또는 영어로 작성하면 ApiLog가 자동으로 위젯을 생성합니다.",
     aiWidgetRequirementLabel: "어떤 내용을 분석할까요?",
     aiWidgetRequirementPlaceholder: "예: 최근 7일 페이지별 전환율 비교",
-    aiWidgetSiteLabel: "사이트 ID (선택)",
-    aiWidgetSitePlaceholder: "예: main-site",
     aiWidgetChartLabel: "선호 차트",
     aiWidgetChartPlaceholder: "자동 선택",
     aiWidgetGenerate: "AI로 만들기",
@@ -680,7 +674,6 @@ export default function DashboardPage() {
   const [isAddingWidget, setIsAddingWidget] = useState(false)
   const [isAiWidgetDialogOpen, setIsAiWidgetDialogOpen] = useState(false)
   const [aiRequirement, setAiRequirement] = useState("")
-  const [aiSiteId, setAiSiteId] = useState("")
   const [aiPreferredChart, setAiPreferredChart] = useState<string>("")
   const [isGeneratingAiWidget, setIsGeneratingAiWidget] = useState(false)
   const [aiWidgetError, setAiWidgetError] = useState<string | null>(null)
@@ -1297,7 +1290,6 @@ export default function DashboardPage() {
       const spec = await generateDynamicWidget({
         requirement,
         language,
-        site_id: aiSiteId.trim() || undefined,
         preferred_chart: (aiPreferredChart || undefined) as DynamicChartType | undefined,
       })
       const widgetType = registerDynamicWidget(spec)
@@ -1316,9 +1308,6 @@ export default function DashboardPage() {
       setAiWidgetError(null)
       setAiRequirement("")
       setAiPreferredChart("")
-      if (spec.site_id) {
-        setAiSiteId(spec.site_id)
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setAiWidgetError(`${copy.aiWidgetErrorPrefix}: ${message}`)
@@ -1897,34 +1886,24 @@ export default function DashboardPage() {
                       rows={4}
                     />
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium">{copy.aiWidgetSiteLabel}</label>
-                      <Input
-                        value={aiSiteId}
-                        onChange={(event) => setAiSiteId(event.target.value)}
-                        placeholder={copy.aiWidgetSitePlaceholder}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium">{copy.aiWidgetChartLabel}</label>
-                      <Select
-                        value={aiPreferredChart || "auto"}
-                        onValueChange={(value) => setAiPreferredChart(value === "auto" ? "" : value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={copy.aiWidgetChartPlaceholder} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="auto">{copy.aiWidgetChartPlaceholder}</SelectItem>
-                          {copy.aiWidgetChartOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">{copy.aiWidgetChartLabel}</label>
+                    <Select
+                      value={aiPreferredChart || "auto"}
+                      onValueChange={(value) => setAiPreferredChart(value === "auto" ? "" : value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={copy.aiWidgetChartPlaceholder} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">{copy.aiWidgetChartPlaceholder}</SelectItem>
+                        {copy.aiWidgetChartOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   {aiWidgetError && <p className="text-sm text-destructive">{aiWidgetError}</p>}
                   <div className="flex gap-2">
