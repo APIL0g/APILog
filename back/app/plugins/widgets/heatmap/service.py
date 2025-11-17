@@ -17,7 +17,7 @@ def _generate_composite_key(site_id: str, page_url: str, device_type: str) -> st
     """
     return f"{site_id}::{page_url}::{device_type}"
 
-def _encode_key_to_filename(key: str) -> str:
+def _encode_key_to_filename(key: str, extension: str = ".webp") -> str:
     """
     키 문자열을 URL/파일 시스템에 안전한 Base64 문자열로 인코딩하여 파일명으로 만듭니다.
     """
@@ -26,8 +26,9 @@ def _encode_key_to_filename(key: str) -> str:
     b64_bytes = base64.urlsafe_b64encode(key_bytes)
     # 패딩(=)을 제거한 문자열 반환
     b64_string = b64_bytes.decode('utf-8').rstrip('=')
-    
-    return f"{b64_string}.webp" # 예: bWFpbjo6L2NhcnQ6OmRlc2t0b3A.webp
+
+    normalized_ext = extension if extension.startswith(".") else f".{extension}"
+    return f"{b64_string}{normalized_ext}" # 예: bWFpbjo6L2NhcnQ6OmRlc2t0b3A.webp
 
 def get_snapshot_filepath(site_id: str, page_url: str, device_type: str) -> str:
     """
@@ -43,6 +44,14 @@ def get_snapshot_filepath(site_id: str, page_url: str, device_type: str) -> str:
     # 3. "/snapshots/bWFpbjo6L2NhcnQ6OmRlc2t0b3A.webp"
     return os.path.join(SNAPSHOT_STORAGE_ROOT, filename)
 
+def get_snapshot_metadata_filepath(site_id: str, page_url: str, device_type: str) -> str:
+    """
+    스냅샷 메타데이터(JSON) 파일의 절대 경로를 반환합니다.
+    """
+    key = _generate_composite_key(site_id, page_url, device_type)
+    filename = _encode_key_to_filename(key, ".json")
+    return os.path.join(SNAPSHOT_STORAGE_ROOT, filename)
+
 def get_click_data_from_influx(path: str, device_type: str) -> List[Dict[str, Any]]:
     """
     (수정) InfluxDB 3.x에서 SQL을 사용하여 클릭 데이터를 조회합니다.
@@ -54,16 +63,35 @@ def get_click_data_from_influx(path: str, device_type: str) -> List[Dict[str, An
     # 데이터 수집(ingest) 시 사용된 스키마(필드명)와 정확히 일치해야 합니다.
     # (예: "siteId", "pageUrl", "deviceType", "x", "y")
     query = f'''
-        SELECT 
-            click_x as x, 
-            click_y as y, 
-            count(*) as value 
-        FROM events
-        WHERE
-            "path" = '{path}' 
-            AND "device_type" = '{device_type}'
-            AND "event_name" = 'click'
-        GROUP BY x, y
+        SELECT
+            norm_x AS x,
+            norm_y AS y,
+            element_hash,
+            COUNT(*) AS value,
+            AVG(element_rel_x) AS element_rel_x,
+            AVG(element_rel_y) AS element_rel_y,
+            AVG(element_rect_x) AS element_rect_x,
+            AVG(element_rect_y) AS element_rect_y,
+            AVG(element_rect_w) AS element_rect_w,
+            AVG(element_rect_h) AS element_rect_h
+        FROM (
+            SELECT
+                COALESCE(viewport_click_x, click_x) AS norm_x,
+                COALESCE(viewport_click_y, click_y) AS norm_y,
+                element_hash,
+                element_rel_x,
+                element_rel_y,
+                element_rect_x,
+                element_rect_y,
+                element_rect_w,
+                element_rect_h
+            FROM events
+            WHERE
+                "path" = '{path}' 
+                AND "device_type" = '{device_type}'
+                AND "event_name" = 'click'
+        ) sub
+        GROUP BY norm_x, norm_y, element_hash
     '''
 
     try:

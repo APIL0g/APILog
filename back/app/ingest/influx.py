@@ -95,10 +95,13 @@ def write_events(events: List[Dict[str, Any]]) -> None:
 
     Fields:
         count, session_id, user_hash, dwell_ms, scroll_pct,
-        click_x, click_y, viewport_w, viewport_h,
+        click_x, click_y, viewport_click_x, viewport_click_y,
+        element_rel_x, element_rel_y,
+        element_rect_x, element_rect_y, element_rect_w, element_rect_h,
         error_flag, extra_json
         수량, 세션 ID, 사용자 해시, 체류 시간, 스크롤 비율,
-        클릭 좌표, 뷰포트 크기, 오류 플래그, 추가 정보
+        클릭 좌표, 뷰포트 클릭 비율, 요소 상대 좌표,
+        요소 박스 치수, 뷰포트 크기, 오류 플래그, 추가 정보
     """
     points: List[Point] = []
 
@@ -107,30 +110,37 @@ def write_events(events: List[Dict[str, Any]]) -> None:
         # 전달된 타임스탬프가 있으면 밀리초 단위로 변환합니다.
         timestamp_ms = _safe_int(event.get("ts"))
 
+        # Prepare a single InfluxDB point containing all relevant tags/fields for this event.
         point = (
             Point("events")
             # Tags describe low-cardinality dimensions for fast grouping.
             # 태그는 빠른 그룹화를 위한 저카디널리티 차원을 설명합니다.
-            .tag("site_id", _safe_tag_str(event.get("site_id")))
-            .tag("path", _safe_tag_str(event.get("path")))
-            .tag("event_name", _safe_tag_str(event.get("event_name")))
-            .tag("element_hash", _safe_tag_str(event.get("element_hash")))
-            .tag("device_type", _safe_tag_str(event.get("device_type")))
-            .tag("browser_family", _safe_tag_str(event.get("browser_family")))
-            .tag("country_code", _safe_tag_str(event.get("country_code")))
+            .tag("site_id", _safe_tag_str(event.get("site_id")))  # 어떤 사이트에서 발생한 이벤트인지
+            .tag("path", _safe_tag_str(event.get("path")))  # 페이지 경로
+            .tag("event_name", _safe_tag_str(event.get("event_name")))  # 이벤트 종류(click, page_view 등)
+            .tag("element_hash", _safe_tag_str(event.get("element_hash")))  # 요소 식별용 해시/라벨
+            .tag("device_type", _safe_tag_str(event.get("device_type")))  # desktop/mobile 구분
+            .tag("browser_family", _safe_tag_str(event.get("browser_family")))  # 브라우저 종류
+            .tag("country_code", _safe_tag_str(event.get("country_code")))  # 추정 국가 코드
             # Fields hold the high-cardinality metrics we query over time.
             # 필드는 시간에 따라 조회할 고카디널리티 지표를 저장합니다.
-            .field("count", _safe_int(event.get("count"), 1) or 1)
-            .field("session_id", _safe_str(event.get("session_id")))
-            .field("user_hash", _safe_str(event.get("user_hash")))
-            .field("dwell_ms", _safe_int(event.get("dwell_ms"), 0) or 0)
-            .field("scroll_pct", _safe_float(event.get("scroll_pct"), 0.0) or 0.0)
-            .field("click_x", _safe_float(event.get("click_x"), 0.0) or 0.0)
-            .field("click_y", _safe_float(event.get("click_y"), 0.0) or 0.0)
-            .field("viewport_w", _safe_int(event.get("viewport_w"), 0) or 0)
-            .field("viewport_h", _safe_int(event.get("viewport_h"), 0) or 0)
-            .field("error_flag", _safe_bool(event.get("error_flag"), False) or False)
-            .field("extra_json", _safe_str(event.get("extra_json")))
+            .field("count", _safe_int(event.get("count"), 1) or 1)  # 배치 적재 시 합계
+            .field("session_id", _safe_str(event.get("session_id")))  # 세션 식별자
+            .field("user_hash", _safe_str(event.get("user_hash")))  # 익명화된 사용자 식별자
+            .field("dwell_ms", _safe_int(event.get("dwell_ms"), 0) or 0)  # 체류 시간(ms)
+            .field("scroll_pct", _safe_float(event.get("scroll_pct"), 0.0) or 0.0)  # 페이지 스크롤 퍼센트
+            .field("click_x", _safe_float(event.get("click_x"), 0.0) or 0.0)  # 문서 기준 클릭 X 비율
+            .field("click_y", _safe_float(event.get("click_y"), 0.0) or 0.0)  # 문서 기준 클릭 Y 비율
+            .field("viewport_click_x", _safe_float(event.get("viewport_click_x"), 0.0) or 0.0)  # 뷰포트 기준 X
+            .field("viewport_click_y", _safe_float(event.get("viewport_click_y"), 0.0) or 0.0)  # 뷰포트 기준 Y
+            .field("element_rel_x", _safe_float(event.get("element_rel_x"), 0.0) or 0.0)  # 요소 내부 상대 X
+            .field("element_rel_y", _safe_float(event.get("element_rel_y"), 0.0) or 0.0)  # 요소 내부 상대 Y
+            .field("element_rect_x", _safe_float(event.get("element_rect_x"), 0.0) or 0.0)  # 요소 왼쪽 위치(문서 비율)
+            .field("element_rect_y", _safe_float(event.get("element_rect_y"), 0.0) or 0.0)  # 요소 위쪽 위치(문서 비율)
+            .field("element_rect_w", _safe_float(event.get("element_rect_w"), 0.0) or 0.0)  # 요소 너비(문서 비율)
+            .field("element_rect_h", _safe_float(event.get("element_rect_h"), 0.0) or 0.0)  # 요소 높이(문서 비율)
+            .field("error_flag", _safe_bool(event.get("error_flag"), False) or False)  # 오류 이벤트 여부
+            .field("extra_json", _safe_str(event.get("extra_json")))  # 추가 정보(JSON 문자열)
         )
 
         if timestamp_ms is not None:

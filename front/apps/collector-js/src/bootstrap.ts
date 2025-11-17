@@ -452,11 +452,21 @@
         const attrs = node.attributes;
         for (let i = attrs.length - 1; i >= 0; i--) {
           const attrName = attrs[i].name.toLowerCase();
-          if (attrName.startsWith("on")) {
+          if (attrName.startsWith("on") || attrName === "style") {
             node.removeAttribute(attrs[i].name);
           }
         }
       }
+
+      const commentWalker = document.createTreeWalker(
+        clone,
+        NodeFilter.SHOW_COMMENT
+      );
+      const commentsToRemove: Comment[] = [];
+      while (commentWalker.nextNode()) {
+        commentsToRemove.push(commentWalker.currentNode as Comment);
+      }
+      commentsToRemove.forEach((node) => node.remove());
 
       let outer = clone.outerHTML || "";
 
@@ -535,6 +545,12 @@
     return cleaned;
   }
 
+  function clamp01(value: number): number {
+    if (value < 0) return 0;
+    if (value > 1) return 1;
+    return value;
+  }
+
   function getElementSignature(
     el: Element,
     clickX: number,
@@ -545,25 +561,67 @@
     elementHash: string;
     relX: number | null;
     relY: number | null;
+    rectX: number | null;
+    rectY: number | null;
+    rectW: number | null;
+    rectH: number | null;
   } {
     const selector = buildDomSelector(el);
     const elementHash = getReadableLabel(labelSource ?? el);
 
     const rect = (el as HTMLElement).getBoundingClientRect();
+    const docEl = document.documentElement;
+    const body = document.body || null;
+    const viewportW =
+      window.innerWidth || docEl.clientWidth || 0;
+    const viewportH =
+      window.innerHeight || docEl.clientHeight || 0;
+    const scrollX =
+      window.scrollX || docEl.scrollLeft || (body ? body.scrollLeft : 0) || 0;
+    const scrollY =
+      window.scrollY || docEl.scrollTop || (body ? body.scrollTop : 0) || 0;
+    const docWidth = Math.max(
+      docEl.scrollWidth || 0,
+      body ? body.scrollWidth || 0 : 0,
+      docEl.clientWidth || 0
+    );
+    const docHeight = Math.max(
+      docEl.scrollHeight || 0,
+      body ? body.scrollHeight || 0 : 0,
+      docEl.clientHeight || 0
+    );
 
-    const viewportX = clickX - window.scrollX;
-    const viewportY = clickY - window.scrollY;
+    const viewportX = clickX - scrollX;
+    const viewportY = clickY - scrollY;
 
     let relX: number | null = null;
     let relY: number | null = null;
     if (rect.width > 0 && rect.height > 0) {
-      relX = (viewportX - rect.left) / rect.width;
-      relY = (viewportY - rect.top) / rect.height;
+      relX = clamp01((viewportX - rect.left) / rect.width);
+      relY = clamp01((viewportY - rect.top) / rect.height);
+    }
 
-      if (relX < 0) relX = 0;
-      if (relX > 1) relX = 1;
-      if (relY < 0) relY = 0;
-      if (relY > 1) relY = 1;
+    let rectX: number | null = null;
+    let rectY: number | null = null;
+    let rectW: number | null = null;
+    let rectH: number | null = null;
+
+    const absLeft = rect.left + scrollX;
+    const absTop = rect.top + scrollY;
+
+    if (docWidth > 0) {
+      rectX = clamp01(absLeft / docWidth);
+      rectW = clamp01(rect.width / docWidth);
+    } else if (viewportW > 0) {
+      rectX = clamp01(rect.left / viewportW);
+      rectW = clamp01(rect.width / viewportW);
+    }
+    if (docHeight > 0) {
+      rectY = clamp01(absTop / docHeight);
+      rectH = clamp01(rect.height / docHeight);
+    } else if (viewportH > 0) {
+      rectY = clamp01(rect.top / viewportH);
+      rectH = clamp01(rect.height / viewportH);
     }
 
     return {
@@ -571,6 +629,10 @@
       elementHash,
       relX,
       relY,
+      rectX,
+      rectY,
+      rectW,
+      rectH,
     };
   }
 
@@ -743,27 +805,42 @@
 
           // Normalise mouse coordinates for consistent metrics.
           // MouseEvent에서 pageX/pageY, clientX/clientY 값을 보정합니다.
-          const x = (ev.pageX || (ev.clientX + scrollX) || 0);
-          const y = (ev.pageY || (ev.clientY + scrollY) || 0);
+          const x = ev.pageX || (ev.clientX + scrollX) || 0;
+          const y = ev.pageY || (ev.clientY + scrollY) || 0;
 
           const maxH = Math.max(
-          bodyEl.scrollHeight, bodyEl.offsetHeight,
-          docEl.clientHeight, docEl.scrollHeight, docEl.offsetHeight
+            bodyEl.scrollHeight,
+            bodyEl.offsetHeight,
+            docEl.clientHeight,
+            docEl.scrollHeight,
+            docEl.offsetHeight
           );
           const maxW = Math.max(
-          bodyEl.scrollWidth, bodyEl.offsetWidth,
-          docEl.clientWidth, docEl.scrollWidth, docEl.offsetWidth
+            bodyEl.scrollWidth,
+            bodyEl.offsetWidth,
+            docEl.clientWidth,
+            docEl.scrollWidth,
+            docEl.offsetWidth
           );
 
-          const x_pct = (maxW > 0) ? (x / maxW) : 0;
-          const y_pct = (maxH > 0) ? (y / maxH) : 0;
+          const docRatioX = maxW > 0 ? x / maxW : 0;
+          const docRatioY = maxH > 0 ? y / maxH : 0;
+
+          const viewportW = window.innerWidth || docEl.clientWidth || 0;
+          const viewportH = window.innerHeight || docEl.clientHeight || 0;
+          const viewportRatioX =
+            viewportW > 0 ? ev.clientX / viewportW : 0;
+          const viewportRatioY =
+            viewportH > 0 ? ev.clientY / viewportH : 0;
 
           if (!interactiveEl) {
             this.q.push({
               ...this.baseTags("click", DEAD_CLICK_LABEL),
               ...this.baseFields(),
-              click_x: x_pct,
-              click_y: y_pct,
+              click_x: docRatioX,
+              click_y: docRatioY,
+              viewport_click_x: viewportRatioX,
+              viewport_click_y: viewportRatioY,
               scroll_pct: this.maxScrollSeen,
               extra_json: JSON.stringify({ dead_click: true }),
               ts: now(),
@@ -771,7 +848,18 @@
             return;
           }
 
-          this.emitClick(interactiveEl, x_pct, y_pct, interactiveEl);
+          this.emitClick(
+            interactiveEl,
+            {
+              docRatioX,
+              docRatioY,
+              viewportRatioX,
+              viewportRatioY,
+              pageX: x,
+              pageY: y,
+            },
+            interactiveEl
+          );
         },
         true // capture
       );
@@ -863,11 +951,6 @@
     }
 
     baseFields() {
-      const vw =
-        window.innerWidth || document.documentElement.clientWidth || 0;
-      const vh =
-        window.innerHeight || document.documentElement.clientHeight || 0;
-
       return {
         count: 1,
         session_id: this.sessionId,
@@ -876,8 +959,14 @@
         scroll_pct: null as number | null,
         click_x: null as number | null,
         click_y: null as number | null,
-        viewport_w: vw,
-        viewport_h: vh,
+        viewport_click_x: null as number | null,
+        viewport_click_y: null as number | null,
+        element_rel_x: null as number | null,
+        element_rel_y: null as number | null,
+        element_rect_x: null as number | null,
+        element_rect_y: null as number | null,
+        element_rect_w: null as number | null,
+        element_rect_h: null as number | null,
         error_flag: null as boolean | null,
         extra_json: null as string | null,
       };
@@ -910,8 +999,24 @@
       this.pushRecord(rec);
     }
 
-    emitClick(targetEl: Element, absX: number, absY: number, labelEl?: Element | null) {
-      const sig = getElementSignature(targetEl, absX, absY, labelEl);
+    emitClick(
+      targetEl: Element,
+      clickMeta: {
+        docRatioX: number;
+        docRatioY: number;
+        viewportRatioX: number;
+        viewportRatioY: number;
+        pageX: number;
+        pageY: number;
+      },
+      labelEl?: Element | null
+    ) {
+      const sig = getElementSignature(
+        targetEl,
+        clickMeta.pageX,
+        clickMeta.pageY,
+        labelEl
+      );
       const outerHtml = sanitizeOuterHtml(labelEl ?? targetEl, sig.elementHash);
       const elementHashPayload = outerHtml || sig.elementHash;
 
@@ -920,8 +1025,16 @@
         this.baseTags("click", elementHashPayload),
         this.baseFields(),
         {
-          click_x: absX,
-          click_y: absY,
+          click_x: clickMeta.docRatioX,
+          click_y: clickMeta.docRatioY,
+          viewport_click_x: clickMeta.viewportRatioX,
+          viewport_click_y: clickMeta.viewportRatioY,
+          element_rel_x: sig.relX,
+          element_rel_y: sig.relY,
+          element_rect_x: sig.rectX,
+          element_rect_y: sig.rectY,
+          element_rect_w: sig.rectW,
+          element_rect_h: sig.rectH,
           scroll_pct: this.maxScrollSeen,
           ts: now(),
         }
