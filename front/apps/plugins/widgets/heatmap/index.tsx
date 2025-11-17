@@ -77,6 +77,14 @@ interface HeatmapData {
 
 const DEFAULT_RELATIVE_POSITION = 0.5
 
+function hasSnapshotAssets(payload: HeatmapData | null): payload is HeatmapData {
+  return Boolean(payload && (payload.snapshot_html_url || payload.snapshot_url))
+}
+
+function isSnapshotPayloadReady(payload: HeatmapData | null): payload is HeatmapData {
+  return Boolean(hasSnapshotAssets(payload) && payload?.element_metadata)
+}
+
 function resolveBaseDimensions(metadata?: SnapshotElementMetadata | null) {
   const baseWidth =
     metadata?.screenshot_width ||
@@ -325,7 +333,7 @@ export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
     while (attempts < maxAttempts) {
       try {
         const result = await fetchHeatmapData(selectedPage, selectedDevice)
-        if (result.snapshot_url) {
+        if (isSnapshotPayloadReady(result)) {
           setData(result)
           setIsGenerating(false)
           setIsLoading(false)
@@ -362,59 +370,18 @@ export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
 
   fetchHeatmapData(selectedPage, selectedDevice)
   .then((result) => {
-    if (!result.snapshot_url) {
-      // No snapshot exists, generate it
-      setIsGenerating(true) // 👈 'isGenerating' 상태 사용 (스피너 및 문구 표시)
-      setError(null) // 이전 오류 상태 초기화
+    const assetsReady = hasSnapshotAssets(result)
+    const metadataReady = Boolean(result.element_metadata)
 
-      // 1. 스냅샷 생성 *요청*
+    if (!assetsReady) {
+      setIsGenerating(true)
+      setError(null)
+
       generateSnapshot(selectedPage, selectedDevice)
         .then(() => {
-          // 2. 생성 *요청*이 성공하면, 이제 *폴링* 시작
-          let attempts = 0
-
-          const pollForSnapshotInternal = () => {
-            // 3. 타임아웃 체크
-            if (attempts >= 10) {
-              setError({ code: "SNAPSHOT_GENERATE_TIMEOUT" }) // 👈 타임아웃 오류 설정
-              setIsLoading(false)
-              setIsGenerating(false)
-              return // 폴링 중단
-            }
-            
-            attempts++
-
-            // 4. 스냅샷 데이터를 다시 가져오기 시도
-            fetchHeatmapData(selectedPage, selectedDevice)
-              .then((pollResult) => {
-                if (pollResult.snapshot_url) {
-                  // 5. [성공] 스냅샷 URL이 존재하면, 데이터 설정 및 로딩 종료
-                  setData(pollResult)
-                  setIsLoading(false)
-                  setIsGenerating(false)
-                  // 폴링 자연 종료
-                } else {
-                  // 6. [폴링 중] 아직 URL이 없음 (404). 다음 폴링 예약
-                  setTimeout(pollForSnapshotInternal, 1000)
-                }
-              })
-              .catch((pollErr) => {
-                // 7. [실패] 폴링 중 (404 이외의) 실제 네트워크 오류 발생
-                setError({
-                  code: "POLLING_ERROR",
-                  details: pollErr instanceof Error ? pollErr.message : String(pollErr),
-                })
-                setIsLoading(false)
-                setIsGenerating(false)
-                // 폴링 중단
-              })
-          }
-
-          // 8. 최초의 폴링 시작 (인터벌 후)
-          setTimeout(pollForSnapshotInternal, 1000)
+          pollForSnapshot().catch(() => {})
         })
         .catch((genErr) => {
-          // 1단계(generateSnapshot) 자체에서 오류가 난 경우
           setError({
             code: "GENERATION_START_FAILED",
             details: genErr instanceof Error ? genErr.message : String(genErr),
@@ -422,8 +389,10 @@ export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
           setIsLoading(false)
           setIsGenerating(false)
         })
+    } else if (!metadataReady) {
+      setIsGenerating(true)
+      pollForSnapshot().catch(() => {})
     } else {
-      // 스냅샷이 이미 존재함
       setData(result)
       setIsLoading(false)
     }
