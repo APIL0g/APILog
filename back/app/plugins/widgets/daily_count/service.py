@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 
 from influxdb_client_3 import InfluxDBClient3
 
-from config import INFLUX_DATABASE, INFLUX_TOKEN, INFLUX_URL
+from config import INFLUX_DATABASE, INFLUX_URL
 
 
 def _iso_date(dt: datetime) -> str:
@@ -37,7 +37,6 @@ ORDER BY day ASC
     try:
         with InfluxDBClient3(
             host=INFLUX_URL,
-            token=INFLUX_TOKEN,
             database=INFLUX_DATABASE,
         ) as client:
             res = client.query(sql)

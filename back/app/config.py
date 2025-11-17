@@ -48,9 +48,6 @@ def is_running_in_docker() -> bool:
 _raw_influx_url = os.getenv("INFLUX_URL")
 INFLUX_URL: str = _clean_str(_raw_influx_url, "http://influxdb3-core:8181")
 
-_raw_influx_token = os.getenv("INFLUX_TOKEN")
-INFLUX_TOKEN: str = _clean_str(_raw_influx_token, "dev-token")
-
 _raw_influx_database = os.getenv("INFLUX_DATABASE")
 INFLUX_DATABASE: str = _clean_str(_raw_influx_database, "apilog_db")
 

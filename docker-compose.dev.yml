@@ -104,7 +104,6 @@ services:
       # Influx endpoint for dev API
       # 개발용 Influx 연결 정보
       INFLUX_URL: ${INFLUX_URL}
-      INFLUX_TOKEN: apilog-dev-token
       INFLUX_DATABASE: apilog_db
       # CORS / LLM / AI widgets
       # CORS 및 LLM/AI 위젯 관련 설정

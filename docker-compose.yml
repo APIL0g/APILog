@@ -74,7 +74,6 @@ services:
       # Backend <-> InfluxDB connection info
       # API와 InfluxDB 연결 정보
       INFLUX_URL: ${INFLUX_URL}
-      INFLUX_TOKEN: ${INFLUX_TOKEN}
       INFLUX_DATABASE: ${INFLUX_DATABASE}
 
       # Web API behavior (CORS & LLM)
