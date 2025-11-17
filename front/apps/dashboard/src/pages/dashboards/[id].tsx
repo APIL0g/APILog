@@ -1966,7 +1966,6 @@ export default function DashboardPage() {
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <p className="text-sm font-semibold text-foreground">{widget.title}</p>
-                                <p className="text-xs text-muted-foreground">{widget.type}</p>
                               </div>
                               <Button
                                 variant="ghost"
