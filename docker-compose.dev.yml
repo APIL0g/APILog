@@ -1,5 +1,8 @@
+version: "3.9"
+
+############################################################
 # Docker Compose for APILog Dev Environment
-# APILog 개발/테스트 환경용 Docker Compose 설정
+# APILog 개발/테스트 환경용 Docker Compose 설정 (DB는 휘발성)
 ############################################################
 
 services:
@@ -17,8 +20,8 @@ services:
       # 스토리지 타입: 로컬 파일 시스템
       INFLUXDB3_OBJECT_STORE: file
 
-      # Data directory (persisted to volume)
-      # 데이터 디렉터리 (볼륨에 영속 저장)
+      # Data directory (컨테이너 내부, 볼륨 X → 휘발성)
+      # 데이터 디렉터리 (컨테이너 삭제 시 함께 삭제)
       INFLUXDB3_DB_DIR: /var/lib/influxdb3
 
       # Node ID (required argument)
@@ -52,12 +55,10 @@ services:
       - "8181:8181"
 
     volumes:
-      # Database / catalog / parquet storage
-      # DB / 카탈로그 / Parquet 데이터 저장
-      - influx-data:/var/lib/influxdb3
-      # Home metadata for influxdb3 user
-      # influxdb3 사용자 홈 디렉터리
-      - influx-meta:/home/influxdb3/.influxdb3
+      # ✅ DB 디렉터리는 더 이상 볼륨 마운트하지 않음 (완전 휘발성)
+      # - influx-data:/var/lib/influxdb3
+      # - influx-meta:/home/influxdb3/.influxdb3
+
       # Plugins directory (rollups, custom scripts)
       # 플러그인/커스텀 스크립트 디렉터리
       - influx-plugins:/plugins
@@ -82,7 +83,8 @@ services:
       - "8888:80"
 
     volumes:
-      - explorer-data:/db
+      # Explorer 내부 상태도 휘발성으로 쓰고 싶다면 별도 볼륨 불필요
+      # - explorer-data:/db
       - ./examples/influxdb3-explorer/config:/app-root/config:ro
 
     depends_on:
@@ -102,9 +104,10 @@ services:
 
     environment:
       # Influx endpoint for dev API
-      # 개발용 Influx 연결 정보
+      # 개발용 Influx 연결 정보 (.env에서 설정 권장)
       INFLUX_URL: ${INFLUX_URL}
       INFLUX_DATABASE: apilog_db
+
       # CORS / LLM / AI widgets
       # CORS 및 LLM/AI 위젯 관련 설정
       CORS_ALLOW_ORIGIN: ${CORS_ALLOW_ORIGIN}
@@ -124,8 +127,9 @@ services:
       AI_INSIGHTS_CACHE_TTL: ${AI_INSIGHTS_CACHE_TTL}
       AI_INSIGHTS_EXPLAIN_CACHE_TTL: ${AI_INSIGHTS_EXPLAIN_CACHE_TTL}
       AI_REPORT_FETCH_BASE: ${AI_REPORT_FETCH_BASE}
-      TARGET_SITE_BASE_URL: http://dummy-frontend:3000
 
+      # Heatmap/snapshot용 대상 사이트
+      TARGET_SITE_BASE_URL: http://dummy-frontend:3000
 
     depends_on:
       - influxdb3-core
@@ -210,6 +214,8 @@ services:
       - "11434:11434"
 
     volumes:
+      # Cache downloaded models
+      # 다운로드한 LLM 모델 캐시
       - ollama-data:/root/.ollama
 
     entrypoint:
@@ -229,14 +235,53 @@ services:
     gpus: all
 
 
+  ############################################################
+  # 7) apilog-seeder (dev dummy data)
+  #    InfluxDB에 매번 30일치 더미 이벤트 5만개 시드
+  #    - docker compose up 할 때마다 새 DB + 랜덤 데이터 생성
+  ############################################################
+  apilog-seeder:
+    image: python:3.12-slim
+    container_name: apilog-seeder
+
+    depends_on:
+      - influxdb3-core
+
+    environment:
+      # InfluxDB 3 Core 엔드포인트 (컨테이너 이름 기준)
+      INFLUX_URL: http://influxdb3-core:8181
+      # 쓸 DB 이름 (없으면 자동 생성)
+      INFLUX_DATABASE: apilog_db
+
+      # 시드 개수 / 기간 설정
+      SEED_EVENT_COUNT: 50000   # 5만 개
+      SEED_DAYS: 30             # 최근 30일
+      SEED_BATCH_SIZE: 5000     # 5k 라인 단위로 나눠서 write
+
+    volumes:
+      # ✅ 예제 디렉터리 전체를 동일 경로 구조(/workspace/examples)로 마운트
+      #    -> 컨테이너 내에서도 /workspace/examples/dummy-influx/seed_influx.py 경로가 유지됨
+      - ./examples:/workspace/examples:ro
+
+    working_dir: /workspace/examples/dummy-influx
+
+    # requests 설치 후 스크립트 한 번 실행
+    command: >
+      sh -c "pip install --no-cache-dir requests &&
+             python seed_influx.py"
+
+    # 한 번 돌고 끝나는 용도 (DB는 휘발성이라 up 할 때마다 새로 시드)
+    restart: "no"
+
+
 ##############################################################
 # Named Volumes (persistent data)
-# 영속 데이터를 위한 볼륨 정의
+# 영속 데이터를 위한 볼륨 정의 (DB는 휘발성이라 제외)
 ##############################################################
 volumes:
-  influx-data:
-  influx-meta:
-  influx-plugins:
-  explorer-data:
-  snapshots:
-  ollama-data:
+  # influx-data:     # dev에서는 사용하지 않음 (DB 휘발성)
+  # influx-meta:     # dev에서는 사용하지 않음
+  influx-plugins:    # 플러그인/스크립트 (필요하면 유지)
+  snapshots:         # 히트맵 스냅샷 파일
+  ollama-data:       # LLM 모델 캐시 (용량 크니까 유지 추천)
+  # explorer-data:   # Explorer 내부 상태도 휘발성으로 쓰려면 제외
