@@ -39,6 +39,8 @@
 
 ## 🛠 소스에서 설치
 
+[▶️ 유저 가이드 영상 보기](https://www.youtube.com/watch?v=pPGZDITqLdY)
+
 ### 요구 사항
 
 - Docker & Docker Compose (전체 스택 실행 권장)
@@ -61,32 +63,69 @@ cp .env.example .env
 아래 내용은 `.env.example` 파일을 그대로 가져온 것입니다. 기본값이 바뀌면 `.env.example`만 수정하고 다시 복사하면 문서와 환경이 함께 업데이트됩니다.
 
 ```ini
-# 이 파일을 .env로 이름을 바꾸고 환경에 맞게 변수를 수정하세요.
+# Copy this file to `.env` (e.g. `cp .env.example .env`) and adjust the values.
+# 이 파일을 `.env`로 복사한 뒤(`cp .env.example .env`) 환경에 맞게 값을 채워주세요.
 
-# InfluxDB 설정
-INFLUX_USERNAME=username
-INFLUX_PASSWORD=password
-INFLUX_ORG=your_organization
-INFLUX_DATABASE=your-database-name
-INFLUX_ADMIN_TOKEN=replace-it-with-a-complicated-random-string
+############################################################
+# Required Settings (필수 설정)
+############################################################
 
-# CORS 허용 목록(쉼표로 구분하거나 * 사용)
-CORS_ALLOW_ORIGIN=*
+# InfluxDB database name where APILog writes/reads analytics events.
+# (If you used docker-compose, the default is usually `apilog_db`).
+# APILog이 데이터를 저장/조회할 InfluxDB 데이터베이스 이름 (docker-compose 기본값: `apilog_db`).
+INFLUX_DATABASE=<Influx Db database name>
 
-# apilog-api가 InfluxDB에 접속할 내부 URL
+# Public base URL of the site you want to snapshot/analyze.
+# Example: https://example.com (include protocol, no trailing slash).
+# 스냅샷·분석 대상 실서비스의 기본 URL (프로토콜 포함, 마지막 슬래시 제외 권장).
+TARGET_SITE_BASE_URL=<your site domain or Ip address>
+
+############################################################
+# Optional Settings (선택 설정) — 필요한 경우에만 수정
+############################################################
+
+# InfluxDB endpoint (change this only if you host Influx elsewhere)
+# docker-compose 기본값으로 충분하다면 수정하지 마세요.
 INFLUX_URL=http://influxdb3-core:8181
 
-# LLM (Ollama) 설정
+# CORS allow list (comma separated or * for all origins)
+# 다중 도메인은 쉼표로 구분, 전부 허용하려면 *.
+CORS_ALLOW_ORIGIN=*
+
+# LLM (Ollama) Settings (used by AI Insights)
+# AI Insights에서 사용하는 Ollama 기본 설정입니다.
 LLM_PROVIDER=ollama
-# apilog-api가 Ollama 컨테이너에 접근할 수 있도록 Docker 서비스 이름 사용
 LLM_ENDPOINT=http://ollama:11434
-# 공백 없는 모델 태그
 LLM_MODEL=llama3:8b
 LLM_TEMPERATURE=0.2
 LLM_TIMEOUT_S=60
 LLM_MAX_TOKENS=1024
-# 테스트 중에는 인사이트 캐시를 비활성화 (0 = 끔)
+
+# AI Report LLM (OpenAI) Settings — leave blank to disable.
+# AI Report 기능을 쓰지 않으면 비워두셔도 됩니다.
+AI_REPORT_LLM_PROVIDER=openai_compat
+AI_REPORT_LLM_ENDPOINT=https://api.openai.com
+AI_REPORT_LLM_MODEL=gpt-4.1
+# Fill with your OpenAI-compatible API key if you want to enable AI Report.
+# AI Report 기능을 쓰려면 OpenAI 호환 API 키를 여기에 입력하세요.
+AI_REPORT_LLM_API_KEY=
+AI_REPORT_LLM_MAX_TOKENS=4096
+AI_REPORT_LLM_TEMPERATURE=0.2
+AI_REPORT_LLM_TIMEOUT_S=300
+
+# AI caching / internal API endpoints
+# AI 캐시 및 내부 API 엔드포인트 설정입니다.
+AI_INSIGHTS_CACHE_TTL=60
 AI_INSIGHTS_EXPLAIN_CACHE_TTL=0
+AI_REPORT_FETCH_BASE=http://apilog-api:8000
+
+# Where to persist AI-generated dynamic widget specs (JSON file path)
+# Docker 환경에서는 /snapshots가 이미 마운트됩니다.
+DYNAMIC_WIDGETS_PATH=/snapshots/dynamic_widgets.json
+
+# Optional settings reference (선택 설정 안내)
+# - LLM_*: Adjust only for advanced LLM tuning / LLM 동작을 세밀히 조정할 때만 변경
+# - AI_INSIGHTS_* / AI_REPORT_FETCH_BASE: Modify when 캐시 정책이나 내부 API 주소를 바꿔야 할 때만 수정하세요.
 ```
 
 ### 3. 애플리케이션 시작
@@ -98,7 +137,13 @@ docker compose up -d --build
 _기본값으로 `http://<Public IP 주소>:8080`(또는 개발 환경에서는 `localhost`)에서 대시보드에 접속할 수 있습니다._
 
 > ⚠️ **외부 접속 주의**  
-> 대시보드를 인터넷에 연 경우 `CORS_ALLOW_ORIGIN`과 보안 그룹(방화벽)에서 허용할 IP/도메인만 열어 두세요. 신뢰하지 않는 주소를 모두 허용하면 데이터가 노출될 수 있습니다.
+> ApiLog 대시보드는 기본적으로 `http://localhost:10000`에서 제공됩니다. 외부에서 접근해야 한다면 `CORS_ALLOW_ORIGIN`을 제한하고 방화벽/보안 그룹에서 10000번 포트를 신뢰하는 IP만 열어 두세요. 예:
+> 
+> ```bash
+> sudo ufw allow from <허용할_IP> to any port 10000 proto tcp
+> ```
+> 
+> 제한 없이 개방하면 분석 데이터가 노출될 수 있습니다.
 
 ### 4. 추적 스니펫 삽입
 
