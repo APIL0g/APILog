@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 from influxdb_client_3 import InfluxDBClient3
 
-from config import INFLUX_DATABASE, INFLUX_URL, INFLUX_TOKEN
+from config import INFLUX_DATABASE, INFLUX_URL
 # from app.ingest.influx import get_influxdb # (InfluxDB 연동 시 필요)
 
 # 모든 스냅샷이 저장될 단일 디렉토리 (docker-compose.yml에서 볼륨 마운트 필요)
@@ -95,7 +95,7 @@ def get_click_data_from_influx(path: str, device_type: str) -> List[Dict[str, An
     '''
 
     try:
-        result_df = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_DATABASE).query(query)
+        result_df = InfluxDBClient3(host=INFLUX_URL, database=INFLUX_DATABASE).query(query)
 
         if result_df is None:
             return []
@@ -117,7 +117,7 @@ def get_available_paths_from_influx() -> List[str]:
 
     try:
         # 2. InfluxDB 3.x 클라이언트로 쿼리 실행
-        result_df = InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_DATABASE).query(query)
+        result_df = InfluxDBClient3(host=INFLUX_URL, database=INFLUX_DATABASE).query(query)
 
         if result_df is None:
             return []

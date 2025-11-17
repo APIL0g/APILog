@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 
 from influxdb_client_3 import InfluxDBClient3
 
-from config import INFLUX_DATABASE, INFLUX_URL, INFLUX_TOKEN
+from config import INFLUX_DATABASE, INFLUX_URL
 
 
 def _sanitize_range(range_str: str) -> str:
@@ -24,7 +24,7 @@ def query_top_buttons_global(range_str: str = "7d", limit: int = 10) -> List[Dic
     rng = _sanitize_range(range_str)
 
     try:
-        with InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_DATABASE) as c3:
+        with InfluxDBClient3(host=INFLUX_URL, database=INFLUX_DATABASE) as c3:
             sql = f"""
 SELECT element_hash,
        SUM("count")::BIGINT AS cnt

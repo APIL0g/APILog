@@ -9,7 +9,6 @@ from influxdb_client_3 import InfluxDBClient3, Point
 
 from config import (
     INFLUX_DATABASE,
-    INFLUX_TOKEN,
     INFLUX_URL,
 )
 
@@ -17,7 +16,6 @@ DEFAULT_TAG_VALUE = "none"
 
 _client = InfluxDBClient3(
     host=INFLUX_URL,
-    token=INFLUX_TOKEN,
     database=INFLUX_DATABASE,
 )
 

@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Tuple
 
 from influxdb_client_3 import InfluxDBClient3
 
-from config import INFLUX_DATABASE, INFLUX_TOKEN, INFLUX_URL
+from config import INFLUX_DATABASE, INFLUX_URL
 
 
 LOOKBACK_DAYS = 7
@@ -146,7 +146,6 @@ LIMIT {limit}
 
         with InfluxDBClient3(
             host=INFLUX_URL,
-            token=INFLUX_TOKEN,
             database=INFLUX_DATABASE,
         ) as c3:
             result = c3.query(sql)

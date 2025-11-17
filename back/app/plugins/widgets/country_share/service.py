@@ -12,7 +12,6 @@ from typing import Any, Dict, List, Tuple
 from influxdb_client_3 import InfluxDBClient3  # InfluxDB 3 코어 SQL 클라이언트
 
 from config import (
-    INFLUX_TOKEN,
     INFLUX_URL,
     INFLUX_DATABASE,
 )
@@ -84,8 +83,7 @@ def query_country_share(range_str: str = "7d", top: int = 5) -> Dict[str, Any]:
     """
 
     client = InfluxDBClient3(
-        host=INFLUX_URL,            # 예: "http://influxdb3-core:8181"
-        token=INFLUX_TOKEN or "",   # without-auth면 그냥 dummy 값
+        host=INFLUX_URL,
         database=INFLUX_DATABASE,
     )
 

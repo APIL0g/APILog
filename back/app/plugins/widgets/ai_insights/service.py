@@ -13,7 +13,6 @@ log = logging.getLogger(__name__)
 
 from config import (
     AI_INSIGHTS_CACHE_TTL,
-    INFLUX_TOKEN,
     INFLUX_URL,
     INFLUX_DATABASE,
 )
@@ -49,7 +48,6 @@ def _get_sql_client():
     from influxdb_client_3 import InfluxDBClient3
     _sql_client = InfluxDBClient3(
         host=INFLUX_URL,
-        token=INFLUX_TOKEN,
         database=INFLUX_DATABASE,
     )
     return _sql_client

@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 
 from influxdb_client_3 import InfluxDBClient3
 
-from config import INFLUX_DATABASE, INFLUX_URL, INFLUX_TOKEN
+from config import INFLUX_DATABASE, INFLUX_URL
 
 
 def _as_int(x: Any, default: int = 0) -> int:
@@ -27,7 +27,7 @@ def query_browser_share(days: int = 7, limit: int = 10) -> List[Dict[str, Any]]:
     limit = max(1, int(limit))
 
     try:
-        with InfluxDBClient3(host=INFLUX_URL, token=INFLUX_TOKEN, database=INFLUX_DATABASE) as c3:
+        with InfluxDBClient3(host=INFLUX_URL, database=INFLUX_DATABASE) as c3:
             sql = f"""
 SELECT
   browser_family AS browser,
