@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import RGL, { WidthProvider, type Layout } from "react-grid-layout"
 import "react-grid-layout/css/styles.css"
 import "react-resizable/css/styles.css"
@@ -681,6 +681,7 @@ export default function DashboardPage() {
   const [aiGeneratedWidgets, setAiGeneratedWidgets] = useState<AiGeneratedWidgetListItem[]>([])
   const [hiddenAiWidgetTypes, setHiddenAiWidgetTypes] = useState<string[]>([])
   const [widgetTagFilter, setWidgetTagFilter] = useState<string>("all")
+  const [recentAiWidgetId, setRecentAiWidgetId] = useState<string | null>(null)
   const timeRange = "12h"
   const [isEditMode, setIsEditMode] = useState(false)
   const [presets, setPresets] = useState<DashboardConfig[]>([])
@@ -823,6 +824,15 @@ export default function DashboardPage() {
     localizedWidgetDescriptions,
     localizedWidgetNames,
   ])
+
+  useEffect(() => {
+    if (!recentAiWidgetId || !isAiWidgetDialogOpen) return
+    if (typeof document === "undefined") return
+    const target = document.getElementById(`ai-widget-${recentAiWidgetId}`)
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    }
+  }, [recentAiWidgetId, isAiWidgetDialogOpen])
   const widgetSections = useMemo<{ tag: string; widgets: typeof sortedAvailableWidgets }[]>(() => {
     const groups: Record<string, typeof sortedAvailableWidgets> = {}
     staticWidgetMetas.forEach((meta) => {
@@ -1305,6 +1315,7 @@ export default function DashboardPage() {
           },
         ]
       })
+      setRecentAiWidgetId(widgetType)
       setAiWidgetError(null)
       setAiRequirement("")
       setAiPreferredChart("")
@@ -1326,6 +1337,9 @@ export default function DashboardPage() {
   const handleRemoveAiWidgetFromLibrary = (widgetType: string) => {
     setAiGeneratedWidgets((prev) => prev.filter((widget) => widget.type !== widgetType))
     setHiddenAiWidgetTypes((prev) => (prev.includes(widgetType) ? prev : [...prev, widgetType]))
+    if (recentAiWidgetId === widgetType) {
+      setRecentAiWidgetId(null)
+    }
   }
 
   const handleRemoveWidget = (widgetId: string) => {
@@ -1867,6 +1881,7 @@ export default function DashboardPage() {
               if (!open) {
                 setAiWidgetError(null)
                 setIsGeneratingAiWidget(false)
+                setRecentAiWidgetId(null)
               }
             }}
           >
@@ -1923,7 +1938,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="space-y-3 rounded-xl border bg-muted/10 p-4">
+                <div className="flex flex-col space-y-3 rounded-xl border bg-muted/10 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-foreground">{copy.aiWidgetLibraryTitle}</p>
@@ -1936,14 +1951,18 @@ export default function DashboardPage() {
                     )}
                   </div>
                   {aiGeneratedWidgets.length === 0 ? (
-                    <div className="rounded-lg border border-dashed bg-background/60 p-4 text-sm text-muted-foreground">
+                    <div className="h-[360px] rounded-lg border border-dashed bg-background/60 p-4 text-sm text-muted-foreground">
                       {copy.aiWidgetLibraryEmpty}
                     </div>
                   ) : (
-                    <ScrollArea className="max-h-[360px] pr-2">
+                    <ScrollArea className="h-[360px] pr-2">
                       <div className="space-y-3">
                         {aiGeneratedWidgets.map((widget) => (
-                          <div key={widget.type} className="rounded-xl border bg-card/80 p-4">
+                          <div
+                            key={widget.type}
+                            id={`ai-widget-${widget.type}`}
+                            className="rounded-xl border bg-card/80 p-4"
+                          >
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <p className="text-sm font-semibold text-foreground">{widget.title}</p>
