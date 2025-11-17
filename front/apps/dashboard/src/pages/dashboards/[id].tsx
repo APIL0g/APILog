@@ -174,6 +174,7 @@ interface DashboardCopy {
   aiWidgetDescription: string
   aiWidgetRequirementLabel: string
   aiWidgetRequirementPlaceholder: string
+  aiWidgetRequirementHelper: string
   aiWidgetChartLabel: string
   aiWidgetChartPlaceholder: string
   aiWidgetGenerate: string
@@ -181,10 +182,15 @@ interface DashboardCopy {
   aiWidgetCancel: string
   aiWidgetErrorPrefix: string
   aiWidgetChartOptions: { value: DynamicChartType; label: string }[]
+  aiWidgetPromptTitle: string
+  aiWidgetPromptDescription: string
+  aiWidgetPromptExamples: { label: string; prompt: string }[]
   aiWidgetLibraryTitle: string
+  aiWidgetLibrarySubtitle: string
   aiWidgetLibraryEmpty: string
   aiWidgetAddToLayout: string
   aiWidgetRemove: string
+  aiWidgetNewBadge: string
 }
 
 interface TutorialStepCopy {
@@ -276,6 +282,7 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       "Describe the metric or audience you want to analyze. ApiLog will design the query, chart, and layout.",
     aiWidgetRequirementLabel: "What should the widget analyze?",
     aiWidgetRequirementPlaceholder: "e.g. Compare mobile vs desktop bounce rate for the last 7 days",
+    aiWidgetRequirementHelper: "Mention the metric, filters, and timeframe so the AI can craft the right SQL.",
     aiWidgetChartLabel: "Preferred chart type",
     aiWidgetChartPlaceholder: "Auto detect",
     aiWidgetGenerate: "Generate widget",
@@ -290,10 +297,28 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       { value: "table", label: "Table" },
       { value: "metric", label: "Metric" },
     ],
+    aiWidgetPromptTitle: "Need inspiration?",
+    aiWidgetPromptDescription: "Fill the prompt with one of these quick ideas.",
+    aiWidgetPromptExamples: [
+      {
+        label: "Weekly total logs",
+        prompt: "Show a bar chart of total count grouped by day for the last 7 days.",
+      },
+      {
+        label: "Today's total logs",
+        prompt: "Show today's total log_count as a single metric card.",
+      },
+      {
+        label: "Top landing pages",
+        prompt: "List the top 5 landing pages by count with their country_code for the last 24 hours.",
+      },
+    ],
     aiWidgetLibraryTitle: "Saved AI widgets",
+    aiWidgetLibrarySubtitle: "Widgets you generated stay here for easy reuse.",
     aiWidgetLibraryEmpty: "No AI widgets yet. Generate one to see it here.",
     aiWidgetAddToLayout: "Add to layout",
     aiWidgetRemove: "Remove",
+    aiWidgetNewBadge: "New",
   },
   ko: {
     tagline: "프리셋으로 레이아웃을 저장하고 다시 불러올 수 있어요.",
@@ -356,6 +381,7 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     aiWidgetDescription: "보고 싶은 지표나 비교를 한국어 또는 영어로 작성하면 ApiLog가 자동으로 위젯을 생성합니다.",
     aiWidgetRequirementLabel: "어떤 내용을 분석할까요?",
     aiWidgetRequirementPlaceholder: "예: 최근 7일 페이지별 전환율 비교",
+    aiWidgetRequirementHelper: "지표, 기간, 필터 조건을 구체적으로 적을수록 더 정확한 카드가 생성됩니다.",
     aiWidgetChartLabel: "선호 차트",
     aiWidgetChartPlaceholder: "자동 선택",
     aiWidgetGenerate: "AI로 만들기",
@@ -370,10 +396,28 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       { value: "table", label: "표" },
       { value: "metric", label: "지표 카드" },
     ],
+    aiWidgetPromptTitle: "예시 프롬프트",
+    aiWidgetPromptDescription: "눌러서 바로 요구사항에 채워보세요.",
+    aiWidgetPromptExamples: [
+      {
+        label: "주간 로그 합계",
+        prompt: "최근 7일 동안 하루 단위 log_count 합계를 막대 차트로 보여줘.",
+      },
+      {
+        label: "총 로그 수",
+        prompt: "최근 7일 동안 log_count 총합을 단일 지표 카드로 보여줘.",
+      },
+      {
+        label: "상위 랜딩 페이지",
+        prompt: "지난 24시간 동안 count 기준 상위 5개 랜딩 페이지와 country_code를 표로 보여줘.",
+      },
+    ],
     aiWidgetLibraryTitle: "AI 위젯 목록",
+    aiWidgetLibrarySubtitle: "생성된 위젯을 저장해두고 필요할 때 다시 불러올 수 있어요.",
     aiWidgetLibraryEmpty: "아직 생성된 AI 위젯이 없어요. 새로 만들면 여기에서 확인할 수 있습니다.",
     aiWidgetAddToLayout: "레이아웃에 추가",
     aiWidgetRemove: "삭제",
+    aiWidgetNewBadge: "신규",
   },
 }
 
@@ -865,6 +909,7 @@ export default function DashboardPage() {
   const legacyStorageKey = `dashboard-config-${dashboardId}`
   const activePreset = presets.find((preset) => preset.id === activePresetId) ?? presets[0]
   const copy = dashboardCopy[language]
+  const aiPromptExamples = copy.aiWidgetPromptExamples ?? []
   const fallbackTagLabels = dashboardCopy.en.widgetTagLabels
   const fallbackTagDescriptions = dashboardCopy.en.widgetTagDescriptions
   const widgetFilterOptions = widgetSections.map((section) => ({
@@ -1325,6 +1370,11 @@ export default function DashboardPage() {
     } finally {
       setIsGeneratingAiWidget(false)
     }
+  }
+
+  const handleApplyAiPrompt = (prompt: string) => {
+    setAiRequirement(prompt)
+    setAiWidgetError(null)
   }
 
   const handleAddAiWidgetFromLibrary = (widgetType: string) => {
@@ -1874,112 +1924,138 @@ export default function DashboardPage() {
               </div>
             </DialogContent>
           </Dialog>
-          <Dialog
-            open={isAiWidgetDialogOpen}
-            onOpenChange={(open) => {
-              setIsAiWidgetDialogOpen(open)
-              if (!open) {
-                setAiWidgetError(null)
-                setIsGeneratingAiWidget(false)
-                setRecentAiWidgetId(null)
-              }
-            }}
-          >
-            <DialogContent className="sm:max-w-3xl">
-              <DialogHeader>
-                <DialogTitle>{copy.aiWidgetTitle}</DialogTitle>
-                <DialogDescription>{copy.aiWidgetDescription}</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">{copy.aiWidgetRequirementLabel}</label>
-                    <Textarea
-                      value={aiRequirement}
-                      onChange={(event) => setAiRequirement(event.target.value)}
-                      placeholder={copy.aiWidgetRequirementPlaceholder}
-                      rows={4}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">{copy.aiWidgetChartLabel}</label>
-                    <Select
-                      value={aiPreferredChart || "auto"}
-                      onValueChange={(value) => setAiPreferredChart(value === "auto" ? "" : value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={copy.aiWidgetChartPlaceholder} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto">{copy.aiWidgetChartPlaceholder}</SelectItem>
-                        {copy.aiWidgetChartOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {aiWidgetError && <p className="text-sm text-destructive">{aiWidgetError}</p>}
-                  <div className="flex gap-2">
-                    <Button onClick={handleGenerateAiWidget} disabled={isGeneratingAiWidget} className="flex-1">
-                      {isGeneratingAiWidget ? copy.aiWidgetGenerating : copy.aiWidgetGenerate}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => {
-                        setIsAiWidgetDialogOpen(false)
-                        setAiWidgetError(null)
-                      }}
-                    >
-                      {copy.aiWidgetCancel}
-                    </Button>
-                  </div>
+        <Dialog
+          open={isAiWidgetDialogOpen}
+          onOpenChange={(open) => {
+            setIsAiWidgetDialogOpen(open)
+            if (!open) {
+              setAiWidgetError(null)
+              setIsGeneratingAiWidget(false)
+              setRecentAiWidgetId(null)
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>{copy.aiWidgetTitle}</DialogTitle>
+              <DialogDescription>{copy.aiWidgetDescription}</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)]">
+              <div className="space-y-5 rounded-2xl border bg-card/80 p-5 shadow-sm">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">{copy.aiWidgetRequirementLabel}</label>
+                  <p className="text-xs text-muted-foreground">{copy.aiWidgetRequirementHelper}</p>
                 </div>
-
-                <div className="flex flex-col space-y-3 rounded-xl border bg-muted/10 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{copy.aiWidgetLibraryTitle}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {copy.aiWidgetHint}
-                      </p>
+                <Textarea
+                  value={aiRequirement}
+                  onChange={(event) => setAiRequirement(event.target.value)}
+                  placeholder={copy.aiWidgetRequirementPlaceholder}
+                  className="min-h-[140px]"
+                />
+                {aiPromptExamples.length > 0 && (
+                  <div className="rounded-xl border bg-muted/20 p-4">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-semibold text-foreground">{copy.aiWidgetPromptTitle}</p>
+                      <p className="text-xs text-muted-foreground">{copy.aiWidgetPromptDescription}</p>
                     </div>
-                    {aiGeneratedWidgets.length > 0 && (
-                      <Badge variant="secondary">{aiGeneratedWidgets.length}</Badge>
-                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {aiPromptExamples.map((example) => (
+                        <button
+                          key={example.prompt}
+                          type="button"
+                          onClick={() => handleApplyAiPrompt(example.prompt)}
+                          className="rounded-full border border-border/70 bg-background px-3 py-1 text-xs font-medium text-muted-foreground transition hover:border-primary/60 hover:text-primary focus:border-primary/60 focus:text-primary focus:outline-none"
+                        >
+                          {example.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  {aiGeneratedWidgets.length === 0 ? (
-                    <div className="h-[360px] rounded-lg border border-dashed bg-background/60 p-4 text-sm text-muted-foreground">
-                      {copy.aiWidgetLibraryEmpty}
-                    </div>
-                  ) : (
-                    <ScrollArea className="h-[360px] pr-2">
-                      <div className="space-y-3">
-                        {aiGeneratedWidgets.map((widget) => (
+                )}
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">{copy.aiWidgetChartLabel}</label>
+                  <Select
+                    value={aiPreferredChart || "auto"}
+                    onValueChange={(value) => setAiPreferredChart(value === "auto" ? "" : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={copy.aiWidgetChartPlaceholder} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">{copy.aiWidgetChartPlaceholder}</SelectItem>
+                      {copy.aiWidgetChartOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {aiWidgetError && <p className="text-sm text-destructive">{aiWidgetError}</p>}
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button onClick={handleGenerateAiWidget} disabled={isGeneratingAiWidget} className="flex-1">
+                    {isGeneratingAiWidget ? copy.aiWidgetGenerating : copy.aiWidgetGenerate}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setIsAiWidgetDialogOpen(false)
+                      setAiWidgetError(null)
+                    }}
+                  >
+                    {copy.aiWidgetCancel}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-4 rounded-2xl border bg-card/80 p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{copy.aiWidgetLibraryTitle}</p>
+                    <p className="text-xs text-muted-foreground">{copy.aiWidgetLibrarySubtitle}</p>
+                  </div>
+                  {aiGeneratedWidgets.length > 0 && (
+                    <Badge variant="secondary">{aiGeneratedWidgets.length}</Badge>
+                  )}
+                </div>
+                {aiGeneratedWidgets.length === 0 ? (
+                  <div className="flex h-[360px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/10 px-6 text-center text-sm text-muted-foreground">
+                    <p>{copy.aiWidgetLibraryEmpty}</p>
+                  </div>
+                ) : (
+                  <ScrollArea className="h-[360px] pr-2">
+                    <div className="space-y-3">
+                      {aiGeneratedWidgets.map((widget) => {
+                        const isRecent = recentAiWidgetId === widget.type
+                        return (
                           <div
                             key={widget.type}
                             id={`ai-widget-${widget.type}`}
-                            className="rounded-xl border bg-card/80 p-4"
+                            className={`rounded-xl border bg-background/80 p-4 shadow-sm transition ${
+                              isRecent ? "ring-2 ring-primary/60" : "hover:border-primary/60"
+                            }`}
                           >
                             <div className="flex items-start justify-between gap-3">
-                              <div>
+                              <div className="space-y-1">
                                 <p className="text-sm font-semibold text-foreground">{widget.title}</p>
+                                {widget.description && (
+                                  <p className="text-xs text-muted-foreground">{widget.description}</p>
+                                )}
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-muted-foreground hover:text-destructive"
-                                onClick={() => handleRemoveAiWidgetFromLibrary(widget.type)}
-                                aria-label={copy.aiWidgetRemove}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                {isRecent && <Badge variant="secondary">{copy.aiWidgetNewBadge}</Badge>}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-muted-foreground hover:text-destructive"
+                                  onClick={() => handleRemoveAiWidgetFromLibrary(widget.type)}
+                                  aria-label={copy.aiWidgetRemove}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
-                            {widget.description && (
-                              <p className="mt-2 text-xs text-muted-foreground">{widget.description}</p>
-                            )}
                             <Button
                               variant="secondary"
                               size="sm"
@@ -1990,14 +2066,15 @@ export default function DashboardPage() {
                               {copy.aiWidgetAddToLayout}
                             </Button>
                           </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  )}
-                </div>
+                        )
+                      })}
+                    </div>
+                  </ScrollArea>
+                )}
               </div>
-            </DialogContent>
-          </Dialog>
+            </div>
+          </DialogContent>
+        </Dialog>
         </>
       )}
 
