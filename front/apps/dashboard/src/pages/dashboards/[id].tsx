@@ -8,6 +8,7 @@ import { WidgetHost } from "@/core/WidgetHost"
 import { widgetMetadata } from "@/core/registry"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog,
   DialogContent,
@@ -25,9 +26,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,6 +74,7 @@ import tutorialGifStep3En from "@/assets/dashboard-tutorial-3_en.gif"
 import tutorialGifStep1Kr from "@/assets/dashboard-tutorial-1_kr.gif"
 import tutorialGifStep2Kr from "@/assets/dashboard-tutorial-2_kr.gif"
 import tutorialGifStep3Kr from "@/assets/dashboard-tutorial-3_kr.gif"
+import examplePreviewFallback from "@plugins/widgets/example/preview.png"
 
 const ReactGridLayout = WidthProvider(RGL)
 
@@ -139,6 +141,10 @@ interface DashboardCopy {
   addWidgetConfirm: string
   addWidgetCancel: string
   addWidgetButtonAria: string
+  addWidgetFilterAll: string
+  addWidgetFilterEmpty: string
+  widgetTagLabels: Record<string, string>
+  widgetTagDescriptions: Record<string, string>
   languageLabel: string
   presetButtonPlaceholder: string
   presetMenuTitle: string
@@ -212,6 +218,26 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     addWidgetConfirm: "Add",
     addWidgetCancel: "Cancel",
     addWidgetButtonAria: "Add widget",
+    addWidgetFilterAll: "All widgets",
+    addWidgetFilterEmpty: "No widgets in this category yet.",
+    widgetTagLabels: {
+      ai: "AI Assist",
+      audience: "Audience",
+      traffic: "Traffic",
+      behavior: "On-site Behavior",
+      conversion: "Conversion",
+      samples: "Examples",
+      others: "Other Widgets",
+    },
+    widgetTagDescriptions: {
+      ai: "Automations that summarize your data for you.",
+      audience: "Who your visitors are and where they come from.",
+      traffic: "When traffic spikes and which pages lead the way.",
+      behavior: "How visitors interact with each screen.",
+      conversion: "CTA and button performance at a glance.",
+      samples: "Starter experiences you can duplicate or extend.",
+      others: "Additional widgets that don't fit a single category.",
+    },
     languageLabel: "Language",
     presetButtonPlaceholder: "Select preset",
     presetMenuTitle: "Presets",
@@ -238,7 +264,8 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     aiWidgetHint: "Ask AI",
     aiWidgetButtonAria: "Generate widget with AI",
     aiWidgetTitle: "Ask AI to build a widget",
-    aiWidgetDescription: "Describe the metric or audience you want to analyze. ApiLog will design the query, chart, and layout.",
+    aiWidgetDescription:
+      "Describe the metric or audience you want to analyze. ApiLog will design the query, chart, and layout.",
     aiWidgetRequirementLabel: "What should the widget analyze?",
     aiWidgetRequirementPlaceholder: "e.g. Compare mobile vs desktop bounce rate for the last 7 days",
     aiWidgetSiteLabel: "Site ID (optional)",
@@ -259,17 +286,37 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     ],
   },
   ko: {
-    tagline: "자주 쓰는 레이아웃을 프리셋으로 저장해 두세요.",
+    tagline: "프리셋으로 레이아웃을 저장하고 다시 불러올 수 있어요.",
     emptyTitle: "아직 위젯이 없어요",
-    emptySubtitle: "원하는 분석 카드들을 추가해서 나만의 대시보드를 만들어보세요.",
-    emptyCta: "첫 번째 위젯 추가",
+    emptySubtitle: "필요한 위젯을 추가하면서 나만의 대시보드를 만들어 보세요.",
+    emptyCta: "첫 번째 위젯 추가하기",
     addWidgetHint: "위젯 추가",
     addWidgetTitle: "위젯 추가",
-    addWidgetDescription: "대시보드에 배치할 위젯을 선택하세요.",
+    addWidgetDescription: "대시보드에 추가할 위젯 종류를 선택하세요.",
     addWidgetSelectPlaceholder: "위젯을 선택하세요...",
     addWidgetConfirm: "추가",
     addWidgetCancel: "취소",
     addWidgetButtonAria: "위젯 추가",
+    addWidgetFilterAll: "전체",
+    addWidgetFilterEmpty: "이 분류에는 아직 위젯이 없어요.",
+    widgetTagLabels: {
+      ai: "AI 도구",
+      audience: "방문자 통계",
+      traffic: "트래픽 흐름",
+      behavior: "사이트 행동",
+      conversion: "전환/CTA",
+      samples: "예시/도구",
+      others: "기타 위젯",
+    },
+    widgetTagDescriptions: {
+      ai: "AI가 데이터를 요약해 통찰을 제공합니다.",
+      audience: "방문자가 누구인지, 어디서 오는지 보여줘요.",
+      traffic: "트래픽이 언제, 어디서 몰리는지 확인해요.",
+      behavior: "사용자가 화면에서 어떻게 행동하는지 살펴봐요.",
+      conversion: "CTA·버튼 성과를 한눈에 파악하세요.",
+      samples: "복제해 확장할 수 있는 예시 위젯들입니다.",
+      others: "다른 카테고리에 속하지 않은 위젯 모음이에요.",
+    },
     languageLabel: "언어",
     presetButtonPlaceholder: "프리셋 선택",
     presetMenuTitle: "프리셋",
@@ -277,7 +324,7 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     saveChanges: "변경사항 저장",
     saveAsPreset: "프리셋으로 저장",
     actionsTitle: "작업",
-    renamePreset: "프리셋 이름 바꾸기",
+    renamePreset: "프리셋 이름 변경",
     deletePreset: "프리셋 삭제",
     unsavedBadge: "미저장",
     newLayout: "새 레이아웃",
@@ -286,13 +333,13 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     aiReport: "AI 리포트",
     cancelEdit: "취소",
     autoLayout: "자동 정렬",
-    autoLayoutTitle: "위젯을 자동으로 정렬합니다",
+    autoLayoutTitle: "위젯 자동 정렬",
     autoLayoutCompact: "콤팩트 그리드",
-    autoLayoutCompactDescription: "위젯의 기본 크기를 유지하며 빈 공간 없이 배치합니다.",
-    autoLayoutTwoColumn: "2열 균등",
-    autoLayoutTwoColumnDescription: "보고서처럼 2열로 나누어 균등하게 보여줍니다.",
-    autoLayoutThreeColumn: "3열 균등",
-    autoLayoutThreeColumnDescription: "작은 카드가 많을 때 3열로 한눈에 보기 좋습니다.",
+    autoLayoutCompactDescription: "위젯 기본 크기를 유지하면서 빈 공간 없이 촘촘하게 배치합니다.",
+    autoLayoutTwoColumn: "2열 균등 배치",
+    autoLayoutTwoColumnDescription: "모든 위젯을 두 열에 맞춰 같은 너비로 정렬합니다.",
+    autoLayoutThreeColumn: "3열 균등 배치",
+    autoLayoutThreeColumnDescription: "작은 카드가 많을 때 3열로 나눠 빠르게 훑어볼 수 있게 합니다.",
     aiWidgetHint: "AI 위젯",
     aiWidgetButtonAria: "AI 위젯 생성",
     aiWidgetTitle: "AI에게 위젯 만들기 요청",
@@ -383,15 +430,27 @@ const widgetTitleProviders: Record<string, (language: LanguageCode) => string> =
   visitor_stat: (language) => getVisitorsStatCopy(language).title,
 }
 
-const localizedWidgetNames: Record<LanguageCode, Record<string, string>> = {
+const providerLocalizedWidgetNames: Record<LanguageCode, Record<string, string>> = {
   en: {},
   ko: {},
 }
 
 Object.entries(widgetTitleProviders).forEach(([widgetId, getTitle]) => {
-  localizedWidgetNames.en[widgetId] = getTitle("en")
-  localizedWidgetNames.ko[widgetId] = getTitle("ko")
+  providerLocalizedWidgetNames.en[widgetId] = getTitle("en")
+  providerLocalizedWidgetNames.ko[widgetId] = getTitle("ko")
 })
+
+const SUPPORTED_LANGUAGES: LanguageCode[] = ["en", "ko"]
+
+const widgetTagOrder = ["ai", "audience", "traffic", "behavior", "conversion", "samples", "others"] as const
+const DEFAULT_WIDGET_TAG = "others"
+
+const widgetDescriptionFallback: Record<LanguageCode, string> = {
+  en: "Description coming soon.",
+  ko: "곧 설명이 추가될 예정이에요.",
+}
+
+const defaultWidgetPreview = examplePreviewFallback
 
 const LANGUAGE_STORAGE_KEY = "dashboard-language"
 
@@ -607,7 +666,8 @@ export default function DashboardPage() {
   const [aiPreferredChart, setAiPreferredChart] = useState<string>("")
   const [isGeneratingAiWidget, setIsGeneratingAiWidget] = useState(false)
   const [aiWidgetError, setAiWidgetError] = useState<string | null>(null)
-  const [selectedWidgetType, setSelectedWidgetType] = useState<string>("")
+  const [selectedWidgetIds, setSelectedWidgetIds] = useState<string[]>([])
+  const [widgetTagFilter, setWidgetTagFilter] = useState<string>("all")
   const timeRange = "12h"
   const [isEditMode, setIsEditMode] = useState(false)
   const [presets, setPresets] = useState<DashboardConfig[]>([])
@@ -641,10 +701,105 @@ export default function DashboardPage() {
     if (b.id === "example") return -1
     return 0
   })
+  const { localizedNames, localizedDescriptions } = useMemo(() => {
+    const names: Record<LanguageCode, Record<string, string>> = {
+      en: {},
+      ko: {},
+    }
+    const descriptions: Record<LanguageCode, Record<string, string>> = {
+      en: {},
+      ko: {},
+    }
+
+    Object.values(widgetMetadata).forEach((meta) => {
+      SUPPORTED_LANGUAGES.forEach((lang) => {
+        const localized = meta.localizations?.[lang]
+        if (localized?.title) {
+          names[lang][meta.id] = localized.title
+        }
+        if (localized?.previewDescription) {
+          descriptions[lang][meta.id] = localized.previewDescription
+        }
+      })
+
+      if (!names.en[meta.id]) {
+        names.en[meta.id] = meta.name ?? meta.id
+      }
+
+      if (!descriptions.en[meta.id] && meta.description) {
+        descriptions.en[meta.id] = meta.description
+      }
+    })
+
+    SUPPORTED_LANGUAGES.forEach((lang) => {
+      Object.keys(names.en).forEach((widgetId) => {
+        if (!names[lang][widgetId]) {
+          names[lang][widgetId] = names.en[widgetId]
+        }
+      })
+      Object.keys(descriptions.en).forEach((widgetId) => {
+        if (!descriptions[lang][widgetId] && descriptions.en[widgetId]) {
+          descriptions[lang][widgetId] = descriptions.en[widgetId]
+        }
+      })
+    })
+
+    return { localizedNames: names, localizedDescriptions: descriptions }
+  }, [widgetMetadataKey])
+  const localizedWidgetDescriptions = localizedDescriptions
+  const localizedWidgetNames = useMemo(() => {
+    const merged: Record<LanguageCode, Record<string, string>> = {
+      en: { ...localizedNames.en },
+      ko: { ...localizedNames.ko },
+    }
+
+    SUPPORTED_LANGUAGES.forEach((lang) => {
+      merged[lang] = {
+        ...merged[lang],
+        ...providerLocalizedWidgetNames[lang],
+      }
+    })
+
+    return merged
+  }, [localizedNames])
+  const widgetSections = useMemo<{ tag: string; widgets: typeof sortedAvailableWidgets }[]>(() => {
+    const groups: Record<string, typeof sortedAvailableWidgets> = {}
+    sortedAvailableWidgets.forEach((meta) => {
+      const primaryTag = meta.tags?.[0] ?? DEFAULT_WIDGET_TAG
+      if (!groups[primaryTag]) {
+        groups[primaryTag] = []
+      }
+      groups[primaryTag].push(meta)
+    })
+
+    const ordered = widgetTagOrder
+      .map<{ tag: string; widgets: typeof sortedAvailableWidgets }>((tag) => ({
+        tag,
+        widgets: groups[tag] ?? [],
+      }))
+      .filter((section) => section.widgets.length > 0)
+
+    const knownTags = new Set<string>(widgetTagOrder as readonly string[])
+    Object.entries(groups).forEach(([tag, widgets]) => {
+      if (!knownTags.has(tag) && widgets.length > 0) {
+        ordered.push({ tag, widgets })
+      }
+    })
+
+    return ordered
+  }, [sortedAvailableWidgets])
+
+  const visibleWidgetSections = widgetTagFilter === "all" ? widgetSections : widgetSections.filter((section) => section.tag === widgetTagFilter)
   const presetStorageKey = `dashboard-presets-${dashboardId}`
   const legacyStorageKey = `dashboard-config-${dashboardId}`
   const activePreset = presets.find((preset) => preset.id === activePresetId) ?? presets[0]
   const copy = dashboardCopy[language]
+  const fallbackTagLabels = dashboardCopy.en.widgetTagLabels
+  const fallbackTagDescriptions = dashboardCopy.en.widgetTagDescriptions
+  const widgetFilterOptions = widgetSections.map((section) => ({
+    tag: section.tag,
+    label: copy.widgetTagLabels[section.tag] ?? fallbackTagLabels[section.tag] ?? section.tag,
+  }))
   const tutorialContent = tutorialDialogCopy[language]
   const tutorialGifSources = tutorialGifSourcesByLanguage[language] ?? tutorialGifSourcesByLanguage.en
   const tutorialSlides = useMemo(
@@ -719,7 +874,7 @@ export default function DashboardPage() {
     }
 
     applyState([defaultPreset], defaultPreset.id)
-  }, [dashboardId, legacyStorageKey, presetStorageKey])
+  }, [dashboardId, legacyStorageKey, presetStorageKey, widgetMetadataKey])
 
   useEffect(() => {
     if (!isHydrated) return
@@ -736,17 +891,9 @@ export default function DashboardPage() {
   }, [activePresetId, isHydrated, legacyStorageKey, presetStorageKey, presets])
 
   useEffect(() => {
-    if (!selectedWidgetType) {
-      if (sortedAvailableWidgets.length > 0) {
-        setSelectedWidgetType(sortedAvailableWidgets[0].id)
-      }
-    }
-  }, [selectedWidgetType, widgetMetadataKey])
-
-  useEffect(() => {
     if (!isEditMode && isAddingWidget) {
       setIsAddingWidget(false)
-      setSelectedWidgetType("")
+      setSelectedWidgetIds([])
     }
   }, [isEditMode, isAddingWidget])
 
@@ -993,52 +1140,81 @@ export default function DashboardPage() {
     setEditSnapshot(null)
   }
 
-  const addWidgetByType = (widgetType?: string, overrideConfig?: Record<string, any>) => {
-    if (!widgetType) return false
-    const meta = widgetMetadata[widgetType]
-    if (!meta) {
-      console.warn("[dashboard] Unknown widget type:", widgetType)
-      return false
-    }
+  const appendWidgets = (entries: { type: string; config?: Record<string, any> }[]) => {
+    if (entries.length === 0) return false
+
+    let added = false
 
     setDashboard((prev) => {
       if (!prev) return prev
 
-      const fallbackLayout = createFallbackLayout(
-        prev.widgets.length,
-        meta?.defaultWidth ?? 400,
-        meta?.defaultHeight ?? 300,
-      )
-      const nextY = prev.widgets.reduce(
+      const createdAt = Date.now()
+      const startingPosition = prev.widgets.length
+      let nextY = prev.widgets.reduce(
         (max, widget) => Math.max(max, (widget.layout?.y ?? 0) + (widget.layout?.h ?? DEFAULT_WIDGET_H)),
         0,
       )
-      const layout = sanitizeLayout({ ...fallbackLayout, y: nextY }, fallbackLayout)
 
-      const newWidget: Widget = {
-        id: `widget-${Date.now()}`,
-        type: widgetType,
-        position: prev.widgets.length,
-        layout,
-        config: overrideConfig ?? meta?.defaultConfig,
+      const newWidgets: Widget[] = []
+
+      entries.forEach((entry, index) => {
+        const meta = widgetMetadata[entry.type]
+        if (!meta) {
+          return
+        }
+
+        const fallbackLayout = createFallbackLayout(
+          startingPosition + newWidgets.length,
+          meta?.defaultWidth ?? 400,
+          meta?.defaultHeight ?? 300,
+        )
+        const layout = sanitizeLayout({ ...fallbackLayout, y: nextY }, fallbackLayout)
+        nextY = layout.y + layout.h
+
+        newWidgets.push({
+          id: `widget-${createdAt + index}`,
+          type: entry.type,
+          position: startingPosition + newWidgets.length,
+          layout,
+          config: entry.config ?? meta?.defaultConfig,
+        })
+      })
+
+      if (newWidgets.length === 0) {
+        return prev
       }
 
+      added = true
       return {
         ...prev,
-        widgets: [...prev.widgets, newWidget],
+        widgets: [...prev.widgets, ...newWidgets],
       }
     })
 
-    setHasUnsavedChanges(true)
-    return true
+    if (added) {
+      setHasUnsavedChanges(true)
+    }
+
+    return added
   }
 
   const handleAddWidget = () => {
-    if (!selectedWidgetType) return
-    if (addWidgetByType(selectedWidgetType)) {
-      setIsAddingWidget(false)
-      setSelectedWidgetType("")
-    }
+    if (selectedWidgetIds.length === 0) return
+
+    const added = appendWidgets(selectedWidgetIds.map((widgetId) => ({ type: widgetId })))
+    if (!added) return
+
+    setIsAddingWidget(false)
+    setSelectedWidgetIds([])
+  }
+
+  const toggleWidgetSelection = (widgetId: string) => {
+    setSelectedWidgetIds((prev) => {
+      if (prev.includes(widgetId)) {
+        return prev.filter((id) => id !== widgetId)
+      }
+      return [...prev, widgetId]
+    })
   }
 
   const handleGenerateAiWidget = async () => {
@@ -1057,7 +1233,7 @@ export default function DashboardPage() {
         preferred_chart: (aiPreferredChart || undefined) as DynamicChartType | undefined,
       })
       const widgetType = registerDynamicWidget(spec)
-      const added = addWidgetByType(widgetType)
+      const added = appendWidgets([{ type: widgetType }])
       if (!added) {
         setAiWidgetError(copy.aiWidgetErrorPrefix)
         return
@@ -1463,36 +1639,141 @@ export default function DashboardPage() {
             onOpenChange={(open) => {
               setIsAddingWidget(open)
               if (!open) {
-                setSelectedWidgetType("")
+                setSelectedWidgetIds([])
+                setWidgetTagFilter("all")
               }
             }}
           >
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="w-full max-w-[80vw] xl:max-w-[1200px]">
               <DialogHeader>
                 <DialogTitle>{copy.addWidgetTitle}</DialogTitle>
                 <DialogDescription>{copy.addWidgetDescription}</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
-                <Select value={selectedWidgetType} onValueChange={setSelectedWidgetType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={copy.addWidgetSelectPlaceholder} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sortedAvailableWidgets.map((meta) => (
-                      <SelectItem key={meta.id} value={meta.id}>
-                        {localizedWidgetNames[language]?.[meta.id] ?? meta.name ?? meta.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex gap-2">
-                  <Button onClick={handleAddWidget} disabled={!selectedWidgetType} className="flex-1">
-                    {copy.addWidgetConfirm}
+                <p className="text-sm text-muted-foreground">{copy.addWidgetSelectPlaceholder}</p>
+                <div className="flex flex-wrap gap-2 overflow-x-auto pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setWidgetTagFilter("all")}
+                    className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+                      widgetTagFilter === "all"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-background text-muted-foreground hover:border-primary/50"
+                    }`}
+                  >
+                    {copy.addWidgetFilterAll}
+                  </button>
+                  {widgetFilterOptions.map((option) => (
+                    <button
+                      key={`filter-${option.tag}`}
+                      type="button"
+                      onClick={() => setWidgetTagFilter(option.tag)}
+                      className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+                        widgetTagFilter === option.tag
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/50"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <ScrollArea className="h-[55vh] pr-2">
+                  <div className="space-y-8">
+                    {visibleWidgetSections.length === 0 && (
+                      <div className="text-sm text-muted-foreground">{copy.addWidgetFilterEmpty}</div>
+                    )}
+                    {visibleWidgetSections.map(({ tag, widgets }) => {
+                      const sectionLabel = copy.widgetTagLabels[tag] ?? fallbackTagLabels[tag] ?? tag
+                      const sectionDescription = copy.widgetTagDescriptions[tag] ?? fallbackTagDescriptions[tag]
+                      return (
+                        <section key={`widget-tag-${tag}`} className="space-y-4">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between">
+                              <p className="text-base font-semibold text-foreground">{sectionLabel}</p>
+                              <span className="text-sm text-muted-foreground">{widgets.length}</span>
+                            </div>
+                            {sectionDescription && (
+                              <p className="text-sm text-muted-foreground">{sectionDescription}</p>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            {widgets.map((meta) => {
+                              const widgetId = meta.id
+                              const displayName = localizedWidgetNames[language]?.[widgetId] ?? meta.name ?? widgetId
+                              const description =
+                                localizedWidgetDescriptions[language]?.[widgetId] ??
+                                meta.description ??
+                                widgetDescriptionFallback[language]
+                              const previewImage = meta.previewImage ?? defaultWidgetPreview
+                              const isSelected = selectedWidgetIds.includes(widgetId)
+                              const widgetTags = meta.tags ?? []
+                              return (
+                                <button
+                                  key={widgetId}
+                                  type="button"
+                                  onClick={() => toggleWidgetSelection(widgetId)}
+                                  className="text-left w-full"
+                                  aria-pressed={isSelected}
+                                >
+                                  <div
+                                    className={`flex h-full flex-col gap-3 rounded-2xl border bg-card/80 p-3 transition hover:border-primary/70 hover:shadow-lg ${
+                                      isSelected ? "border-primary ring-2 ring-primary ring-offset-2 ring-offset-background" : "border-border"
+                                    }`}
+                                  >
+                                    <div className="relative overflow-hidden rounded-xl border bg-background/60 h-65">
+                                      <img
+                                        src={previewImage}
+                                        alt={`${displayName} preview`}
+                                        className="h-full w-full object-contain"
+                                        loading="lazy"
+                                      />
+                                      <div className="absolute inset-x-4 bottom-3 rounded-full bg-background/70 px-4 py-1.5 text-sm font-medium uppercase tracking-wide text-muted-foreground">
+                                        {widgetId.replace(/-/g, " ")}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <p className="text-base font-semibold text-foreground">{displayName}</p>
+                                        <p className="text-sm text-muted-foreground">{widgetId}</p>
+                                      </div>
+                                      {isSelected && <Check className="h-5 w-5 text-primary" />}
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">{description}</p>
+                                    {widgetTags.length > 0 && (
+                                      <div className="flex flex-wrap gap-2 text-xs uppercase text-muted-foreground">
+                                        {widgetTags.map((tagValue) => (
+                                          <span
+                                            key={`${widgetId}-${tagValue}`}
+                                            className="rounded-full border border-border/70 px-2 py-0.5"
+                                          >
+                                            {copy.widgetTagLabels[tagValue] ??
+                                              fallbackTagLabels[tagValue] ??
+                                              tagValue}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </section>
+                      )
+                    })}
+                  </div>
+                </ScrollArea>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button onClick={handleAddWidget} disabled={selectedWidgetIds.length === 0} className="flex-1">
+                    {selectedWidgetIds.length > 0
+                      ? `${copy.addWidgetConfirm} (${selectedWidgetIds.length})`
+                      : copy.addWidgetConfirm}
                   </Button>
                   <Button
                     onClick={() => {
                       setIsAddingWidget(false)
-                      setSelectedWidgetType("")
+                      setSelectedWidgetIds([])
                     }}
                     variant="outline"
                     className="flex-1"
