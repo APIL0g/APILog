@@ -112,7 +112,6 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER}
       LLM_ENDPOINT: ${LLM_ENDPOINT}
       LLM_MODEL: ${LLM_MODEL}
-      LLM_API_KEY: ${LLM_API_KEY}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE}
       LLM_TIMEOUT_S: ${LLM_TIMEOUT_S}
@@ -225,7 +224,7 @@ services:
         if [ -n "$LLM_MODEL" ]; then
           ollama pull "$LLM_MODEL" || echo "Warning: failed to pull $LLM_MODEL"
         fi
-        wait $PID
+        wait $$PID
 
     restart: unless-stopped
     gpus: all

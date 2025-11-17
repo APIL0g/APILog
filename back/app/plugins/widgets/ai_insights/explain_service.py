@@ -15,7 +15,6 @@ from fastapi import HTTPException
 
 from config import (
     AI_INSIGHTS_EXPLAIN_CACHE_TTL,
-    LLM_API_KEY,
     LLM_ENDPOINT,
     LLM_MAX_TOKENS,
     LLM_MODEL,
@@ -30,7 +29,6 @@ log = logging.getLogger("ai_insights")
 # Cache TTL for explain results (seconds). Set to 0 to disable caching.
 EXPLAIN_CACHE_TTL_S = AI_INSIGHTS_EXPLAIN_CACHE_TTL
 _cache = TTLCache(maxsize=256, ttl=max(0, EXPLAIN_CACHE_TTL_S))
-
 
 # ---- Utils ----
 def _now_iso() -> str:
@@ -167,47 +165,6 @@ def _status_insight(message: str, code: str) -> Dict[str, Any]:
         "meta": {"fallback": code, "provider": LLM_PROVIDER, "model": LLM_MODEL},
     }
 
-# ---- Rule fallback (minimal insights) ----
-def _rule_based_insights(digest: Dict[str, Any]) -> Dict[str, Any]:
-    series = digest.get("series", {})
-    pv = series.get("pageviews", [])
-    err = series.get("error_rate", [])
-    top_paths = digest.get("top_paths", [])
-    insights: List[Dict[str, Any]] = []
-    if pv:
-        peak = max(pv, key=lambda x: x.get("v", 0))
-        insights.append({
-            "title": "트래픽 피크",
-            "severity": "low",
-            "metric_refs": [f"pageviews@{peak.get('t')}"],
-            "evidence": {"peak": peak},
-            "explanation": "해당 구간의 페이지뷰가 최고치입니다. 배포/캠페인 여부 확인 권장.",
-            "action": "피크 전후 유입 경로 비교"
-        })
-    if err:
-        worst = max(err, key=lambda x: x.get("v", 0.0))
-        sev = "high" if worst.get("v", 0.0) > 0.05 else ("medium" if worst.get("v", 0.0) > 0.02 else "low")
-        insights.append({
-            "title": "에러율 고점",
-            "severity": sev,
-            "metric_refs": [f"error_rate@{worst.get('t')}"],
-            "evidence": {"max_error_rate": round(worst.get("v", 0.0), 4)},
-            "explanation": "해당 구간에서 에러율이 평소보다 높습니다.",
-            "action": "구간 로그 샘플링 및 코드/상태코드 확인"
-        })
-    if top_paths:
-        top = top_paths[0]
-        insights.append({
-            "title": "상위 경로 집중",
-            "severity": "low",
-            "metric_refs": [f"path:{top.get('path','/')}"],
-            "evidence": {"path": top.get("path", "/"), "pv": top.get("pv", 0)},
-            "explanation": "특정 경로로 트래픽이 집중됩니다.",
-            "action": "해당 경로의 성능/환경제어 점검"
-        })
-    return {"generated_at": _now_iso(), "insights": insights, "meta": {"mode": "rule"}}
-
-
 # ---- Prompt builder ----
 def _compact_digest(digest: Dict[str, Any], max_points: int = None, top_n_paths: int = None) -> Dict[str, Any]:
     try:
@@ -274,8 +231,6 @@ def _build_messages(digest: Dict[str, Any], language: str, word_limit: int, audi
 def _call_openai_compatible(messages: List[Dict[str, str]]) -> str:
     url = (LLM_ENDPOINT or "").rstrip("/") + "/v1/chat/completions"
     headers = {"Content-Type": "application/json"}
-    if LLM_API_KEY:
-        headers["Authorization"] = f"Bearer {LLM_API_KEY}"
     payload = {
         "model": LLM_MODEL,
         "messages": messages,
@@ -340,10 +295,6 @@ def generate_insights(digest: Dict[str, Any], language: str, word_limit: int, au
         return _cache[key]
 
     messages = _build_messages(digest, language, word_limit, audience)
-    try:
-        log.info("[ai] provider=%s model=%s endpoint=%s", LLM_PROVIDER, LLM_MODEL, LLM_ENDPOINT)
-    except Exception:
-        pass
 
     try:
         if LLM_PROVIDER in ("vllm", "openai_compat", "openai"):
