@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import RGL, { WidthProvider, type Layout } from "react-grid-layout"
 import "react-grid-layout/css/styles.css"
 import "react-resizable/css/styles.css"
@@ -174,8 +174,6 @@ interface DashboardCopy {
   aiWidgetDescription: string
   aiWidgetRequirementLabel: string
   aiWidgetRequirementPlaceholder: string
-  aiWidgetSiteLabel: string
-  aiWidgetSitePlaceholder: string
   aiWidgetChartLabel: string
   aiWidgetChartPlaceholder: string
   aiWidgetGenerate: string
@@ -183,6 +181,10 @@ interface DashboardCopy {
   aiWidgetCancel: string
   aiWidgetErrorPrefix: string
   aiWidgetChartOptions: { value: DynamicChartType; label: string }[]
+  aiWidgetLibraryTitle: string
+  aiWidgetLibraryEmpty: string
+  aiWidgetAddToLayout: string
+  aiWidgetRemove: string
 }
 
 interface TutorialStepCopy {
@@ -203,6 +205,12 @@ interface EditSnapshot {
   dashboard: DashboardConfig | null
   activePresetId: string | null
   isNewPresetDraft: boolean
+}
+
+interface AiGeneratedWidgetListItem {
+  type: string
+  title: string
+  description?: string
 }
 
 const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
@@ -268,8 +276,6 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       "Describe the metric or audience you want to analyze. ApiLog will design the query, chart, and layout.",
     aiWidgetRequirementLabel: "What should the widget analyze?",
     aiWidgetRequirementPlaceholder: "e.g. Compare mobile vs desktop bounce rate for the last 7 days",
-    aiWidgetSiteLabel: "Site ID (optional)",
-    aiWidgetSitePlaceholder: "main-site",
     aiWidgetChartLabel: "Preferred chart type",
     aiWidgetChartPlaceholder: "Auto detect",
     aiWidgetGenerate: "Generate widget",
@@ -284,6 +290,10 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       { value: "table", label: "Table" },
       { value: "metric", label: "Metric" },
     ],
+    aiWidgetLibraryTitle: "Saved AI widgets",
+    aiWidgetLibraryEmpty: "No AI widgets yet. Generate one to see it here.",
+    aiWidgetAddToLayout: "Add to layout",
+    aiWidgetRemove: "Remove",
   },
   ko: {
     tagline: "프리셋으로 레이아웃을 저장하고 다시 불러올 수 있어요.",
@@ -346,8 +356,6 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
     aiWidgetDescription: "보고 싶은 지표나 비교를 한국어 또는 영어로 작성하면 ApiLog가 자동으로 위젯을 생성합니다.",
     aiWidgetRequirementLabel: "어떤 내용을 분석할까요?",
     aiWidgetRequirementPlaceholder: "예: 최근 7일 페이지별 전환율 비교",
-    aiWidgetSiteLabel: "사이트 ID (선택)",
-    aiWidgetSitePlaceholder: "예: main-site",
     aiWidgetChartLabel: "선호 차트",
     aiWidgetChartPlaceholder: "자동 선택",
     aiWidgetGenerate: "AI로 만들기",
@@ -362,6 +370,10 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       { value: "table", label: "표" },
       { value: "metric", label: "지표 카드" },
     ],
+    aiWidgetLibraryTitle: "AI 위젯 목록",
+    aiWidgetLibraryEmpty: "아직 생성된 AI 위젯이 없어요. 새로 만들면 여기에서 확인할 수 있습니다.",
+    aiWidgetAddToLayout: "레이아웃에 추가",
+    aiWidgetRemove: "삭제",
   },
 }
 
@@ -662,12 +674,14 @@ export default function DashboardPage() {
   const [isAddingWidget, setIsAddingWidget] = useState(false)
   const [isAiWidgetDialogOpen, setIsAiWidgetDialogOpen] = useState(false)
   const [aiRequirement, setAiRequirement] = useState("")
-  const [aiSiteId, setAiSiteId] = useState("")
   const [aiPreferredChart, setAiPreferredChart] = useState<string>("")
   const [isGeneratingAiWidget, setIsGeneratingAiWidget] = useState(false)
   const [aiWidgetError, setAiWidgetError] = useState<string | null>(null)
   const [selectedWidgetIds, setSelectedWidgetIds] = useState<string[]>([])
+  const [aiGeneratedWidgets, setAiGeneratedWidgets] = useState<AiGeneratedWidgetListItem[]>([])
+  const [hiddenAiWidgetTypes, setHiddenAiWidgetTypes] = useState<string[]>([])
   const [widgetTagFilter, setWidgetTagFilter] = useState<string>("all")
+  const [recentAiWidgetId, setRecentAiWidgetId] = useState<string | null>(null)
   const timeRange = "12h"
   const [isEditMode, setIsEditMode] = useState(false)
   const [presets, setPresets] = useState<DashboardConfig[]>([])
@@ -701,6 +715,14 @@ export default function DashboardPage() {
     if (b.id === "example") return -1
     return 0
   })
+  const staticWidgetMetas = useMemo(
+    () => sortedAvailableWidgets.filter((meta) => !meta.id.startsWith("dynamic:")),
+    [sortedAvailableWidgets],
+  )
+  const dynamicWidgetMetas = useMemo(
+    () => sortedAvailableWidgets.filter((meta) => meta.id.startsWith("dynamic:")),
+    [sortedAvailableWidgets],
+  )
   const { localizedNames, localizedDescriptions } = useMemo(() => {
     const names: Record<LanguageCode, Record<string, string>> = {
       en: {},
@@ -762,9 +784,58 @@ export default function DashboardPage() {
 
     return merged
   }, [localizedNames])
+  useEffect(() => {
+    const metaMap = new Map(dynamicWidgetMetas.map((meta) => [meta.id, meta]))
+    setAiGeneratedWidgets((prev) => {
+      const existing = new Set(prev.map((item) => item.type))
+      const hiddenSet = new Set(hiddenAiWidgetTypes)
+      let changed = false
+      const next = prev.map((item) => {
+        const meta = metaMap.get(item.type)
+        if (!meta) {
+          return item
+        }
+        const nextTitle = localizedWidgetNames[language]?.[meta.id] ?? meta.name ?? meta.id
+        const nextDescription =
+          localizedWidgetDescriptions[language]?.[meta.id] ?? meta.description ?? undefined
+        if (item.title !== nextTitle || item.description !== nextDescription) {
+          changed = true
+          return { ...item, title: nextTitle, description: nextDescription }
+        }
+        return item
+      })
+      metaMap.forEach((meta, id) => {
+        if (hiddenSet.has(id) || existing.has(id)) {
+          return
+        }
+        next.push({
+          type: id,
+          title: localizedWidgetNames[language]?.[id] ?? meta.name ?? id,
+          description: localizedWidgetDescriptions[language]?.[id] ?? meta.description ?? undefined,
+        })
+        changed = true
+      })
+      return changed ? next : prev
+    })
+  }, [
+    dynamicWidgetMetas,
+    hiddenAiWidgetTypes,
+    language,
+    localizedWidgetDescriptions,
+    localizedWidgetNames,
+  ])
+
+  useEffect(() => {
+    if (!recentAiWidgetId || !isAiWidgetDialogOpen) return
+    if (typeof document === "undefined") return
+    const target = document.getElementById(`ai-widget-${recentAiWidgetId}`)
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    }
+  }, [recentAiWidgetId, isAiWidgetDialogOpen])
   const widgetSections = useMemo<{ tag: string; widgets: typeof sortedAvailableWidgets }[]>(() => {
     const groups: Record<string, typeof sortedAvailableWidgets> = {}
-    sortedAvailableWidgets.forEach((meta) => {
+    staticWidgetMetas.forEach((meta) => {
       const primaryTag = meta.tags?.[0] ?? DEFAULT_WIDGET_TAG
       if (!groups[primaryTag]) {
         groups[primaryTag] = []
@@ -787,7 +858,7 @@ export default function DashboardPage() {
     })
 
     return ordered
-  }, [sortedAvailableWidgets])
+  }, [staticWidgetMetas])
 
   const visibleWidgetSections = widgetTagFilter === "all" ? widgetSections : widgetSections.filter((section) => section.tag === widgetTagFilter)
   const presetStorageKey = `dashboard-presets-${dashboardId}`
@@ -1229,26 +1300,45 @@ export default function DashboardPage() {
       const spec = await generateDynamicWidget({
         requirement,
         language,
-        site_id: aiSiteId.trim() || undefined,
         preferred_chart: (aiPreferredChart || undefined) as DynamicChartType | undefined,
       })
       const widgetType = registerDynamicWidget(spec)
-      const added = appendWidgets([{ type: widgetType }])
-      if (!added) {
-        setAiWidgetError(copy.aiWidgetErrorPrefix)
-        return
-      }
-      setIsAiWidgetDialogOpen(false)
+      setHiddenAiWidgetTypes((prev) => prev.filter((id) => id !== widgetType))
+      setAiGeneratedWidgets((prev) => {
+        const next = prev.filter((item) => item.type !== widgetType)
+        return [
+          ...next,
+          {
+            type: widgetType,
+            title: spec.title ?? widgetType,
+            description: spec.description ?? undefined,
+          },
+        ]
+      })
+      setRecentAiWidgetId(widgetType)
+      setAiWidgetError(null)
       setAiRequirement("")
       setAiPreferredChart("")
-      if (spec.site_id) {
-        setAiSiteId(spec.site_id)
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setAiWidgetError(`${copy.aiWidgetErrorPrefix}: ${message}`)
     } finally {
       setIsGeneratingAiWidget(false)
+    }
+  }
+
+  const handleAddAiWidgetFromLibrary = (widgetType: string) => {
+    const added = appendWidgets([{ type: widgetType }])
+    if (!added) {
+      setAiWidgetError(copy.aiWidgetErrorPrefix)
+    }
+  }
+
+  const handleRemoveAiWidgetFromLibrary = (widgetType: string) => {
+    setAiGeneratedWidgets((prev) => prev.filter((widget) => widget.type !== widgetType))
+    setHiddenAiWidgetTypes((prev) => (prev.includes(widgetType) ? prev : [...prev, widgetType]))
+    if (recentAiWidgetId === widgetType) {
+      setRecentAiWidgetId(null)
     }
   }
 
@@ -1791,31 +1881,24 @@ export default function DashboardPage() {
               if (!open) {
                 setAiWidgetError(null)
                 setIsGeneratingAiWidget(false)
+                setRecentAiWidgetId(null)
               }
             }}
           >
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-3xl">
               <DialogHeader>
                 <DialogTitle>{copy.aiWidgetTitle}</DialogTitle>
                 <DialogDescription>{copy.aiWidgetDescription}</DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">{copy.aiWidgetRequirementLabel}</label>
-                  <Textarea
-                    value={aiRequirement}
-                    onChange={(event) => setAiRequirement(event.target.value)}
-                    placeholder={copy.aiWidgetRequirementPlaceholder}
-                    rows={4}
-                  />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+                <div className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-sm font-medium">{copy.aiWidgetSiteLabel}</label>
-                    <Input
-                      value={aiSiteId}
-                      onChange={(event) => setAiSiteId(event.target.value)}
-                      placeholder={copy.aiWidgetSitePlaceholder}
+                    <label className="text-sm font-medium">{copy.aiWidgetRequirementLabel}</label>
+                    <Textarea
+                      value={aiRequirement}
+                      onChange={(event) => setAiRequirement(event.target.value)}
+                      placeholder={copy.aiWidgetRequirementPlaceholder}
+                      rows={4}
                     />
                   </div>
                   <div className="space-y-1">
@@ -1837,22 +1920,81 @@ export default function DashboardPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {aiWidgetError && <p className="text-sm text-destructive">{aiWidgetError}</p>}
+                  <div className="flex gap-2">
+                    <Button onClick={handleGenerateAiWidget} disabled={isGeneratingAiWidget} className="flex-1">
+                      {isGeneratingAiWidget ? copy.aiWidgetGenerating : copy.aiWidgetGenerate}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        setIsAiWidgetDialogOpen(false)
+                        setAiWidgetError(null)
+                      }}
+                    >
+                      {copy.aiWidgetCancel}
+                    </Button>
+                  </div>
                 </div>
-                {aiWidgetError && <p className="text-sm text-destructive">{aiWidgetError}</p>}
-                <div className="flex gap-2">
-                  <Button onClick={handleGenerateAiWidget} disabled={isGeneratingAiWidget} className="flex-1">
-                    {isGeneratingAiWidget ? copy.aiWidgetGenerating : copy.aiWidgetGenerate}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => {
-                      setIsAiWidgetDialogOpen(false)
-                      setAiWidgetError(null)
-                    }}
-                  >
-                    {copy.aiWidgetCancel}
-                  </Button>
+
+                <div className="flex flex-col space-y-3 rounded-xl border bg-muted/10 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{copy.aiWidgetLibraryTitle}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {copy.aiWidgetHint}
+                      </p>
+                    </div>
+                    {aiGeneratedWidgets.length > 0 && (
+                      <Badge variant="secondary">{aiGeneratedWidgets.length}</Badge>
+                    )}
+                  </div>
+                  {aiGeneratedWidgets.length === 0 ? (
+                    <div className="h-[360px] rounded-lg border border-dashed bg-background/60 p-4 text-sm text-muted-foreground">
+                      {copy.aiWidgetLibraryEmpty}
+                    </div>
+                  ) : (
+                    <ScrollArea className="h-[360px] pr-2">
+                      <div className="space-y-3">
+                        {aiGeneratedWidgets.map((widget) => (
+                          <div
+                            key={widget.type}
+                            id={`ai-widget-${widget.type}`}
+                            className="rounded-xl border bg-card/80 p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">{widget.title}</p>
+                                <p className="text-xs text-muted-foreground">{widget.type}</p>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-muted-foreground hover:text-destructive"
+                                onClick={() => handleRemoveAiWidgetFromLibrary(widget.type)}
+                                aria-label={copy.aiWidgetRemove}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            {widget.description && (
+                              <p className="mt-2 text-xs text-muted-foreground">{widget.description}</p>
+                            )}
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="mt-3 w-full"
+                              onClick={() => handleAddAiWidgetFromLibrary(widget.type)}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              {copy.aiWidgetAddToLayout}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  )}
                 </div>
               </div>
             </DialogContent>

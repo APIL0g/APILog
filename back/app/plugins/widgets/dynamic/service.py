@@ -165,13 +165,13 @@ def get_widget(widget_id: str) -> DynamicWidgetSpec:
 
 def _resolve_widget_llm_provider() -> tuple[str, bool]:
     """Returns (provider, use_ai_report_config)."""
+    report_pref = (AI_REPORT_LLM_PROVIDER or "").strip().lower()
+    if report_pref and report_pref not in {"disabled", "none"}:
+        return report_pref, True
+
     primary = (LLM_PROVIDER or "").strip().lower()
     if primary and primary not in {"disabled", "none"}:
         return primary, False
-
-    fallback = (AI_REPORT_LLM_PROVIDER or "").strip().lower()
-    if fallback and fallback not in {"disabled", "none"}:
-        return fallback, True
     return "", False
 
 
