@@ -181,11 +181,25 @@ async def _collect_element_metadata(page):
                         const attrs = node.attributes;
                         for (let i = attrs.length - 1; i >= 0; i--) {
                             const attrName = attrs[i].name.toLowerCase();
-                            if (attrName.startsWith("on")) {
+                            if (attrName.startsWith("on") || attrName === "style") {
                                 node.removeAttribute(attrs[i].name);
                             }
                         }
                     }
+
+                    const commentWalker = document.createTreeWalker(
+                        clone,
+                        NodeFilter.SHOW_COMMENT
+                    );
+                    const commentsToRemove = [];
+                    while (commentWalker.nextNode()) {
+                        commentsToRemove.push(commentWalker.currentNode);
+                    }
+                    commentsToRemove.forEach((node) => {
+                        if (node && node.parentNode) {
+                            node.parentNode.removeChild(node);
+                        }
+                    });
 
                     let outer = clone.outerHTML || "";
 

@@ -76,6 +76,12 @@ interface HeatmapData {
 }
 
 const DEFAULT_RELATIVE_POSITION = 0.5
+const MATCH_CONFIDENCE_THRESHOLD = 0.05
+
+interface MatchResult {
+  element: HeatmapElementMetadataEntry | null
+  score: number
+}
 
 function hasSnapshotAssets(payload: HeatmapData | null): payload is HeatmapData {
   return Boolean(payload && (payload.snapshot_html_url || payload.snapshot_url))
@@ -112,9 +118,9 @@ function getElementMetric(value?: number | null, fallback?: number) {
 function matchElementForClick(
   click: ApiClickData,
   metadata?: SnapshotElementMetadata | null
-): HeatmapElementMetadataEntry | null {
+): MatchResult {
   if (!metadata?.elements || metadata.elements.length === 0) {
-    return null
+    return { element: null, score: Number.POSITIVE_INFINITY }
   }
 
   const normalizedHash = (click.element_hash ?? "").trim()
@@ -125,7 +131,7 @@ function matchElementForClick(
       (element) => (element.element_hash ?? "").trim() === normalizedHash
     )
     if (hashMatches.length === 1) {
-      return hashMatches[0]
+      return { element: hashMatches[0], score: 0 }
     }
     if (hashMatches.length > 1) {
       candidates = hashMatches
@@ -167,8 +173,8 @@ function matchElementForClick(
     }
   }
 
-  if (bestElement) {
-    return bestElement
+  if (bestElement && Number.isFinite(bestScore)) {
+    return { element: bestElement, score: bestScore }
   }
 
   if (
@@ -176,10 +182,10 @@ function matchElementForClick(
     normalizedHash.toLowerCase() !== "unknown" &&
     candidates.length > 0
   ) {
-    return candidates[0]
+    return { element: candidates[0], score: Number.POSITIVE_INFINITY }
   }
 
-  return null
+  return { element: null, score: Number.POSITIVE_INFINITY }
 }
 
 function projectClickToSnapshot(
@@ -197,9 +203,16 @@ function projectClickToSnapshot(
     baseHeight &&
     baseHeight > 0
   ) {
-    const matchedElement = matchElementForClick(click, metadata)
+    const { element: matchedElement, score } = matchElementForClick(
+      click,
+      metadata
+    )
+    const hasConfidentMatch =
+      matchedElement &&
+      (score === 0 ||
+        (Number.isFinite(score) && score <= MATCH_CONFIDENCE_THRESHOLD))
 
-    if (matchedElement) {
+    if (hasConfidentMatch) {
       const elementLeft =
         getElementMetric(matchedElement.rel_x, matchedElement.x / baseWidth) ??
         0
@@ -236,7 +249,14 @@ function projectClickToSnapshot(
     }
   }
 
-  return [click.x * renderWidth, click.y * renderHeight]
+  const fallbackX =
+    getElementMetric(click.x, DEFAULT_RELATIVE_POSITION) ??
+    DEFAULT_RELATIVE_POSITION
+  const fallbackY =
+    getElementMetric(click.y, DEFAULT_RELATIVE_POSITION) ??
+    DEFAULT_RELATIVE_POSITION
+
+  return [fallbackX * renderWidth, fallbackY * renderHeight]
 }
 
 // --- API Functions ---

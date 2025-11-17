@@ -452,11 +452,21 @@
         const attrs = node.attributes;
         for (let i = attrs.length - 1; i >= 0; i--) {
           const attrName = attrs[i].name.toLowerCase();
-          if (attrName.startsWith("on")) {
+          if (attrName.startsWith("on") || attrName === "style") {
             node.removeAttribute(attrs[i].name);
           }
         }
       }
+
+      const commentWalker = document.createTreeWalker(
+        clone,
+        NodeFilter.SHOW_COMMENT
+      );
+      const commentsToRemove: Comment[] = [];
+      while (commentWalker.nextNode()) {
+        commentsToRemove.push(commentWalker.currentNode as Comment);
+      }
+      commentsToRemove.forEach((node) => node.remove());
 
       let outer = clone.outerHTML || "";
 
@@ -561,13 +571,28 @@
 
     const rect = (el as HTMLElement).getBoundingClientRect();
     const docEl = document.documentElement;
+    const body = document.body || null;
     const viewportW =
       window.innerWidth || docEl.clientWidth || 0;
     const viewportH =
       window.innerHeight || docEl.clientHeight || 0;
+    const scrollX =
+      window.scrollX || docEl.scrollLeft || (body ? body.scrollLeft : 0) || 0;
+    const scrollY =
+      window.scrollY || docEl.scrollTop || (body ? body.scrollTop : 0) || 0;
+    const docWidth = Math.max(
+      docEl.scrollWidth || 0,
+      body ? body.scrollWidth || 0 : 0,
+      docEl.clientWidth || 0
+    );
+    const docHeight = Math.max(
+      docEl.scrollHeight || 0,
+      body ? body.scrollHeight || 0 : 0,
+      docEl.clientHeight || 0
+    );
 
-    const viewportX = clickX - window.scrollX;
-    const viewportY = clickY - window.scrollY;
+    const viewportX = clickX - scrollX;
+    const viewportY = clickY - scrollY;
 
     let relX: number | null = null;
     let relY: number | null = null;
@@ -581,11 +606,20 @@
     let rectW: number | null = null;
     let rectH: number | null = null;
 
-    if (viewportW > 0) {
+    const absLeft = rect.left + scrollX;
+    const absTop = rect.top + scrollY;
+
+    if (docWidth > 0) {
+      rectX = clamp01(absLeft / docWidth);
+      rectW = clamp01(rect.width / docWidth);
+    } else if (viewportW > 0) {
       rectX = clamp01(rect.left / viewportW);
       rectW = clamp01(rect.width / viewportW);
     }
-    if (viewportH > 0) {
+    if (docHeight > 0) {
+      rectY = clamp01(absTop / docHeight);
+      rectH = clamp01(rect.height / docHeight);
+    } else if (viewportH > 0) {
       rectY = clamp01(rect.top / viewportH);
       rectH = clamp01(rect.height / viewportH);
     }
