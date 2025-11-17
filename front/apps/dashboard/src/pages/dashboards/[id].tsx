@@ -562,6 +562,15 @@ function generatePresetId() {
   return `preset-${Math.random().toString(36).slice(2, 11)}`
 }
 
+function generateWidgetId() {
+  const cryptoApi = typeof globalThis !== "undefined" ? (globalThis.crypto as Crypto | undefined) : undefined
+  if (cryptoApi?.randomUUID) {
+    return `widget-${cryptoApi.randomUUID()}`
+  }
+  const randomSuffix = Math.random().toString(36).slice(2, 9)
+  return `widget-${Date.now().toString(36)}-${randomSuffix}`
+}
+
 function cloneDashboardConfig(config: DashboardConfig): DashboardConfig {
   return {
     ...config,
@@ -726,6 +735,7 @@ export default function DashboardPage() {
   const [hiddenAiWidgetTypes, setHiddenAiWidgetTypes] = useState<string[]>([])
   const [widgetTagFilter, setWidgetTagFilter] = useState<string>("all")
   const [recentAiWidgetId, setRecentAiWidgetId] = useState<string | null>(null)
+  const [recentlyAddedWidgetId, setRecentlyAddedWidgetId] = useState<string | null>(null)
   const timeRange = "12h"
   const [isEditMode, setIsEditMode] = useState(false)
   const [presets, setPresets] = useState<DashboardConfig[]>([])
@@ -877,6 +887,17 @@ export default function DashboardPage() {
       target.scrollIntoView({ behavior: "smooth", block: "nearest" })
     }
   }, [recentAiWidgetId, isAiWidgetDialogOpen])
+
+  useEffect(() => {
+    if (!recentlyAddedWidgetId) return
+    if (typeof document === "undefined") return
+    const target = document.getElementById(`dashboard-widget-${recentlyAddedWidgetId}`)
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" })
+    }
+    const timer = window.setTimeout(() => setRecentlyAddedWidgetId(null), 2000)
+    return () => window.clearTimeout(timer)
+  }, [recentlyAddedWidgetId])
   const widgetSections = useMemo<{ tag: string; widgets: typeof sortedAvailableWidgets }[]>(() => {
     const groups: Record<string, typeof sortedAvailableWidgets> = {}
     staticWidgetMetas.forEach((meta) => {
@@ -1257,14 +1278,13 @@ export default function DashboardPage() {
   }
 
   const appendWidgets = (entries: { type: string; config?: Record<string, any> }[]) => {
-    if (entries.length === 0) return false
+    if (entries.length === 0) return []
 
-    let added = false
+    const createdIds: string[] = []
 
     setDashboard((prev) => {
       if (!prev) return prev
 
-      const createdAt = Date.now()
       const startingPosition = prev.widgets.length
       let nextY = prev.widgets.reduce(
         (max, widget) => Math.max(max, (widget.layout?.y ?? 0) + (widget.layout?.h ?? DEFAULT_WIDGET_H)),
@@ -1273,10 +1293,10 @@ export default function DashboardPage() {
 
       const newWidgets: Widget[] = []
 
-      entries.forEach((entry, index) => {
+      entries.forEach((entry) => {
         const meta = widgetMetadata[entry.type]
         if (!meta) {
-          return
+          console.warn("[dashboard] Missing widget meta for type:", entry.type)
         }
 
         const fallbackLayout = createFallbackLayout(
@@ -1286,39 +1306,40 @@ export default function DashboardPage() {
         )
         const layout = sanitizeLayout({ ...fallbackLayout, y: nextY }, fallbackLayout)
         nextY = layout.y + layout.h
+        const newId = generateWidgetId()
 
         newWidgets.push({
-          id: `widget-${createdAt + index}`,
+          id: newId,
           type: entry.type,
           position: startingPosition + newWidgets.length,
           layout,
-          config: entry.config ?? meta?.defaultConfig,
+          config: entry.config ?? meta?.defaultConfig ?? {},
         })
+        createdIds.push(newId)
       })
 
       if (newWidgets.length === 0) {
         return prev
       }
 
-      added = true
       return {
         ...prev,
         widgets: [...prev.widgets, ...newWidgets],
       }
     })
 
-    if (added) {
+    if (createdIds.length > 0) {
       setHasUnsavedChanges(true)
     }
 
-    return added
+    return createdIds
   }
 
   const handleAddWidget = () => {
     if (selectedWidgetIds.length === 0) return
 
     const added = appendWidgets(selectedWidgetIds.map((widgetId) => ({ type: widgetId })))
-    if (!added) return
+    if (added.length === 0) return
 
     setIsAddingWidget(false)
     setSelectedWidgetIds([])
@@ -1379,11 +1400,12 @@ export default function DashboardPage() {
 
   const handleAddAiWidgetFromLibrary = (widgetType: string) => {
     const added = appendWidgets([{ type: widgetType }])
-    if (!added) {
+    if (added.length === 0) {
       setAiWidgetError(copy.aiWidgetErrorPrefix)
+      return
     }
+    setRecentlyAddedWidgetId(added[added.length - 1])
   }
-
   const handleRemoveAiWidgetFromLibrary = (widgetType: string) => {
     setAiGeneratedWidgets((prev) => prev.filter((widget) => widget.type !== widgetType))
     setHiddenAiWidgetTypes((prev) => (prev.includes(widgetType) ? prev : [...prev, widgetType]))
@@ -1698,11 +1720,11 @@ export default function DashboardPage() {
       {/* Main Content */}
       <main className="p-6">
         <div className="space-y-6">
-          <ReactGridLayout
-            className="layout"
-            layout={gridLayout}
-            cols={GRID_COLS}
-            rowHeight={GRID_ROW_HEIGHT}
+      <ReactGridLayout
+        className="layout"
+        layout={gridLayout}
+        cols={GRID_COLS}
+        rowHeight={GRID_ROW_HEIGHT}
             margin={GRID_MARGIN}
             isDraggable={isEditMode}
             isResizable={isEditMode}
@@ -1712,13 +1734,19 @@ export default function DashboardPage() {
             preventCollision={!isEditMode}
             onLayoutChange={handleLayoutChange}
           >
-            {dashboard.widgets.map((widget) => (
-              <div key={widget.id} className="h-full">
-                <WidgetHost
-                  type={widget.type}
-                  config={widget.config}
-                  timeRange={timeRange}
-                  language={language}
+        {dashboard.widgets.map((widget) => (
+          <div
+            key={widget.id}
+            id={`dashboard-widget-${widget.id}`}
+            className={`h-full transition ${
+              recentlyAddedWidgetId === widget.id ? "ring-2 ring-primary/60 ring-offset-1" : ""
+            }`}
+          >
+            <WidgetHost
+              type={widget.type}
+              config={widget.config}
+              timeRange={timeRange}
+              language={language}
                   isEditMode={isEditMode}
                   onRemove={() => handleRemoveWidget(widget.id)}
                 />
@@ -2048,19 +2076,22 @@ export default function DashboardPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="text-muted-foreground hover:text-destructive"
-                                  onClick={() => handleRemoveAiWidgetFromLibrary(widget.type)}
-                                  aria-label={copy.aiWidgetRemove}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
+                                className="text-muted-foreground hover:text-destructive"
+                                onClick={() => handleRemoveAiWidgetFromLibrary(widget.type)}
+                                aria-label={copy.aiWidgetRemove}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                             </div>
                             <Button
                               variant="secondary"
                               size="sm"
-                              className="mt-3 w-full"
-                              onClick={() => handleAddAiWidgetFromLibrary(widget.type)}
+                              className={`mt-3 w-full transition active:translate-y-[1px] active:scale-[0.98]`}
+                              onClick={(event) => {
+                                event.currentTarget.blur()
+                                handleAddAiWidgetFromLibrary(widget.type)
+                              }}
                             >
                               <Plus className="mr-2 h-4 w-4" />
                               {copy.aiWidgetAddToLayout}
