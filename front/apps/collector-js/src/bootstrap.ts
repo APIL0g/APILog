@@ -1037,6 +1037,7 @@
         labelEl
       );
       const outerHtml = sanitizeOuterHtml(labelEl ?? targetEl, sig.elementHash);
+      const elementHashPayload = outerHtml || sig.elementHash;
 
       const rec = Object.assign(
         {},
@@ -1054,8 +1055,7 @@
           element_rect_w: sig.rectW,
           element_rect_h: sig.rectH,
           scroll_pct: this.maxScrollSeen,
-          element_hash: sig.elementHash,
-          element_preview: outerHtml,
+          element_hash: elementHashPayload,
           ts: now(),
         }
       );
