@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { GripVertical, X } from "lucide-react"
@@ -16,6 +17,29 @@ interface WidgetHostProps {
 
 export function WidgetHost({ type, config, timeRange, language, isEditMode, onRemove }: WidgetHostProps) {
   const WidgetComponent = widgetRegistry[type]
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null)
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof ResizeObserver === "undefined") return
+    const element = contentRef.current
+    if (!element) return
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      const { width, height } = entry.contentRect
+      setContainerSize((prev) => {
+        if (prev && prev.width === width && prev.height === height) return prev
+        return { width, height }
+      })
+    })
+
+    observer.observe(element)
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
 
   if (!WidgetComponent) {
     return (
@@ -58,8 +82,8 @@ export function WidgetHost({ type, config, timeRange, language, isEditMode, onRe
       )}
 
       {/* Widget Content */}
-      <div className="flex-1 overflow-auto">
-        <WidgetComponent config={config} timeRange={timeRange} language={language} />
+      <div ref={contentRef} className="flex-1 overflow-auto">
+        <WidgetComponent config={config} timeRange={timeRange} language={language} containerSize={containerSize ?? undefined} />
       </div>
     </Card>
   )

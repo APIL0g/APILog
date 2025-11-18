@@ -45,7 +45,7 @@ function formatDuration(totalSeconds: number) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
 }
 
-export default function DwellTimeWidget({ language }: WidgetProps) {
+export default function DwellTimeWidget({ language, containerSize }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const common = getCommonWidgetCopy(language)
@@ -73,8 +73,15 @@ export default function DwellTimeWidget({ language }: WidgetProps) {
 
   const topSorted = useMemo(() => {
     const list = rows ? [...rows] : []
-    return list.sort((a, b) => b.avgSeconds - a.avgSeconds).slice(0, 10)
+    return list.sort((a, b) => b.avgSeconds - a.avgSeconds)
   }, [rows])
+
+  const containerWidth = containerSize?.width ?? 0
+  const containerHeight = containerSize?.height ?? 0
+  const headerReserve = 110
+  const bodyHeight = containerHeight > headerReserve ? containerHeight - headerReserve : containerHeight
+  const columns = containerWidth >= 760 ? 2 : 1
+  const listStyle = bodyHeight > 0 ? { maxHeight: bodyHeight, overflowY: "auto" as const } : undefined
 
   return (
     <>
@@ -91,12 +98,18 @@ export default function DwellTimeWidget({ language }: WidgetProps) {
         {!error && rows === null && <div className="text-sm text-muted-foreground">{common.loading}</div>}
         {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">{common.noData}</div>}
         {!error && rows && rows.length > 0 && (
-          <div className="divide-y">
+          <div
+            className="grid gap-3"
+            style={{
+              gridTemplateColumns: columns > 1 ? `repeat(${columns}, minmax(0, 1fr))` : undefined,
+              ...(listStyle ?? {}),
+            }}
+          >
             {topSorted.map((r, idx) => (
-              <div key={`${r.path}-${r.avgSeconds}-${idx}`} className="flex items-center justify-between py-2">
+              <div key={`${r.path}-${idx}`} className="flex items-center justify-between rounded-md border px-3 py-2">
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-xs tabular-nums text-muted-foreground w-6 text-right">{idx + 1}.</span>
-                  <div className="text-sm truncate">{displayPath(r.path)}</div>
+                  <div className="text-sm truncate" title={r.path}>{displayPath(r.path)}</div>
                 </div>
                 <div className="text-sm font-medium tabular-nums">{formatDuration(r.avgSeconds)}</div>
               </div>
@@ -119,6 +132,10 @@ export const widgetMeta: WidgetMeta = {
   description: "페이지별 평균 체류시간 Top 10",
   defaultWidth: 520,
   defaultHeight: 300,
+  minWidth: 420,
+  minHeight: 340,
+  relaxedMinHeight: 240,
+  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["behavior"],
   localizations: {

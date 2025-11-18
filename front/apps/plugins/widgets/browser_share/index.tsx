@@ -17,7 +17,7 @@ async function fetchBrowserShare(range: string, top = 10): Promise<Row[]> {
   return data?.rows ?? []
 }
 
-export default function BrowserShareWidget({ timeRange, language }: WidgetProps) {
+export default function BrowserShareWidget({ timeRange, language, containerSize }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const common = getCommonWidgetCopy(language)
@@ -58,12 +58,41 @@ export default function BrowserShareWidget({ timeRange, language }: WidgetProps)
     "var(--chart-5)",
   ]
 
+  const containerWidth = containerSize?.width ?? 0
+  const containerHeight = containerSize?.height ?? 0
+  const isCompactLayout = !containerWidth || containerWidth < 520
+  const headerReserve = 96
+  const bodyHeight = containerHeight > headerReserve ? containerHeight - headerReserve : containerHeight
+  const MIN_CHART_HEIGHT = 160
+  const MIN_LEGEND_HEIGHT = 120
+  const SECTION_GAP = 20
+  const fallbackStacked = { chart: 300, legend: 200 }
+  const stackedHeights = useMemo(() => {
+    if (!bodyHeight || bodyHeight <= SECTION_GAP) return fallbackStacked
+    const effective = Math.max(bodyHeight - SECTION_GAP, 0)
+    if (effective <= 0) return fallbackStacked
+    const minTotal = MIN_CHART_HEIGHT + MIN_LEGEND_HEIGHT
+    if (effective >= minTotal) {
+      const maxChart = effective - MIN_LEGEND_HEIGHT
+      const preferred = effective * 0.6
+      const chart = Math.max(MIN_CHART_HEIGHT, Math.min(maxChart, preferred))
+      return { chart, legend: effective - chart }
+    }
+    const ratio = MIN_CHART_HEIGHT / minTotal
+    const chart = Math.max(80, effective * ratio)
+    const legend = Math.max(60, effective - chart)
+    return { chart, legend }
+  }, [bodyHeight])
+  const rowHeight = bodyHeight && bodyHeight > 0 ? bodyHeight : Math.max(fallbackStacked.chart, fallbackStacked.legend)
+  const chartHeight = isCompactLayout ? stackedHeights.chart : rowHeight
+  const legendHeight = isCompactLayout ? stackedHeights.legend : rowHeight
+
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
         <CardTitle>{copy.title}</CardTitle>
       </CardHeader>
-      <CardContent className="pt-3 md:pt-4" style={{ height: 270 }}>
+      <CardContent className="flex flex-1 flex-col gap-4 pt-3 md:pt-4 overflow-hidden">
         {error && <div className="text-sm md:text-base text-red-500">{common.errorPrefix}: {error}</div>}
         {!rows && !error && <div className="text-sm md:text-base text-muted-foreground">{common.loading}</div>}
         {rows && rows.length === 0 && (
@@ -71,17 +100,20 @@ export default function BrowserShareWidget({ timeRange, language }: WidgetProps)
         )}
 
         {rows && rows.length > 0 && (
-          <div className="flex h-full gap-3">
-            <div className="flex-1">
-              <ResponsiveContainer width="100%" height="100%">
+          <div className={`flex flex-1 min-h-0 gap-4 ${isCompactLayout ? "flex-col" : "flex-row"}`}>
+            <div
+              className={`${isCompactLayout ? "" : "flex-1"} min-w-0`}
+              style={{ height: chartHeight }}
+            >
+              <ResponsiveContainer width="100%" height={chartHeight}>
                 <PieChart>
                   <Tooltip formatter={(value: any, name: any) => [value, name]} />
                   <Pie
                     data={chartData}
                     dataKey="value"
                     nameKey="name"
-                    innerRadius={60}
-                    outerRadius={100}
+                    innerRadius="45%"
+                    outerRadius="80%"
                     paddingAngle={2}
                     isAnimationActive={false}
                     label={false}
@@ -94,7 +126,7 @@ export default function BrowserShareWidget({ timeRange, language }: WidgetProps)
               </ResponsiveContainer>
             </div>
 
-            <div className="flex-1">
+            <div className={`${isCompactLayout ? "" : "flex-1"} min-w-0`} style={{ height: legendHeight }}>
               <div className="h-full rounded-md border bg-background/70 p-3 shadow-sm text-sm md:text-base">
                 <div className="space-y-1.5">
                   {chartData.map((d, idx) => {
@@ -132,6 +164,10 @@ export const widgetMeta: WidgetMeta = {
   description: "원형(도넛) 차트로 브라우저별 세션 비율",
   defaultWidth: 520,
   defaultHeight: 300,
+  minWidth: 420,
+  minHeight: 320,
+  relaxedMinHeight: 200,
+  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["audience"],
   localizations: {

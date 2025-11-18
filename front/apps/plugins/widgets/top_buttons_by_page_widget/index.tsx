@@ -58,7 +58,7 @@ async function fetchTopButtonsByPath(path: string, range: string): Promise<Row[]
   return rows.map((r) => ({ site_id: path, element_text: r?.element_text ?? "unknown", count: Number(r?.count ?? 0) }))
 }
 
-export default function TopButtonsByPageWidget({ timeRange, language }: WidgetProps) {
+export default function TopButtonsByPageWidget({ timeRange, language, containerSize }: WidgetProps) {
   const [paths, setPaths] = useState<PathOption[]>([])
   const [pagePath, setPagePath] = useState<string>("")
   const [range, setRange] = useState<string>("7d")
@@ -129,7 +129,7 @@ export default function TopButtonsByPageWidget({ timeRange, language }: WidgetPr
 
   const topSorted = useMemo(() => {
     const list = rows ? [...rows] : []
-    return list.sort((a, b) => b.count - a.count).slice(0, 10)
+    return list.sort((a, b) => b.count - a.count)
   }, [rows])
 
   const totalPathCount = useMemo(() => {
@@ -142,6 +142,13 @@ export default function TopButtonsByPageWidget({ timeRange, language }: WidgetPr
     if (p === "/") return "/"
     return p.replace(/^\/+/, "")
   }
+
+  const containerWidth = containerSize?.width ?? 0
+  const containerHeight = containerSize?.height ?? 0
+  const headerReserve = 170
+  const bodyHeight = containerHeight > headerReserve ? containerHeight - headerReserve : containerHeight
+  const columns = containerWidth >= 900 ? 3 : containerWidth >= 640 ? 2 : 1
+  const gridStyle = bodyHeight > 0 ? { maxHeight: bodyHeight, overflowY: "auto" as const } : undefined
 
   return (
     <>
@@ -173,7 +180,7 @@ export default function TopButtonsByPageWidget({ timeRange, language }: WidgetPr
           </Popover>
         </div>
       </CardHeader>
-      <CardContent className="pt-2">
+      <CardContent className="flex flex-1 flex-col gap-3 pt-2">
         <div className="mb-2 flex items-center justify-end">
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
@@ -223,12 +230,18 @@ export default function TopButtonsByPageWidget({ timeRange, language }: WidgetPr
         {!error && rows === null && <div className="text-sm text-muted-foreground">{common.loading}</div>}
         {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">{common.noData}</div>}
         {!error && rows && rows.length > 0 && (
-          <div className="divide-y">
+          <div
+            className="grid gap-3"
+            style={{
+              gridTemplateColumns: columns > 1 ? `repeat(${columns}, minmax(0, 1fr))` : undefined,
+              ...(gridStyle ?? {}),
+            }}
+          >
             {topSorted.map((r, idx) => {
               const hasMarkup = typeof r.element_text === "string" && looksLikeHtmlSnippet(r.element_text)
               const previewHtml = hasMarkup ? r.element_text : null
               return (
-                <div key={`${pagePath}-${idx}`} className="flex flex-col gap-2 py-4">
+                <div key={`${pagePath}-${idx}`} className="flex flex-col gap-2 rounded-md border px-3 py-3">
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span className="text-xs tabular-nums">{copy.columnButton} {idx + 1}.</span>
                     <span className="text-xs uppercase tracking-wide">{copy.columnClicks}: {fmt(r.count)}</span>
@@ -262,6 +275,10 @@ export const widgetMeta: WidgetMeta = {
   description: "Ranked button clicks grouped by page",
   defaultWidth: 520,
   defaultHeight: 300,
+  minWidth: 420,
+  minHeight: 360,
+  relaxedMinHeight: 260,
+  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["conversion"],
   localizations: {

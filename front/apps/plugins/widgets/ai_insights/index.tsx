@@ -16,7 +16,7 @@ function sevClass(s?: string) {
   }
 }
 
-function AiInsightsWidget({ timeRange, language }: WidgetProps) {
+function AiInsightsWidget({ timeRange, language, containerSize }: WidgetProps) {
   const [digest, setDigest] = useState<Digest | null>(null);
   const [insights, setInsights] = useState<InsightsResp | null>(null);
   const [loading, setLoading] = useState(false);
@@ -24,6 +24,12 @@ function AiInsightsWidget({ timeRange, language }: WidgetProps) {
   const resolvedLanguage = resolveWidgetLanguage(language);
   const common = getCommonWidgetCopy(resolvedLanguage);
   const copy = getAiInsightsCopy(resolvedLanguage);
+  const containerHeight = containerSize?.height ?? 0;
+  const containerWidth = containerSize?.width ?? 0;
+  const headerReserve = 130;
+  const bodyHeight = containerHeight > headerReserve ? containerHeight - headerReserve : containerHeight;
+  const insightsColumns = containerWidth >= 960 ? 2 : 1;
+  const insightsAreaHeight = bodyHeight > 0 ? Math.max(220, bodyHeight - 180) : undefined;
 
   useEffect(() => {
     let alive = true;
@@ -68,7 +74,7 @@ function AiInsightsWidget({ timeRange, language }: WidgetProps) {
       <CardHeader className="mb-2 md:mb-3">
         <CardTitle>{copy.title}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="flex flex-1 flex-col gap-3 pt-3 md:pt-4">
         {loading && <div className="text-sm text-muted-foreground">{common.loading}</div>}
         {error && (
           <div className="text-sm text-red-500">
@@ -96,9 +102,15 @@ function AiInsightsWidget({ timeRange, language }: WidgetProps) {
           <div className="text-sm text-muted-foreground">{copy.noInsights}</div>
         )}
         {insights && insights.insights.length > 0 && (
-          <ul className="space-y-3">
+          <div
+            className="grid gap-3"
+            style={{
+              gridTemplateColumns: insightsColumns > 1 ? `repeat(${insightsColumns}, minmax(0,1fr))` : undefined,
+              ...(insightsAreaHeight ? { maxHeight: insightsAreaHeight, overflowY: "auto" } : {}),
+            }}
+          >
             {insights.insights.map((it, i) => (
-              <li key={i} className="rounded-lg border p-3">
+              <div key={i} className="rounded-lg border p-3">
                 <div className="flex items-center gap-2">
                   <span className={`text-xs px-2 py-0.5 rounded ${sevClass(it.severity)}`}>
                     {it.severity ?? "low"}
@@ -111,9 +123,9 @@ function AiInsightsWidget({ timeRange, language }: WidgetProps) {
                     {copy.actionLabel}: {it.action}
                   </div>
                 )}
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </CardContent>
     </>
@@ -135,6 +147,10 @@ export const widgetMeta: WidgetMeta = {
   description: "로그 집계 기반 AI 설명 위젯",
   defaultWidth: 520,
   defaultHeight: 300,
+  minWidth: 420,
+  minHeight: 360,
+  relaxedMinHeight: 260,
+  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["ai"],
   localizations: {

@@ -5,7 +5,7 @@ import RGL, { WidthProvider, type Layout } from "react-grid-layout"
 import "react-grid-layout/css/styles.css"
 import "react-resizable/css/styles.css"
 import { WidgetHost } from "@/core/WidgetHost"
-import { widgetMetadata } from "@/core/registry"
+import { widgetMetadata, type WidgetMeta } from "@/core/registry"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -595,10 +595,12 @@ function restoreWidgetsFromStorage(storedWidgets: StoredWidget[]): Widget[] {
         index,
         (typeof widget.width === "number" && Number.isFinite(widget.width) ? widget.width : undefined) ?? meta?.defaultWidth,
         (typeof widget.height === "number" && Number.isFinite(widget.height) ? widget.height : undefined) ?? meta?.defaultHeight,
+        meta,
       )
       const layout = sanitizeLayout(
         widget.layout && typeof widget.layout === "object" ? (widget.layout as Partial<WidgetLayoutState>) : undefined,
         fallbackLayout,
+        meta,
       )
 
       return {
@@ -665,23 +667,59 @@ function pxToGridHeight(height?: number) {
   return Math.max(Math.round(height / GRID_ROW_HEIGHT) || DEFAULT_WIDGET_H, MIN_WIDGET_H)
 }
 
-function createFallbackLayout(index: number, width?: number, height?: number): WidgetLayoutState {
+function pxToGridUnitsWidth(value?: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined
+  return clamp(Math.round(value / APPROX_COL_WIDTH_PX) || MIN_WIDGET_W, MIN_WIDGET_W, GRID_COLS)
+}
+
+function pxToGridUnitsHeight(value?: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined
+  return Math.max(Math.round(value / GRID_ROW_HEIGHT) || MIN_WIDGET_H, MIN_WIDGET_H)
+}
+
+function getWidgetMinConstraints(meta?: WidgetMeta, currentWidth?: number) {
+  const minW = meta?.minWidth ? pxToGridUnitsWidth(meta.minWidth) ?? MIN_WIDGET_W : MIN_WIDGET_W
+  let minH = meta?.minHeight ? pxToGridUnitsHeight(meta.minHeight) ?? MIN_WIDGET_H : MIN_WIDGET_H
+
+  if (
+    typeof currentWidth === "number" &&
+    meta?.relaxedMinHeight &&
+    typeof meta.relaxedMinHeightBreakpointCols === "number" &&
+    currentWidth >= meta.relaxedMinHeightBreakpointCols
+  ) {
+    const relaxed = pxToGridUnitsHeight(meta.relaxedMinHeight) ?? MIN_WIDGET_H
+    minH = Math.min(minH, relaxed)
+  }
+
+  return { minW: Math.max(MIN_WIDGET_W, minW), minH: Math.max(MIN_WIDGET_H, minH) }
+}
+
+function createFallbackLayout(index: number, width?: number, height?: number, meta?: WidgetMeta): WidgetLayoutState {
   const defaultGridWidth = getDefaultGridWidth()
   const perRow = Math.max(1, Math.floor(GRID_COLS / defaultGridWidth))
-  const w = pxToGridWidth(width)
-  const h = pxToGridHeight(height)
+  const tentativeW = pxToGridWidth(width)
+  const { minW, minH } = getWidgetMinConstraints(meta, tentativeW)
+  const w = Math.max(minW, tentativeW)
+  const tentativeH = pxToGridHeight(height)
+  const h = Math.max(minH, tentativeH)
   const tentativeX = (index % perRow) * defaultGridWidth
   const x = clamp(tentativeX, 0, GRID_COLS - w)
   const y = Math.floor(index / perRow) * DEFAULT_WIDGET_H
   return { x, y, w, h }
 }
 
-function sanitizeLayout(layout: Partial<WidgetLayoutState> | undefined, fallback: WidgetLayoutState): WidgetLayoutState {
+function sanitizeLayout(
+  layout: Partial<WidgetLayoutState> | undefined,
+  fallback: WidgetLayoutState,
+  meta?: WidgetMeta,
+): WidgetLayoutState {
   const candidate = layout ?? {}
   const rawW = Number.isFinite(candidate.w) ? (candidate.w as number) : fallback.w
-  const w = clamp(Math.round(rawW), MIN_WIDGET_W, GRID_COLS)
+  let w = clamp(Math.round(rawW), MIN_WIDGET_W, GRID_COLS)
+  const { minW, minH } = getWidgetMinConstraints(meta, w)
+  w = Math.max(minW, w)
   const rawH = Number.isFinite(candidate.h) ? (candidate.h as number) : fallback.h
-  const h = Math.max(MIN_WIDGET_H, Math.round(rawH))
+  const h = Math.max(minH, Math.round(rawH))
   const rawX = Number.isFinite(candidate.x) ? (candidate.x as number) : fallback.x
   const x = clamp(Math.round(rawX), 0, GRID_COLS - w)
   const rawY = Number.isFinite(candidate.y) ? (candidate.y as number) : fallback.y
@@ -689,15 +727,15 @@ function sanitizeLayout(layout: Partial<WidgetLayoutState> | undefined, fallback
   return { x, y, w, h }
 }
 
-function flowLayouts(items: { id: string; w: number; h: number }[]): Record<string, WidgetLayoutState> {
+function flowLayouts(items: { id: string; w: number; h: number; minW: number; minH: number }[]): Record<string, WidgetLayoutState> {
   let cursorX = 0
   let cursorY = 0
   let rowHeight = 0
   const placements: Record<string, WidgetLayoutState> = {}
 
-  items.forEach(({ id, w, h }) => {
-    const width = clamp(Math.round(w) || MIN_WIDGET_W, MIN_WIDGET_W, GRID_COLS)
-    const height = Math.max(MIN_WIDGET_H, Math.round(h) || MIN_WIDGET_H)
+  items.forEach(({ id, w, h, minW, minH }) => {
+    const width = clamp(Math.round(w) || minW, minW, GRID_COLS)
+    const height = Math.max(minH, Math.round(h) || minH)
 
     if (cursorX + width > GRID_COLS) {
       cursorY += rowHeight
@@ -722,14 +760,16 @@ function autoLayoutWidgets(widgets: Widget[], mode: AutoLayoutMode): Record<stri
 
   const items = widgets.map((widget, index) => {
     const meta = widgetMetadata[widget.type]
-    const fallback = createFallbackLayout(index, widget.width ?? meta?.defaultWidth, widget.height ?? meta?.defaultHeight)
-    const base = sanitizeLayout(widget.layout, fallback)
+    const fallback = createFallbackLayout(index, widget.width ?? meta?.defaultWidth, widget.height ?? meta?.defaultHeight, meta)
+    const base = sanitizeLayout(widget.layout, fallback, meta)
     let width = base.w
     if (columnOverride && columnOverride > 0) {
       const columnWidth = clamp(Math.floor(GRID_COLS / columnOverride) || MIN_WIDGET_W, MIN_WIDGET_W, GRID_COLS)
-      width = columnWidth
+      width = Math.max(columnWidth, getWidgetMinConstraints(meta, columnWidth).minW)
     }
-    return { id: widget.id, w: width, h: base.h }
+    const constraints = getWidgetMinConstraints(meta, width)
+    const height = Math.max(constraints.minH, base.h)
+    return { id: widget.id, w: width, h: height, minW: constraints.minW, minH: constraints.minH }
   })
 
   return flowLayouts(items)
@@ -1318,8 +1358,9 @@ export default function DashboardPage() {
           startingPosition + newWidgets.length,
           meta?.defaultWidth ?? 400,
           meta?.defaultHeight ?? 300,
+          meta,
         )
-        const layout = sanitizeLayout({ ...fallbackLayout, y: nextY }, fallbackLayout)
+        const layout = sanitizeLayout({ ...fallbackLayout, y: nextY }, fallbackLayout, meta)
         nextY = layout.y + layout.h
         const newId = generateWidgetId()
 
@@ -1450,16 +1491,17 @@ export default function DashboardPage() {
     if (!dashboard) return []
     return dashboard.widgets.map((widget, index) => {
       const meta = widgetMetadata[widget.type]
-      const fallback = createFallbackLayout(index, widget.width ?? meta?.defaultWidth, widget.height ?? meta?.defaultHeight)
-      const layout = sanitizeLayout(widget.layout, fallback)
+      const fallback = createFallbackLayout(index, widget.width ?? meta?.defaultWidth, widget.height ?? meta?.defaultHeight, meta)
+      const layout = sanitizeLayout(widget.layout, fallback, meta)
+      const { minW, minH } = getWidgetMinConstraints(meta, layout.w)
       return {
         i: widget.id,
         x: layout.x,
         y: layout.y,
         w: layout.w,
         h: layout.h,
-        minW: MIN_WIDGET_W,
-        minH: MIN_WIDGET_H,
+        minW,
+        minH,
       }
     })
   }, [dashboard, widgetMetadataKey])

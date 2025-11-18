@@ -46,7 +46,7 @@ async function fetchTopPages(limit = 5): Promise<Row[]> {
 }
 
 // 메인 컴포넌트
-export default function TopPagesWidget({ timeRange, language }: WidgetProps) {
+export default function TopPagesWidget({ timeRange, language, containerSize }: WidgetProps) {
   // API 응답 데이터
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -92,12 +92,17 @@ export default function TopPagesWidget({ timeRange, language }: WidgetProps) {
     return { xMax: maxNice, xTicks: ticks }
   }, [chartData])
 
+  const containerHeight = containerSize?.height ?? 0
+  const headerReserve = 110
+  const bodyHeight = containerHeight > headerReserve ? containerHeight - headerReserve : containerHeight
+  const chartHeight = bodyHeight > 0 ? Math.max(260, Math.min(bodyHeight, 600)) : 320
+
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
         <CardTitle>{copy.title}</CardTitle>
       </CardHeader>
-      <CardContent className="pt-3 md:pt-4" style={{ height: 320 }}>
+      <CardContent className="flex flex-1 flex-col pt-3 md:pt-4">
         {/* 에러 상태 */}
         {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
         {/* 로딩 상태 */}
@@ -108,7 +113,9 @@ export default function TopPagesWidget({ timeRange, language }: WidgetProps) {
         )}
         {/* 차트 렌더링 */}
         {rows && rows.length > 0 && (
-          <TopPagesChart chartData={chartData} xMax={xMax} xTicks={xTicks} />
+          <div className="flex-1" style={{ minHeight: chartHeight }}>
+            <TopPagesChart chartData={chartData} xMax={xMax} xTicks={xTicks} height={chartHeight} />
+          </div>
         )}
       </CardContent>
     </>
@@ -129,7 +136,7 @@ function measureTextPx(text: string, font = "12px sans-serif"): number {
 ;(measureTextPx as any)._canvas = undefined as HTMLCanvasElement | undefined
 
 // 차트 컴포넌트
-function TopPagesChart({ chartData, xMax, xTicks }: { chartData: ChartDatum[]; xMax: number; xTicks: number[] }) {
+function TopPagesChart({ chartData, xMax, xTicks, height }: { chartData: ChartDatum[]; xMax: number; xTicks: number[]; height?: number }) {
   const yAxisWidth = useMemo(() => {
     const max = chartData.reduce((m, d) => Math.max(m, measureTextPx(d.label, '12px sans-serif')), 0)
     // 최소/최대 폭 제한으로 차트 영역 과도 점유 방지
@@ -140,7 +147,7 @@ function TopPagesChart({ chartData, xMax, xTicks }: { chartData: ChartDatum[]; x
   }, [chartData])
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <ResponsiveContainer width="100%" height={height ?? 320}>
       <BarChart
         data={chartData}
         layout="vertical"
@@ -191,6 +198,10 @@ export const widgetMeta: WidgetMeta = {
   description: "인기 페이지 Top 5를 가로 막대로 표시",
   defaultWidth: 520,
   defaultHeight: 300,
+  minWidth: 420,
+  minHeight: 340,
+  relaxedMinHeight: 240,
+  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["traffic"],
   localizations: {

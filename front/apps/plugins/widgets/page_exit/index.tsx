@@ -35,7 +35,7 @@ function formatPct(v: number) {
   return `${n.toFixed(2)}%`
 }
 
-export default function PageExitWidget({ timeRange, language }: WidgetProps) {
+export default function PageExitWidget({ timeRange, language, containerSize }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -67,7 +67,14 @@ export default function PageExitWidget({ timeRange, language }: WidgetProps) {
     }
   }, [days])
 
-  const topSorted = useMemo(() => (rows ?? []).slice(0, 10), [rows])
+  const topSorted = useMemo(() => (rows ?? []), [rows])
+
+  const containerWidth = containerSize?.width ?? 0
+  const containerHeight = containerSize?.height ?? 0
+  const headerReserve = 120
+  const bodyHeight = containerHeight > headerReserve ? containerHeight - headerReserve : containerHeight
+  const columns = containerWidth >= 760 ? 2 : 1
+  const listStyle = bodyHeight > 0 ? { maxHeight: bodyHeight, overflowY: "auto" as const } : undefined
 
   return (
     <>
@@ -109,24 +116,32 @@ export default function PageExitWidget({ timeRange, language }: WidgetProps) {
         {!error && rows === null && <div className="text-sm text-muted-foreground">{common.loading}</div>}
         {!error && rows && rows.length === 0 && <div className="text-sm text-muted-foreground">{common.noData}</div>}
         {!error && rows && rows.length > 0 && (
-          <div className="divide-y">
+          <div
+            className="grid gap-3"
+            style={{
+              gridTemplateColumns: columns > 1 ? `repeat(${columns}, minmax(0, 1fr))` : undefined,
+              ...(listStyle ?? {}),
+            }}
+          >
             {topSorted.map((r, idx) => (
-              <div key={`${r.path}-${idx}`} className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-xs tabular-nums text-muted-foreground w-6 text-right">{idx + 1}.</span>
-                  <div className="min-w-0">
-                    <div className="text-sm truncate" title={r.path}>{displayPath(r.path)}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      <span className="mr-3">
-                        {copy.labels.exits}: <span className="tabular-nums">{r.exits ?? 0}</span>
-                      </span>
-                      <span>
-                        {copy.labels.views}: <span className="tabular-nums">{r.views ?? 0}</span>
-                      </span>
+              <div key={`${r.path}-${idx}`} className="rounded-md border px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-xs tabular-nums text-muted-foreground w-6 text-right">{idx + 1}.</span>
+                    <div className="min-w-0">
+                      <div className="text-sm truncate" title={r.path}>{displayPath(r.path)}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-3">
+                        <span>
+                          {copy.labels.exits}: <span className="tabular-nums">{r.exits ?? 0}</span>
+                        </span>
+                        <span>
+                          {copy.labels.views}: <span className="tabular-nums">{r.views ?? 0}</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
+                  <div className="text-sm font-medium tabular-nums whitespace-nowrap">{formatPct(r.exit_rate || 0)}</div>
                 </div>
-                <div className="text-sm font-medium tabular-nums">{formatPct(r.exit_rate || 0)}</div>
               </div>
             ))}
           </div>
@@ -147,6 +162,10 @@ export const widgetMeta: WidgetMeta = {
   description: "페이지별 세션 종료 비율 Top 10",
   defaultWidth: 520,
   defaultHeight: 300,
+  minWidth: 420,
+  minHeight: 340,
+  relaxedMinHeight: 240,
+  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["behavior"],
   localizations: {
