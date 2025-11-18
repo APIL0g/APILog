@@ -196,6 +196,7 @@ function DynamicWidgetRenderer({ spec, config, language }: DynamicWidgetRenderer
                 chart={chartConfig}
                 data={rowSeries}
                 formatHint={chartConfig.value_format}
+                language={language}
               />
             </div>
           )}
@@ -282,12 +283,16 @@ function DynamicChart({
   data,
   chart,
   formatHint,
+  language,
 }: {
   chartType: DynamicChartType
   data: SeriesResult
   chart: DynamicChartConfig
   formatHint?: string | null
+  language?: string
 }) {
+  const axisTicks = useMemo(() => buildAxisTicks(data.data), [data.data])
+
   if (chartType === "table") {
     return <DynamicTable data={data.data} />
   }
@@ -323,7 +328,12 @@ function DynamicChart({
       <ResponsiveContainer width="100%" height={320}>
         <BarChart data={data.data}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-          <XAxis dataKey="label" stroke="hsl(var(--border))" />
+          <XAxis
+            dataKey="label"
+            stroke="hsl(var(--border))"
+            ticks={axisTicks}
+            tickFormatter={(value) => formatAxisLabel(value, language)}
+          />
           <YAxis stroke="hsl(var(--border))" />
           <Tooltip formatter={(value: unknown) => formatValue(value, formatHint)} />
           <Legend />
@@ -342,7 +352,12 @@ function DynamicChart({
       <ResponsiveContainer width="100%" height={320}>
         <AreaChart data={data.data}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-          <XAxis dataKey="label" stroke="hsl(var(--border))" />
+          <XAxis
+            dataKey="label"
+            stroke="hsl(var(--border))"
+            ticks={axisTicks}
+            tickFormatter={(value) => formatAxisLabel(value, language)}
+          />
           <YAxis stroke="hsl(var(--border))" />
           <Tooltip formatter={(value: unknown) => formatValue(value, formatHint)} />
           <Legend />
@@ -366,7 +381,12 @@ function DynamicChart({
     <ResponsiveContainer width="100%" height={320}>
       <LineChart data={data.data}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-        <XAxis dataKey="label" stroke="hsl(var(--border))" />
+        <XAxis
+          dataKey="label"
+          stroke="hsl(var(--border))"
+          ticks={axisTicks}
+          tickFormatter={(value) => formatAxisLabel(value, language)}
+        />
         <YAxis stroke="hsl(var(--border))" />
         <Tooltip formatter={(value: unknown) => formatValue(value, formatHint)} />
         <Legend />
@@ -445,6 +465,52 @@ function MetaBadge({ label, value }: { label: string; value: string }) {
       <span className="font-medium normal-case text-foreground">{value}</span>
     </span>
   )
+}
+
+function buildAxisTicks(rows: DataRow[]): Array<string | number> | undefined {
+  const seen = new Set<string>()
+  const ticks: Array<string | number> = []
+  rows.forEach((row) => {
+    const raw = row.rawX ?? row.label
+    const rawString = raw == null ? undefined : String(raw)
+    const ts = Date.parse(rawString ?? "")
+    if (Number.isNaN(ts)) {
+      return
+    }
+    const date = new Date(ts)
+    const key = `${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`
+    if (seen.has(key)) {
+      return
+    }
+    seen.add(key)
+    let tickValue: string | number
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      tickValue = raw
+    } else if (typeof row.label === "string" && row.label.length > 0) {
+      tickValue = row.label
+    } else if (rawString) {
+      tickValue = rawString
+    } else {
+      tickValue = key
+    }
+    ticks.push(tickValue)
+  })
+  return ticks.length > 0 ? ticks : undefined
+}
+
+function formatAxisLabel(value: unknown, language?: string): string {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? `${value}` : ""
+  }
+  const str = ensureString(value)
+  if (!str) return ""
+  const parsed = new Date(str)
+  if (!Number.isNaN(parsed.getTime())) {
+    const month = `${parsed.getUTCMonth() + 1}`.padStart(2, "0")
+    const day = `${parsed.getUTCDate()}`.padStart(2, "0")
+    return `${month}/${day}`
+  }
+  return str.length > 18 ? `${str.slice(0, 16)}…` : str
 }
 
 function StateMessage({
