@@ -453,17 +453,19 @@ export default function AIReportPage() {
               <p className="text-sm text-muted-foreground">{copy.headerSubtitle}</p>
             </div>
           </div>
-          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-            <Select value={language} onValueChange={(value) => (value === "ko" || value === "en" ? setLanguage(value) : null)}>
-              <SelectTrigger className="w-full min-w-[160px] sm:w-[140px]" aria-label={copy.languageLabel}>
-                <SelectValue placeholder={copy.languageLabel}>{LANGUAGE_LABELS[language]}</SelectValue>
-              </SelectTrigger>
-              <SelectContent align="end">
-                <SelectItem value="en">English</SelectItem>
-                <SelectItem value="ko">한국어</SelectItem>
-              </SelectContent>
-            </Select>
-            <ThemeToggle />
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+            <div className="flex w-full flex-row items-center gap-2 sm:w-auto">
+              <Select value={language} onValueChange={(value) => (value === "ko" || value === "en" ? setLanguage(value) : null)}>
+                <SelectTrigger className="w-full min-w-[160px] sm:w-[140px]" aria-label={copy.languageLabel}>
+                  <SelectValue placeholder={copy.languageLabel}>{LANGUAGE_LABELS[language]}</SelectValue>
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="ko">한국어</SelectItem>
+                </SelectContent>
+              </Select>
+              <ThemeToggle />
+            </div>
             <Button variant="outline" onClick={() => (globalThis.location.hash = "#/")} className="w-full sm:w-auto">
               {copy.backToDashboard}
             </Button>

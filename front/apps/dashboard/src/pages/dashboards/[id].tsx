@@ -1596,8 +1596,8 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="px-6 py-4 space-y-4">
+      <header className="sticky top-0 z-20 border-b border-border bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+        <div className="mx-auto max-w-7xl px-4 py-4 space-y-4 lg:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
               <div className="flex items-center gap-4">
@@ -1686,29 +1686,41 @@ export default function DashboardPage() {
                   </Badge>
                 )}
 
-                {!isEditMode && !isNewPresetDraft && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleStartNewLayout}
-                    className="w-full sm:w-auto"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    {copy.newLayout}
-                  </Button>
-                )}
+                <div className="flex w-full flex-row flex-wrap gap-2 sm:w-auto">
+                  {!isEditMode && !isNewPresetDraft && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleStartNewLayout}
+                      className="flex-1 min-w-[140px]"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      {copy.newLayout}
+                    </Button>
+                  )}
 
-                {isEditMode && (
+                  {isEditMode && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancelEditing}
+                      className="flex-1 min-w-[140px] text-destructive hover:text-destructive focus:text-destructive"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      {copy.cancelEdit}
+                    </Button>
+                  )}
+
                   <Button
-                    variant="outline"
+                    variant={isEditMode ? "default" : "outline"}
                     size="sm"
-                    onClick={handleCancelEditing}
-                    className="w-full text-destructive hover:text-destructive focus:text-destructive sm:w-auto"
+                    onClick={handleToggleEditMode}
+                    className="flex-1 min-w-[140px]"
                   >
-                    <X className="h-4 w-4 mr-2" />
-                    {copy.cancelEdit}
+                    <LayoutGrid className="h-4 w-4 mr-2" />
+                    {isEditMode ? copy.saveLayout : copy.editLayout}
                   </Button>
-                )}
+                </div>
 
                 {isEditMode && (
                   <DropdownMenu>
@@ -1766,18 +1778,9 @@ export default function DashboardPage() {
                   </DropdownMenu>
                 )}
 
-                <Button
-                  variant={isEditMode ? "default" : "outline"}
-                  size="sm"
-                  onClick={handleToggleEditMode}
-                  className="w-full sm:w-auto"
-                >
-                  <LayoutGrid className="h-4 w-4 mr-2" />
-                  {isEditMode ? copy.saveLayout : copy.editLayout}
-                </Button>
               </div>
 
-              <div className="flex w-full flex-col gap-2 border-t border-border pt-3 sm:w-auto sm:flex-row sm:items-center sm:gap-2 sm:border-none sm:pt-0 lg:border-l lg:pl-3">
+              <div className="flex w-full flex-row items-center gap-2 border-t border-border pt-3 sm:w-auto sm:border-none sm:pt-0 lg:border-l lg:pl-3">
                 <Select value={language} onValueChange={(value) => (value === "ko" || value === "en" ? setLanguage(value) : null)}>
                   <SelectTrigger className="w-full sm:w-[140px]" aria-label={copy.languageLabel}>
                     <SelectValue placeholder={copy.languageLabel} />
@@ -1787,10 +1790,7 @@ export default function DashboardPage() {
                     <SelectItem value="ko">한국어</SelectItem>
                   </SelectContent>
                 </Select>
-                <div className="flex w-full items-center justify-between gap-2 rounded-md border border-border px-3 py-2 sm:w-auto sm:border-none sm:px-0 sm:py-0">
-                  <span className="text-sm font-medium text-muted-foreground sm:hidden">{copy.themeLabel}</span>
-                  <ThemeToggle />
-                </div>
+                <ThemeToggle />
               </div>
             </div>
           </div>
