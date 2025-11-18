@@ -1,8 +1,12 @@
 """Service logic for visitor statistics.
 
 Aggregates per-day visitor counts and new visitor counts based on ``user_hash``
-values stored in InfluxDB. Previous-day results are cached in-memory for faster
-subsequent lookups while the current day's statistics are always refreshed.
+values stored in InfluxDB.
+
+🏃‍♂️ Performance notes
+- 7일치 히스토리는 이제 하루씩 7번 조회하지 않고,
+  **한 번의 범위 SQL(7일 구간)** 로 묶어서 가져온 뒤 파이썬에서 일자별로 풀어 쓴다.
+- 과거 날짜(오늘 이전)는 여전히 메모리 캐시에 저장해서 재호출 속도를 높인다.
 """
 
 from __future__ import annotations
@@ -34,20 +38,69 @@ def get_visitor_stat(date_str: Optional[str] = None, site_id: Optional[str] = No
             "total_visitors": 120,
             "new_visitors": 45,
             "returning_visitors": 75,
-            "history": [...],
+            "history": [
+                {
+                    "date": "2024-12-26",
+                    "total_visitors": ...,
+                    "new_visitors": ...,
+                    "returning_visitors": ...,
+                },
+                ...  # 7일치 (과거 6일 + target_date)
+            ],
         }
     """
 
     target_date = _parse_date(date_str)
-    primary = _get_day_stat(target_date, site_id)
+    today = datetime.now(timezone.utc).date()
+    site_key = site_id or ""
 
-    history_entries: List[Dict[str, Any]] = []
-    for offset in range(6, -1, -1):
-        day = target_date - timedelta(days=offset)
-        if day == target_date:
-            history_entries.append(dict(primary))
-        else:
-            history_entries.append(_get_day_stat(day, site_id))
+    # 7일 window: target_date 포함 과거 6일
+    history_days: List[date] = [
+        target_date - timedelta(days=offset) for offset in range(6, -1, -1)
+    ]
+
+    stats_by_date: Dict[date, Dict[str, Any]] = {}
+    missing_days: List[date] = []
+
+    # 1) 캐시에서 먼저 채우고, 캐시에 없는 날짜만 모아서 한 번에 Influx 조회
+    for day in history_days:
+        if day < today:
+            cached = _get_cached((day.isoformat(), site_key))
+            if cached is not None:
+                stats_by_date[day] = cached
+                continue
+        # 오늘이거나 캐시에 없는 과거 날짜는 나중에 범위 조회
+        missing_days.append(day)
+
+    if missing_days:
+        start_day = min(missing_days)
+        end_day = max(missing_days)
+        range_stats = _query_range_influx(start_day, end_day, site_id)
+
+        for iso, payload in range_stats.items():
+            d = datetime.fromisoformat(iso).date()
+            stats_by_date[d] = payload
+            if d < today:
+                _set_cached((iso, site_key), payload)
+
+    # 2) 그래도 비어 있는 날짜(데이터 완전 0인 날)는 0으로 채움
+    for day in history_days:
+        if day not in stats_by_date:
+            iso = day.isoformat()
+            stats_by_date[day] = {
+                "date": iso,
+                "total_visitors": 0,
+                "new_visitors": 0,
+            }
+
+    primary = stats_by_date.get(
+        target_date,
+        {
+            "date": target_date.isoformat(),
+            "total_visitors": 0,
+            "new_visitors": 0,
+        },
+    )
 
     def _with_returning(payload: Dict[str, Any]) -> Dict[str, Any]:
         total = int(payload.get("total_visitors", 0) or 0)
@@ -57,26 +110,16 @@ def get_visitor_stat(date_str: Optional[str] = None, site_id: Optional[str] = No
         enriched["returning_visitors"] = returning
         return enriched
 
+    history_entries = [_with_returning(stats_by_date[d]) for d in history_days]
+
     response = _with_returning(primary)
-    response["history"] = [_with_returning(entry) for entry in history_entries]
+    response["history"] = history_entries
     return response
 
 
-def _get_day_stat(target_date: date, site_id: Optional[str]) -> Dict[str, Any]:
-    today = datetime.now(timezone.utc).date()
-    cache_key = (target_date.isoformat(), site_id or "")
-
-    if target_date < today:
-        cached = _get_cached(cache_key)
-        if cached is not None:
-            return cached
-
-    stats = _query_influx(target_date, site_id)
-
-    if target_date < today:
-        _set_cached(cache_key, stats)
-
-    return stats
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _parse_date(date_str: Optional[str]) -> date:
@@ -116,59 +159,90 @@ def _set_cached(key: Tuple[str, str], value: Dict[str, Any]) -> None:
         _CACHE[key] = dict(value)
 
 
-def _query_influx(target_date: date, site_id: Optional[str]) -> Dict[str, Any]:
-    start, end = _date_range(target_date)
-    start_iso = _iso_utc(start)
-    end_iso = _iso_utc(end)
+def _query_range_influx(
+    start_date: date,
+    end_date: date,
+    site_id: Optional[str],
+) -> Dict[str, Dict[str, Any]]:
+    """Query InfluxDB for a date range and return per-day stats.
+
+    Args:
+        start_date: 시작 날짜 (포함)
+        end_date:   끝 날짜 (포함)
+
+    Returns:
+        {
+            "YYYY-MM-DD": {
+                "date": "YYYY-MM-DD",
+                "total_visitors": int,
+                "new_visitors": int,
+            },
+            ...
+        }
+    """
+    # [start, end_next) 구간
+    start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc)
+    end_dt = datetime(end_date.year, end_date.month, end_date.day, tzinfo=timezone.utc) + timedelta(days=1)
+
+    start_iso = _iso_utc(start_dt)
+    end_iso = _iso_utc(end_dt)
 
     client = InfluxDBClient3(host=INFLUX_URL, database=INFLUX_DATABASE)
-
     where_clause = _build_where(site_id)
 
+    # 1) 일자별 total_visitors (해당 일자에 page_view를 한 distinct user_hash 수)
     total_sql = f"""
-        SELECT COUNT(*) AS total_visitors
-        FROM (
-            SELECT DISTINCT user_hash
-            FROM events
-            WHERE {where_clause}
-              AND time >= TIMESTAMP '{start_iso}'
-              AND time < TIMESTAMP '{end_iso}'
-        )
+        SELECT
+            date_bin(INTERVAL '1 day', time, TIMESTAMP '1970-01-01 00:00:00Z') AS day,
+            COUNT(DISTINCT user_hash) AS total_visitors
+        FROM events
+        WHERE {where_clause}
+          AND time >= TIMESTAMP '{start_iso}'
+          AND time < TIMESTAMP '{end_iso}'
+        GROUP BY day
     """
 
+    # 2) 일자별 new_visitors
+    #    - 유저별로 '첫 방문 시각(MIN(time))'을 먼저 계산
+    #    - 그 first_time 이 7일 구간 안에 있는 경우만 day-bin 으로 묶어서 카운트
     new_sql = f"""
-        SELECT COUNT(*) AS new_visitors
-        FROM (
-            SELECT user_hash, MIN(time) AS first_time
+        WITH first_visits AS (
+            SELECT
+                MIN(time) AS first_time
             FROM events
             WHERE {where_clause}
             GROUP BY user_hash
-        ) AS first_visits
+        )
+        SELECT
+            date_bin(INTERVAL '1 day', first_time, TIMESTAMP '1970-01-01 00:00:00Z') AS day,
+            COUNT(*) AS new_visitors
+        FROM first_visits
         WHERE first_time >= TIMESTAMP '{start_iso}'
           AND first_time < TIMESTAMP '{end_iso}'
+        GROUP BY day
     """
 
     try:
-        total = _run_scalar_query(client, total_sql, "total_visitors")
-        new = _run_scalar_query(client, new_sql, "new_visitors")
+        total_by_day = _run_range_query(client, total_sql, "total_visitors")
+        new_by_day = _run_range_query(client, new_sql, "new_visitors")
     except Exception as exc:  # pragma: no cover - defensive logging path
-        print(f"Error querying InfluxDB visitor stats: {exc}")
-        total = 0
-        new = 0
+        print(f"Error querying InfluxDB visitor stats (range): {exc}")
+        total_by_day = {}
+        new_by_day = {}
     finally:
         client.close()
 
-    return {
-        "date": target_date.isoformat(),
-        "total_visitors": int(total),
-        "new_visitors": int(new),
-    }
+    # 두 결과를 day 기준으로 merge
+    all_days = set(total_by_day.keys()) | set(new_by_day.keys())
+    result: Dict[str, Dict[str, Any]] = {}
+    for day_iso in all_days:
+        result[day_iso] = {
+            "date": day_iso,
+            "total_visitors": int(total_by_day.get(day_iso, 0)),
+            "new_visitors": int(new_by_day.get(day_iso, 0)),
+        }
 
-
-def _date_range(target_date: date) -> Tuple[datetime, datetime]:
-    start = datetime(target_date.year, target_date.month, target_date.day, tzinfo=timezone.utc)
-    end = start + timedelta(days=1)
-    return start, end
+    return result
 
 
 def _iso_utc(dt: datetime) -> str:
@@ -184,29 +258,53 @@ def _build_where(site_id: Optional[str]) -> str:
     return " AND ".join(conditions)
 
 
-def _run_scalar_query(client: InfluxDBClient3, sql: str, column: str) -> int:
-    table = client.query(query=sql, language="sql")
+def _normalize_day_value(value: Any) -> Optional[str]:
+    """Influx date_bin 결과를 'YYYY-MM-DD' 문자열로 통일."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
 
+    text = str(value)
+    if not text:
+        return None
+    if "T" in text:
+        # 예: 2025-01-01T00:00:00Z or 2025-01-01T00:00:00.000Z
+        return text.split("T", 1)[0]
+    return text[:10]
+
+
+def _run_range_query(client: InfluxDBClient3, sql: str, column: str) -> Dict[str, int]:
+    """일자 컬럼(day/time/_time) + 값 컬럼 하나를 갖는 쿼리를 실행해서
+    { 'YYYY-MM-DD': value } 형태로 변환."""
+    table = client.query(query=sql, language="sql")
     if table is None:
-        return 0
+        return {}
 
     data: Dict[str, Any] = getattr(table, "to_pydict", lambda: {})()
     if not data:
-        return 0
+        return {}
 
+    # 컬럼 이름은 day 또는 time 중 하나일 가능성이 큼
+    days = data.get("day") or data.get("time") or data.get("_time")
     values = data.get(column)
-    if not values:
-        return 0
+    if not days or not values:
+        return {}
 
-    try:
-        raw = values[0]
-    except (IndexError, TypeError):
-        return 0
+    result: Dict[str, int] = {}
+    for raw_day, raw_value in zip(days, values):
+        day_iso = _normalize_day_value(raw_day)
+        if not day_iso:
+            continue
 
-    try:
-        return int(raw)
-    except Exception:
         try:
-            return int(float(raw))
+            v = int(raw_value)
         except Exception:
-            return 0
+            try:
+                v = int(float(raw_value))
+            except Exception:
+                continue
+
+        result[day_iso] = v
+
+    return result
