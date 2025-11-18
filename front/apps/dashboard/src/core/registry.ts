@@ -4,6 +4,10 @@ export interface WidgetProps {
   config?: Record<string, any>
   timeRange: string
   language?: string
+  containerSize?: {
+    width: number
+    height: number
+  }
 }
 
 export type WidgetComponent = ComponentType<WidgetProps>
@@ -19,6 +23,10 @@ export interface WidgetMeta {
   description?: string
   defaultWidth?: number
   defaultHeight?: number
+  minWidth?: number
+  minHeight?: number
+  relaxedMinHeight?: number
+  relaxedMinHeightBreakpointCols?: number
   defaultConfig?: Record<string, any>
   previewImage?: string
   tags?: string[]
@@ -47,6 +55,10 @@ export function registerWidget(id: string, component: WidgetComponent, meta?: Pa
     description: meta?.description,
     defaultWidth: meta?.defaultWidth,
     defaultHeight: meta?.defaultHeight,
+    minWidth: meta?.minWidth,
+    minHeight: meta?.minHeight,
+    relaxedMinHeight: meta?.relaxedMinHeight,
+    relaxedMinHeightBreakpointCols: meta?.relaxedMinHeightBreakpointCols,
     defaultConfig: meta?.defaultConfig,
     previewImage: meta?.previewImage,
     tags: meta?.tags ?? [],

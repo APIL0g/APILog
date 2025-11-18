@@ -354,6 +354,8 @@ function nowIso() {
   return new Date().toISOString().replace(/\..*/, "")
 }
 
+const AI_REPORT_STORAGE_KEY = "ai-report-data"
+
 export default function AIReportPage() {
   const [prompt, setPrompt] = useState("")
   const [loading, setLoading] = useState(false)
@@ -362,10 +364,25 @@ export default function AIReportPage() {
   const [language, setLanguage] = useState<LanguageCode>("en")
   const copy = COPY[language]
 
-  const defaultRange = useMemo(() => {
+  const [defaultRange, setDefaultRange] = useState(() => {
     const to = new Date()
     const from = new Date(Date.now() - 24 * 60 * 60 * 1000)
     return { from: from.toISOString().replace(/\..*/, ""), to: to.toISOString().replace(/\..*/, ""), bucket: "1h" }
+  })
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const stored = window.localStorage?.getItem(AI_REPORT_STORAGE_KEY)
+      if (!stored) return
+      const parsed: { report?: Report; prompt?: string; range?: typeof defaultRange; language?: LanguageCode } = JSON.parse(stored)
+      if (parsed.prompt) setPrompt(parsed.prompt)
+      if (parsed.report) setReport(parsed.report)
+      if (parsed.range?.from && parsed.range?.to) setDefaultRange(parsed.range)
+      if (parsed.language === "ko" || parsed.language === "en") setLanguage(parsed.language)
+    } catch (err) {
+      console.warn("Failed to restore AI report state", err)
+    }
   }, [])
 
   useEffect(() => {
@@ -389,6 +406,18 @@ export default function AIReportPage() {
   useEffect(() => {
     window.localStorage?.setItem(LANGUAGE_STORAGE_KEY, language)
   }, [language])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      window.localStorage?.setItem(
+        AI_REPORT_STORAGE_KEY,
+        JSON.stringify({ prompt, report, range: defaultRange, language }),
+      )
+    } catch (err) {
+      console.warn("Failed to persist AI report state", err)
+    }
+  }, [prompt, report, defaultRange, language])
 
   async function handleGenerate() {
     setLoading(true)
@@ -444,18 +473,18 @@ export default function AIReportPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
+          <div className="flex flex-wrap items-center gap-3">
             <img src="/dashboard-logo.png" alt="ApiLog" className="h-8" />
             <div className="h-6 w-px bg-border" />
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-semibold text-foreground">{copy.headerTitle}</h1>
               <p className="text-sm text-muted-foreground">{copy.headerSubtitle}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-row flex-wrap items-center justify-end gap-2 sm:w-auto">
             <Select value={language} onValueChange={(value) => (value === "ko" || value === "en" ? setLanguage(value) : null)}>
-              <SelectTrigger className="w-[140px]" aria-label={copy.languageLabel}>
+              <SelectTrigger className="w-full min-w-[160px] sm:w-[140px]" aria-label={copy.languageLabel}>
                 <SelectValue placeholder={copy.languageLabel}>{LANGUAGE_LABELS[language]}</SelectValue>
               </SelectTrigger>
               <SelectContent align="end">
@@ -464,14 +493,24 @@ export default function AIReportPage() {
               </SelectContent>
             </Select>
             <ThemeToggle />
-            <Button variant="outline" onClick={() => (globalThis.location.hash = "#/")}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                try {
+                  globalThis.location.hash = "#/"
+                } catch (err) {
+                  console.error("Failed to navigate to dashboard", err)
+                }
+              }}
+              className="w-full sm:w-auto"
+            >
               {copy.backToDashboard}
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-6 p-6">
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
         <Card>
           <CardHeader>
             <CardTitle>{copy.generateCardTitle}</CardTitle>
@@ -510,7 +549,7 @@ export default function AIReportPage() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <CardTitle className="flex items-center gap-2">
                     {report.title}
                     <Badge variant="secondary" className="uppercase">

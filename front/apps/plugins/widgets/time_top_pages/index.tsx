@@ -30,7 +30,7 @@ function formatBucketLabel(b: string): string {
   return t.slice(0, 16)
 }
 
-export default function TimeTopPagesWidget({ language }: WidgetProps) {
+export default function TimeTopPagesWidget({ language, containerSize }: WidgetProps) {
   const [bucket, setBucket] = useState<"6h" | "12h">("6h")
   const [hours, setHours] = useState<number>(24)
   const [limit] = useState<number>(5)
@@ -49,7 +49,14 @@ export default function TimeTopPagesWidget({ language }: WidgetProps) {
     return () => { alive = false }
   }, [bucket, hours, limit])
 
-  const hasData = useMemo(() => (buckets?.some(b => (b.rows?.length ?? 0) > 0)) ?? false, [buckets])
+  const hasData = useMemo(() => (buckets?.some((b) => (b.rows?.length ?? 0) > 0)) ?? false, [buckets])
+
+  const containerWidth = containerSize?.width ?? 0
+  const containerHeight = containerSize?.height ?? 0
+  const headerReserve = 130
+  const bodyHeight = containerHeight > headerReserve ? containerHeight - headerReserve : containerHeight
+  const bucketColumns = containerWidth >= 720 ? 2 : 1
+  const listStyle = bodyHeight > 0 ? { maxHeight: bodyHeight, overflowY: "auto" as const } : undefined
 
   return (
     <>
@@ -80,14 +87,20 @@ export default function TimeTopPagesWidget({ language }: WidgetProps) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pt-3 md:pt-4 space-y-4" style={{ maxHeight: 360, overflowY: 'auto' }}>
+      <CardContent className="flex flex-1 flex-col gap-4 pt-3 md:pt-4">
         {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
         {!buckets && !error && <div className="text-sm text-muted-foreground">{common.loading}</div>}
         {buckets && !hasData && (
           <div className="text-sm text-muted-foreground">{common.noData}</div>
         )}
         {buckets && hasData && (
-          <div className="space-y-4">
+          <div
+            className="grid gap-4"
+            style={{
+              gridTemplateColumns: bucketColumns > 1 ? `repeat(${bucketColumns}, minmax(0,1fr))` : undefined,
+              ...(listStyle ?? {}),
+            }}
+          >
             {buckets.map((bk, i) => (
               <div key={`${bk.bucket}-${i}`} className="rounded-md border">
                 <div className="px-3 py-2 text-xs text-muted-foreground border-b">
@@ -124,6 +137,10 @@ export const widgetMeta: WidgetMeta = {
   description: "시간대(6h/12h) 버킷별 Top 페이지",
   defaultWidth: 520,
   defaultHeight: 300,
+  minWidth: 420,
+  minHeight: 320,
+  relaxedMinHeight: 220,
+  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["traffic"],
   localizations: {

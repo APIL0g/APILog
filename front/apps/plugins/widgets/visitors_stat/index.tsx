@@ -130,7 +130,7 @@ function formatDisplayDate(value?: string): string | undefined {
   }).format(parsed)
 }
 
-export default function VisitorStatWidget({ timeRange, config, language }: WidgetProps) {
+export default function VisitorStatWidget({ timeRange, config, language, containerSize }: WidgetProps) {
   const [data, setData] = useState<VisitorStatResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const common = getCommonWidgetCopy(language)
@@ -177,6 +177,21 @@ export default function VisitorStatWidget({ timeRange, config, language }: Widge
     }))
   }, [data])
 
+  const containerWidth = containerSize?.width ?? 0
+  const containerHeight = containerSize?.height ?? 0
+  const headerReserve = 140
+  const bodyHeight = containerHeight > headerReserve ? containerHeight - headerReserve : containerHeight
+  const metricsColumns = containerWidth >= 640 ? 3 : containerWidth >= 420 ? 2 : 1
+  const metricsMinHeight = metricsColumns >= 3 ? 140 : metricsColumns === 2 ? 170 : 210
+  const chartSectionGap = 16
+  const chartHeight = (() => {
+    if (!bodyHeight || bodyHeight <= 0) return 260
+    const available = Math.max(bodyHeight - metricsMinHeight - chartSectionGap, 180)
+    return Math.max(200, Math.min(available, 560))
+  })()
+  const metricsHeight =
+    bodyHeight && bodyHeight > 0 ? Math.max(metricsMinHeight, bodyHeight - chartHeight - chartSectionGap) : metricsMinHeight
+
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
@@ -187,12 +202,18 @@ export default function VisitorStatWidget({ timeRange, config, language }: Widge
           </div>
         )}
       </CardHeader>
-      <CardContent className="pt-3 md:pt-4">
+      <CardContent className="flex flex-1 flex-col gap-4 overflow-hidden pt-3 md:pt-4">
         {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
         {!data && !error && <div className="text-sm text-muted-foreground">{common.loading}</div>}
         {data && (
-          <>
-            <div className="grid gap-3 sm:grid-cols-3">
+          <div className="flex flex-1 flex-col gap-4">
+            <div
+              className="grid gap-3"
+              style={{
+                minHeight: metricsHeight,
+                gridTemplateColumns: metricsColumns > 1 ? `repeat(${metricsColumns}, minmax(0, 1fr))` : undefined,
+              }}
+            >
               <Metric label={copy.metrics.total} value={formatNumber(data.total_visitors)} helper="" />
               <Metric
                 label={copy.metrics.returning}
@@ -201,11 +222,11 @@ export default function VisitorStatWidget({ timeRange, config, language }: Widge
               />
               <Metric label={copy.metrics.new} value={formatNumber(data.new_visitors)} helper="" />
             </div>
-            <div className="mt-6 h-64">
+            <div className="flex-1">
               {chartData.length === 0 ? (
                 <div className="text-sm text-muted-foreground">{copy.noHistory}</div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height={chartHeight}>
                   <LineChart
                     data={chartData}
                     margin={{ top: 16, right: 20, left: 4, bottom: 12 }}
@@ -232,7 +253,7 @@ export default function VisitorStatWidget({ timeRange, config, language }: Widge
                 </ResponsiveContainer>
               )}
             </div>
-          </>
+          </div>
         )}
       </CardContent>
     </>
@@ -297,6 +318,10 @@ export const widgetMeta: WidgetMeta = {
   description: "Show total, returning, and new visitors with a 7-day trend chart",
   defaultWidth: 520,
   defaultHeight: 300,
+  minWidth: 480,
+  minHeight: 360,
+  relaxedMinHeight: 240,
+  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["audience"],
   localizations: {

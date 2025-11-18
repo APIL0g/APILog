@@ -5,7 +5,7 @@ import RGL, { WidthProvider, type Layout } from "react-grid-layout"
 import "react-grid-layout/css/styles.css"
 import "react-resizable/css/styles.css"
 import { WidgetHost } from "@/core/WidgetHost"
-import { widgetMetadata } from "@/core/registry"
+import { widgetMetadata, type WidgetMeta } from "@/core/registry"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -86,6 +86,7 @@ const MIN_WIDGET_H = 4
 const DEFAULT_WIDGET_W = 4
 const DEFAULT_WIDGET_H = 8
 const APPROX_COL_WIDTH_PX = 120
+const MOBILE_BREAKPOINT_PX = 768
 const RESIZE_HANDLES: NonNullable<Layout["resizeHandles"]> = ["s", "n", "e", "w", "se", "sw", "ne", "nw"]
 const DASHBOARD_TUTORIAL_STORAGE_KEY = "apilog-dashboard-tutorial-seen"
 const tutorialGifSourcesByLanguage = {
@@ -146,6 +147,7 @@ interface DashboardCopy {
   widgetTagLabels: Record<string, string>
   widgetTagDescriptions: Record<string, string>
   languageLabel: string
+  themeLabel: string
   presetButtonPlaceholder: string
   presetMenuTitle: string
   noPresets: string
@@ -253,6 +255,7 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       others: "Additional widgets that don't fit a single category.",
     },
     languageLabel: "Language",
+    themeLabel: "Theme",
     presetButtonPlaceholder: "Select preset",
     presetMenuTitle: "Presets",
     noPresets: "No presets yet",
@@ -353,6 +356,7 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       others: "다른 카테고리에 속하지 않은 위젯 모음이에요.",
     },
     languageLabel: "언어",
+    themeLabel: "테마",
     presetButtonPlaceholder: "프리셋 선택",
     presetMenuTitle: "프리셋",
     noPresets: "아직 프리셋이 없어요",
@@ -591,10 +595,12 @@ function restoreWidgetsFromStorage(storedWidgets: StoredWidget[]): Widget[] {
         index,
         (typeof widget.width === "number" && Number.isFinite(widget.width) ? widget.width : undefined) ?? meta?.defaultWidth,
         (typeof widget.height === "number" && Number.isFinite(widget.height) ? widget.height : undefined) ?? meta?.defaultHeight,
+        meta,
       )
       const layout = sanitizeLayout(
         widget.layout && typeof widget.layout === "object" ? (widget.layout as Partial<WidgetLayoutState>) : undefined,
         fallbackLayout,
+        meta,
       )
 
       return {
@@ -641,9 +647,19 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
 
+function isMobileViewport() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false
+  return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX}px)`).matches
+}
+
+function getDefaultGridWidth() {
+  return isMobileViewport() ? GRID_COLS : DEFAULT_WIDGET_W
+}
+
 function pxToGridWidth(width?: number) {
-  if (typeof width !== "number" || !Number.isFinite(width)) return DEFAULT_WIDGET_W
-  return clamp(Math.round(width / APPROX_COL_WIDTH_PX) || DEFAULT_WIDGET_W, MIN_WIDGET_W, GRID_COLS)
+  if (isMobileViewport()) return GRID_COLS
+  if (typeof width !== "number" || !Number.isFinite(width)) return getDefaultGridWidth()
+  return clamp(Math.round(width / APPROX_COL_WIDTH_PX) || getDefaultGridWidth(), MIN_WIDGET_W, GRID_COLS)
 }
 
 function pxToGridHeight(height?: number) {
@@ -651,22 +667,59 @@ function pxToGridHeight(height?: number) {
   return Math.max(Math.round(height / GRID_ROW_HEIGHT) || DEFAULT_WIDGET_H, MIN_WIDGET_H)
 }
 
-function createFallbackLayout(index: number, width?: number, height?: number): WidgetLayoutState {
-  const perRow = Math.max(1, Math.floor(GRID_COLS / DEFAULT_WIDGET_W))
-  const w = pxToGridWidth(width)
-  const h = pxToGridHeight(height)
-  const tentativeX = (index % perRow) * DEFAULT_WIDGET_W
+function pxToGridUnitsWidth(value?: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined
+  return clamp(Math.round(value / APPROX_COL_WIDTH_PX) || MIN_WIDGET_W, MIN_WIDGET_W, GRID_COLS)
+}
+
+function pxToGridUnitsHeight(value?: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined
+  return Math.max(Math.round(value / GRID_ROW_HEIGHT) || MIN_WIDGET_H, MIN_WIDGET_H)
+}
+
+function getWidgetMinConstraints(meta?: WidgetMeta, currentWidth?: number) {
+  const minW = meta?.minWidth ? pxToGridUnitsWidth(meta.minWidth) ?? MIN_WIDGET_W : MIN_WIDGET_W
+  let minH = meta?.minHeight ? pxToGridUnitsHeight(meta.minHeight) ?? MIN_WIDGET_H : MIN_WIDGET_H
+
+  if (
+    typeof currentWidth === "number" &&
+    meta?.relaxedMinHeight &&
+    typeof meta.relaxedMinHeightBreakpointCols === "number" &&
+    currentWidth >= meta.relaxedMinHeightBreakpointCols
+  ) {
+    const relaxed = pxToGridUnitsHeight(meta.relaxedMinHeight) ?? MIN_WIDGET_H
+    minH = Math.min(minH, relaxed)
+  }
+
+  return { minW: Math.max(MIN_WIDGET_W, minW), minH: Math.max(MIN_WIDGET_H, minH) }
+}
+
+function createFallbackLayout(index: number, width?: number, height?: number, meta?: WidgetMeta): WidgetLayoutState {
+  const defaultGridWidth = getDefaultGridWidth()
+  const perRow = Math.max(1, Math.floor(GRID_COLS / defaultGridWidth))
+  const tentativeW = pxToGridWidth(width)
+  const { minW, minH } = getWidgetMinConstraints(meta, tentativeW)
+  const w = Math.max(minW, tentativeW)
+  const tentativeH = pxToGridHeight(height)
+  const h = Math.max(minH, tentativeH)
+  const tentativeX = (index % perRow) * defaultGridWidth
   const x = clamp(tentativeX, 0, GRID_COLS - w)
   const y = Math.floor(index / perRow) * DEFAULT_WIDGET_H
   return { x, y, w, h }
 }
 
-function sanitizeLayout(layout: Partial<WidgetLayoutState> | undefined, fallback: WidgetLayoutState): WidgetLayoutState {
+function sanitizeLayout(
+  layout: Partial<WidgetLayoutState> | undefined,
+  fallback: WidgetLayoutState,
+  meta?: WidgetMeta,
+): WidgetLayoutState {
   const candidate = layout ?? {}
   const rawW = Number.isFinite(candidate.w) ? (candidate.w as number) : fallback.w
-  const w = clamp(Math.round(rawW), MIN_WIDGET_W, GRID_COLS)
+  let w = clamp(Math.round(rawW), MIN_WIDGET_W, GRID_COLS)
+  const { minW, minH } = getWidgetMinConstraints(meta, w)
+  w = Math.max(minW, w)
   const rawH = Number.isFinite(candidate.h) ? (candidate.h as number) : fallback.h
-  const h = Math.max(MIN_WIDGET_H, Math.round(rawH))
+  const h = Math.max(minH, Math.round(rawH))
   const rawX = Number.isFinite(candidate.x) ? (candidate.x as number) : fallback.x
   const x = clamp(Math.round(rawX), 0, GRID_COLS - w)
   const rawY = Number.isFinite(candidate.y) ? (candidate.y as number) : fallback.y
@@ -674,15 +727,15 @@ function sanitizeLayout(layout: Partial<WidgetLayoutState> | undefined, fallback
   return { x, y, w, h }
 }
 
-function flowLayouts(items: { id: string; w: number; h: number }[]): Record<string, WidgetLayoutState> {
+function flowLayouts(items: { id: string; w: number; h: number; minW: number; minH: number }[]): Record<string, WidgetLayoutState> {
   let cursorX = 0
   let cursorY = 0
   let rowHeight = 0
   const placements: Record<string, WidgetLayoutState> = {}
 
-  items.forEach(({ id, w, h }) => {
-    const width = clamp(Math.round(w) || MIN_WIDGET_W, MIN_WIDGET_W, GRID_COLS)
-    const height = Math.max(MIN_WIDGET_H, Math.round(h) || MIN_WIDGET_H)
+  items.forEach(({ id, w, h, minW, minH }) => {
+    const width = clamp(Math.round(w) || minW, minW, GRID_COLS)
+    const height = Math.max(minH, Math.round(h) || minH)
 
     if (cursorX + width > GRID_COLS) {
       cursorY += rowHeight
@@ -707,14 +760,16 @@ function autoLayoutWidgets(widgets: Widget[], mode: AutoLayoutMode): Record<stri
 
   const items = widgets.map((widget, index) => {
     const meta = widgetMetadata[widget.type]
-    const fallback = createFallbackLayout(index, widget.width ?? meta?.defaultWidth, widget.height ?? meta?.defaultHeight)
-    const base = sanitizeLayout(widget.layout, fallback)
+    const fallback = createFallbackLayout(index, widget.width ?? meta?.defaultWidth, widget.height ?? meta?.defaultHeight, meta)
+    const base = sanitizeLayout(widget.layout, fallback, meta)
     let width = base.w
     if (columnOverride && columnOverride > 0) {
       const columnWidth = clamp(Math.floor(GRID_COLS / columnOverride) || MIN_WIDGET_W, MIN_WIDGET_W, GRID_COLS)
-      width = columnWidth
+      width = Math.max(columnWidth, getWidgetMinConstraints(meta, columnWidth).minW)
     }
-    return { id: widget.id, w: width, h: base.h }
+    const constraints = getWidgetMinConstraints(meta, width)
+    const height = Math.max(constraints.minH, base.h)
+    return { id: widget.id, w: width, h: height, minW: constraints.minW, minH: constraints.minH }
   })
 
   return flowLayouts(items)
@@ -1303,8 +1358,9 @@ export default function DashboardPage() {
           startingPosition + newWidgets.length,
           meta?.defaultWidth ?? 400,
           meta?.defaultHeight ?? 300,
+          meta,
         )
-        const layout = sanitizeLayout({ ...fallbackLayout, y: nextY }, fallbackLayout)
+        const layout = sanitizeLayout({ ...fallbackLayout, y: nextY }, fallbackLayout, meta)
         nextY = layout.y + layout.h
         const newId = generateWidgetId()
 
@@ -1405,6 +1461,7 @@ export default function DashboardPage() {
       return
     }
     setRecentlyAddedWidgetId(added[added.length - 1])
+    setIsAiWidgetDialogOpen(false)
   }
   const handleRemoveAiWidgetFromLibrary = (widgetType: string) => {
     setAiGeneratedWidgets((prev) => prev.filter((widget) => widget.type !== widgetType))
@@ -1435,16 +1492,17 @@ export default function DashboardPage() {
     if (!dashboard) return []
     return dashboard.widgets.map((widget, index) => {
       const meta = widgetMetadata[widget.type]
-      const fallback = createFallbackLayout(index, widget.width ?? meta?.defaultWidth, widget.height ?? meta?.defaultHeight)
-      const layout = sanitizeLayout(widget.layout, fallback)
+      const fallback = createFallbackLayout(index, widget.width ?? meta?.defaultWidth, widget.height ?? meta?.defaultHeight, meta)
+      const layout = sanitizeLayout(widget.layout, fallback, meta)
+      const { minW, minH } = getWidgetMinConstraints(meta, layout.w)
       return {
         i: widget.id,
         x: layout.x,
         y: layout.y,
         w: layout.w,
         h: layout.h,
-        minW: MIN_WIDGET_W,
-        minH: MIN_WIDGET_H,
+        minW,
+        minH,
       }
     })
   }, [dashboard, widgetMetadataKey])
@@ -1538,8 +1596,8 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="px-6 py-4 space-y-4">
+      <header className="sticky top-0 z-20 border-b border-border bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+        <div className="mx-auto max-w-7xl px-4 py-4 space-y-4 lg:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
               <div className="flex items-center gap-4">
@@ -1553,156 +1611,184 @@ export default function DashboardPage() {
               <Button
                 size="lg"
                 className="w-full sm:w-auto font-semibold shadow-sm"
-                onClick={() => (globalThis.location.hash = "#/ai-report")}
+                onClick={() => {
+                  try {
+                    globalThis.location.hash = "#/ai-report"
+                  } catch (err) {
+                    console.error("Failed to navigate to AI report", err)
+                  }
+                }}
                 aria-label={copy.aiReport}
               >
                 {copy.aiReport}
               </Button>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="min-w-[220px] justify-between">
-                    <span className="truncate">{presetButtonLabel}</span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-64">
-                  <DropdownMenuLabel>{copy.presetMenuTitle}</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {presets.length === 0 ? (
-                    <DropdownMenuItem disabled>{copy.noPresets}</DropdownMenuItem>
-                  ) : (
-                    presets.map((preset) => (
-                      <DropdownMenuItem key={preset.id} onSelect={() => handlePresetSelect(preset.id)}>
-                        <div className="flex w-full items-center justify-between gap-2">
-                          <span className="truncate">{preset.name}</span>
-                          {preset.id === activePresetId && <Check className="h-4 w-4 text-primary" />}
-                        </div>
-                      </DropdownMenuItem>
-                    ))
-                  )}
-                  {(hasUnsavedChanges || dashboard) && <DropdownMenuSeparator />}
-                  {hasUnsavedChanges && (
-                    <DropdownMenuItem
-                      disabled={!activePresetId && !isNewPresetDraft}
-                      onSelect={() => handleSavePresetChanges()}
-                    >
-                      <Save className="mr-2 h-4 w-4" />
-                      {copy.saveChanges}
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onSelect={() => openSaveAsDialog()} disabled={!dashboard}>
-                    <CopyPlus className="mr-2 h-4 w-4" />
-                    {copy.saveAsPreset}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>{copy.actionsTitle}</DropdownMenuLabel>
-                  <DropdownMenuItem onSelect={() => openRenameDialog()} disabled={!activePresetId}>
-                    <PenLine className="mr-2 h-4 w-4" />
-                    {copy.renamePreset}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    disabled={presets.length <= 1}
-                    onSelect={() => setIsDeleteDialogOpen(true)}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    {copy.deletePreset}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {hasUnsavedChanges && (
-                <Badge variant="secondary" className="uppercase tracking-wide">
-                  {copy.unsavedBadge}
-                </Badge>
-              )}
-
-              {!isEditMode && !isNewPresetDraft && (
-                <Button variant="outline" size="sm" onClick={handleStartNewLayout}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  {copy.newLayout}
-                </Button>
-              )}
-
-              {isEditMode && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCancelEditing}
-                  className="text-destructive hover:text-destructive focus:text-destructive"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  {copy.cancelEdit}
-                </Button>
-              )}
-
-              {isEditMode && (
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-end">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-3">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={dashboard.widgets.length === 0}
-                      className="gap-2"
+                      className="min-w-[220px] justify-between w-full sm:w-auto"
                     >
-                      <Wand2 className="h-4 w-4" />
-                      {copy.autoLayout}
+                      <span className="truncate">{presetButtonLabel}</span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-72">
-                    <DropdownMenuLabel>{copy.autoLayoutTitle}</DropdownMenuLabel>
+                  <DropdownMenuContent className="w-64">
+                    <DropdownMenuLabel>{copy.presetMenuTitle}</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={dashboard.widgets.length === 0}
-                      onSelect={(event) => {
-                        event.preventDefault()
-                        handleAutoLayout("compact")
-                      }}
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{copy.autoLayoutCompact}</p>
-                        <p className="text-xs text-muted-foreground">{copy.autoLayoutCompactDescription}</p>
-                      </div>
+                    {presets.length === 0 ? (
+                      <DropdownMenuItem disabled>{copy.noPresets}</DropdownMenuItem>
+                    ) : (
+                      presets.map((preset) => (
+                        <DropdownMenuItem key={preset.id} onSelect={() => handlePresetSelect(preset.id)}>
+                          <div className="flex w-full items-center justify-between gap-2">
+                            <span className="truncate">{preset.name}</span>
+                            {preset.id === activePresetId && <Check className="h-4 w-4 text-primary" />}
+                          </div>
+                        </DropdownMenuItem>
+                      ))
+                    )}
+                    {(hasUnsavedChanges || dashboard) && <DropdownMenuSeparator />}
+                    {hasUnsavedChanges && (
+                      <DropdownMenuItem
+                        disabled={!activePresetId && !isNewPresetDraft}
+                        onSelect={() => handleSavePresetChanges()}
+                      >
+                        <Save className="mr-2 h-4 w-4" />
+                        {copy.saveChanges}
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onSelect={() => openSaveAsDialog()} disabled={!dashboard}>
+                      <CopyPlus className="mr-2 h-4 w-4" />
+                      {copy.saveAsPreset}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>{copy.actionsTitle}</DropdownMenuLabel>
+                    <DropdownMenuItem onSelect={() => openRenameDialog()} disabled={!activePresetId}>
+                      <PenLine className="mr-2 h-4 w-4" />
+                      {copy.renamePreset}
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      disabled={dashboard.widgets.length === 0}
-                      onSelect={(event) => {
-                        event.preventDefault()
-                        handleAutoLayout("two-column")
-                      }}
+                      className="text-destructive focus:text-destructive"
+                      disabled={presets.length <= 1}
+                      onSelect={() => setIsDeleteDialogOpen(true)}
                     >
-                      <div>
-                        <p className="text-sm font-medium">{copy.autoLayoutTwoColumn}</p>
-                        <p className="text-xs text-muted-foreground">{copy.autoLayoutTwoColumnDescription}</p>
-                      </div>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={dashboard.widgets.length === 0}
-                      onSelect={(event) => {
-                        event.preventDefault()
-                        handleAutoLayout("three-column")
-                      }}
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{copy.autoLayoutThreeColumn}</p>
-                        <p className="text-xs text-muted-foreground">{copy.autoLayoutThreeColumnDescription}</p>
-                      </div>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {copy.deletePreset}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              )}
 
-              <Button variant={isEditMode ? "default" : "outline"} size="sm" onClick={handleToggleEditMode}>
-                <LayoutGrid className="h-4 w-4 mr-2" />
-                {isEditMode ? copy.saveLayout : copy.editLayout}
-              </Button>
+                {hasUnsavedChanges && (
+                  <Badge
+                    variant="secondary"
+                    className="uppercase tracking-wide text-center w-full sm:w-auto"
+                  >
+                    {copy.unsavedBadge}
+                  </Badge>
+                )}
 
-              <div className="flex items-center gap-2 pl-3 border-l border-border">
+                <div className="flex w-full flex-row flex-wrap gap-2 sm:w-auto">
+                  {!isEditMode && !isNewPresetDraft && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleStartNewLayout}
+                      className="flex-1 min-w-[140px]"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      {copy.newLayout}
+                    </Button>
+                  )}
+
+                  {isEditMode && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancelEditing}
+                      className="flex-1 min-w-[140px] text-destructive hover:text-destructive focus:text-destructive"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      {copy.cancelEdit}
+                    </Button>
+                  )}
+
+                  <Button
+                    variant={isEditMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={handleToggleEditMode}
+                    className="flex-1 min-w-[140px]"
+                  >
+                    <LayoutGrid className="h-4 w-4 mr-2" />
+                    {isEditMode ? copy.saveLayout : copy.editLayout}
+                  </Button>
+                </div>
+
+                {isEditMode && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={dashboard.widgets.length === 0}
+                        className="gap-2 w-full sm:w-auto"
+                      >
+                        <Wand2 className="h-4 w-4" />
+                        {copy.autoLayout}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-72">
+                      <DropdownMenuLabel>{copy.autoLayoutTitle}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        disabled={dashboard.widgets.length === 0}
+                        onSelect={(event) => {
+                          event.preventDefault()
+                          handleAutoLayout("compact")
+                        }}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{copy.autoLayoutCompact}</p>
+                          <p className="text-xs text-muted-foreground">{copy.autoLayoutCompactDescription}</p>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={dashboard.widgets.length === 0}
+                        onSelect={(event) => {
+                          event.preventDefault()
+                          handleAutoLayout("two-column")
+                        }}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{copy.autoLayoutTwoColumn}</p>
+                          <p className="text-xs text-muted-foreground">{copy.autoLayoutTwoColumnDescription}</p>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={dashboard.widgets.length === 0}
+                        onSelect={(event) => {
+                          event.preventDefault()
+                          handleAutoLayout("three-column")
+                        }}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{copy.autoLayoutThreeColumn}</p>
+                          <p className="text-xs text-muted-foreground">{copy.autoLayoutThreeColumnDescription}</p>
+                        </div>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+
+              </div>
+
+              <div className="flex w-full flex-row items-center gap-2 border-t border-border pt-3 sm:w-auto sm:border-none sm:pt-0 lg:border-l lg:pl-3">
                 <Select value={language} onValueChange={(value) => (value === "ko" || value === "en" ? setLanguage(value) : null)}>
-                  <SelectTrigger className="w-[140px]" aria-label={copy.languageLabel}>
+                  <SelectTrigger className="w-full sm:w-[140px]" aria-label={copy.languageLabel}>
                     <SelectValue placeholder={copy.languageLabel} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1775,7 +1861,7 @@ export default function DashboardPage() {
       {isEditMode && (
         <>
           <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-            <span className="rounded-full bg-background/90 px-4 py-2 text-sm font-medium text-foreground shadow-lg shadow-primary/20">
+            <span className="rounded-full bg-background/90 px-4 py-2 text-sm font-medium text-foreground shadow-lg shadow-primary/20 self-start sm:self-auto">
               <span className="block">{copy.addWidgetHint}</span>
               <span className="block text-xs font-normal text-muted-foreground">{copy.aiWidgetHint}</span>
             </span>
@@ -1812,7 +1898,7 @@ export default function DashboardPage() {
               }
             }}
           >
-            <DialogContent className="w-full max-w-[80vw] xl:max-w-[1200px]">
+            <DialogContent className="w-full max-w-[95vw] sm:max-w-[80vw] xl:max-w-[1200px]">
               <DialogHeader>
                 <DialogTitle>{copy.addWidgetTitle}</DialogTitle>
                 <DialogDescription>{copy.addWidgetDescription}</DialogDescription>
@@ -1963,7 +2049,7 @@ export default function DashboardPage() {
             }
           }}
         >
-          <DialogContent className="sm:max-w-4xl">
+          <DialogContent className="w-full max-w-[95vw] sm:max-w-4xl">
             <DialogHeader>
               <DialogTitle>{copy.aiWidgetTitle}</DialogTitle>
               <DialogDescription>{copy.aiWidgetDescription}</DialogDescription>

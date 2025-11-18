@@ -311,7 +311,7 @@ type HeatmapErrorState =
   | { message: string }
   | null
 
-export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
+export default function HeatmapWidget({ timeRange, language, containerSize }: WidgetProps) {
   const [selectedPage, setSelectedPage] = useState<string>("")
   const [selectedDevice, setSelectedDevice] = useState<"desktop" | "mobile">(
     "desktop"
@@ -344,6 +344,10 @@ export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
         ? `${common.errorPrefix}: ${error.message}`
         : null
     : null
+  const containerWidth = containerSize?.width ?? 0
+  const containerHeight = containerSize?.height ?? 0
+  const headerReserve = 160
+  const viewportHeight = Math.max(360, containerHeight > headerReserve ? containerHeight - headerReserve : containerHeight)
 
   // Polling for snapshot generation
   const pollForSnapshot = useCallback(async () => {
@@ -667,12 +671,12 @@ export default function HeatmapWidget({ timeRange, language }: WidgetProps) {
           </ToggleGroup>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-1 flex-col">
         {/* Scrollable Viewport */}
         <div
           ref={containerRef}
-          className="relative w-full h-[600px] overflow-auto rounded-md border"
-          style={{ background: "#f9f9f9" }}
+          className="relative w-full overflow-auto rounded-md border"
+          style={{ background: "#f9f9f9", minHeight: viewportHeight, height: viewportHeight }}
         >
           {/* Loading State */}
           {(isLoading || isGenerating) && (
@@ -744,6 +748,10 @@ export const widgetMeta: WidgetMeta = {
   description: "Displays click heatmap overlayed on page snapshots using deck.gl",
   defaultWidth: 520,
   defaultHeight: 300,
+  minWidth: 520,
+  minHeight: 420,
+  relaxedMinHeight: 320,
+  relaxedMinHeightBreakpointCols: 7,
   previewImage,
   tags: ["behavior"],
   localizations: {

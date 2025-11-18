@@ -44,7 +44,7 @@ async function fetchDaily(range: string): Promise<Row[]> {
   return data?.rows ?? []
 }
 
-export default function DailyCountWidget({ timeRange, language }: WidgetProps) {
+export default function DailyCountWidget({ timeRange, language, containerSize }: WidgetProps) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const common = getCommonWidgetCopy(language)
@@ -89,24 +89,45 @@ export default function DailyCountWidget({ timeRange, language }: WidgetProps) {
     return { yMax: maxNice, yTicks: ticks }
   }, [chartData])
 
+  const containerHeight = containerSize?.height ?? 0
+  const headerReserve = 110
+  const bodyHeight = containerHeight > headerReserve ? containerHeight - headerReserve : containerHeight
+  const chartHeight = bodyHeight > 0 ? Math.max(220, Math.min(bodyHeight, 560)) : 320
+
+  const renderBarValueLabel = ({ x = 0, y = 0, width = 0, height = 0, value }: any) => {
+    const numericValue = typeof value === "number" && Number.isFinite(value) ? value : Number(value) || 0
+    const anchorX = x + width / 2
+    const aboveY = y - 6
+    const shouldPlaceInside = aboveY < 12
+    const insideYOffset = Math.min(Math.max(height, 8) - 4, 18)
+    const labelY = shouldPlaceInside ? y + insideYOffset : aboveY
+    const fill = shouldPlaceInside ? "hsl(var(--background))" : "hsl(var(--foreground))"
+    return (
+      <text x={anchorX} y={labelY} fill={fill} textAnchor="middle" fontSize={12} fontWeight={600}>
+        {numericValue}
+      </text>
+    )
+  }
+
   return (
     <>
       <CardHeader className="mb-2 md:mb-3">
         <CardTitle>{copy.title}</CardTitle>
       </CardHeader>
-      <CardContent className="pt-3 md:pt-4" style={{ height: 280 }}>
+      <CardContent className="flex flex-1 flex-col pt-3 md:pt-4">
         {error && <div className="text-sm text-red-500">{common.errorPrefix}: {error}</div>}
         {!rows && !error && <div className="text-sm text-muted-foreground">{common.loading}</div>}
         {rows && rows.length === 0 && (
           <div className="text-sm text-muted-foreground">{common.noData}</div>
         )}
         {rows && rows.length > 0 && (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              margin={{ top: 24, right: 12, left: 4, bottom: 12 }}
-              // Use currentColor so we can drive color via CSS variable
-              style={{ color: 'hsl(var(--foreground))' }}
+          <div className="flex-1" style={{ minHeight: chartHeight }}>
+            <ResponsiveContainer width="100%" height={chartHeight}>
+              <BarChart
+                data={chartData}
+                margin={{ top: 24, right: 12, left: 4, bottom: 12 }}
+                // Use currentColor so we can drive color via CSS variable
+                style={{ color: 'hsl(var(--foreground))' }}
             >
               <CartesianGrid
                 stroke="hsl(var(--border))"
@@ -133,15 +154,11 @@ export default function DailyCountWidget({ timeRange, language }: WidgetProps) {
                 radius={[6, 6, 0, 0]}
                 maxBarSize={48}
               >
-                <LabelList
-                  dataKey="value"
-                  position="top"
-                  className="fill-foreground"
-                  formatter={(v: number) => `${v}`}
-                />
+                <LabelList dataKey="value" content={renderBarValueLabel} />
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
+            </ResponsiveContainer>
+          </div>
         )}
       </CardContent>
     </>
@@ -159,6 +176,10 @@ export const widgetMeta: WidgetMeta = {
   description: "최근 1주일 일자별 로그 합계를 막대 그래프로 표시",
   defaultWidth: 520,
   defaultHeight: 300,
+  minWidth: 420,
+  minHeight: 320,
+  relaxedMinHeight: 240,
+  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["traffic"],
   localizations: {
