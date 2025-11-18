@@ -1611,7 +1611,13 @@ export default function DashboardPage() {
               <Button
                 size="lg"
                 className="w-full sm:w-auto font-semibold shadow-sm"
-                onClick={() => (globalThis.location.hash = "#/ai-report")}
+                onClick={() => {
+                  try {
+                    globalThis.location.hash = "#/ai-report"
+                  } catch (err) {
+                    console.error("Failed to navigate to AI report", err)
+                  }
+                }}
                 aria-label={copy.aiReport}
               >
                 {copy.aiReport}

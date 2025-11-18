@@ -354,6 +354,8 @@ function nowIso() {
   return new Date().toISOString().replace(/\..*/, "")
 }
 
+const AI_REPORT_STORAGE_KEY = "ai-report-data"
+
 export default function AIReportPage() {
   const [prompt, setPrompt] = useState("")
   const [loading, setLoading] = useState(false)
@@ -362,10 +364,25 @@ export default function AIReportPage() {
   const [language, setLanguage] = useState<LanguageCode>("en")
   const copy = COPY[language]
 
-  const defaultRange = useMemo(() => {
+  const [defaultRange, setDefaultRange] = useState(() => {
     const to = new Date()
     const from = new Date(Date.now() - 24 * 60 * 60 * 1000)
     return { from: from.toISOString().replace(/\..*/, ""), to: to.toISOString().replace(/\..*/, ""), bucket: "1h" }
+  })
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const stored = window.localStorage?.getItem(AI_REPORT_STORAGE_KEY)
+      if (!stored) return
+      const parsed: { report?: Report; prompt?: string; range?: typeof defaultRange; language?: LanguageCode } = JSON.parse(stored)
+      if (parsed.prompt) setPrompt(parsed.prompt)
+      if (parsed.report) setReport(parsed.report)
+      if (parsed.range?.from && parsed.range?.to) setDefaultRange(parsed.range)
+      if (parsed.language === "ko" || parsed.language === "en") setLanguage(parsed.language)
+    } catch (err) {
+      console.warn("Failed to restore AI report state", err)
+    }
   }, [])
 
   useEffect(() => {
@@ -389,6 +406,18 @@ export default function AIReportPage() {
   useEffect(() => {
     window.localStorage?.setItem(LANGUAGE_STORAGE_KEY, language)
   }, [language])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      window.localStorage?.setItem(
+        AI_REPORT_STORAGE_KEY,
+        JSON.stringify({ prompt, report, range: defaultRange, language }),
+      )
+    } catch (err) {
+      console.warn("Failed to persist AI report state", err)
+    }
+  }, [prompt, report, defaultRange, language])
 
   async function handleGenerate() {
     setLoading(true)
@@ -453,20 +482,28 @@ export default function AIReportPage() {
               <p className="text-sm text-muted-foreground">{copy.headerSubtitle}</p>
             </div>
           </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-            <div className="flex w-full flex-row items-center gap-2 sm:w-auto">
-              <Select value={language} onValueChange={(value) => (value === "ko" || value === "en" ? setLanguage(value) : null)}>
-                <SelectTrigger className="w-full min-w-[160px] sm:w-[140px]" aria-label={copy.languageLabel}>
-                  <SelectValue placeholder={copy.languageLabel}>{LANGUAGE_LABELS[language]}</SelectValue>
-                </SelectTrigger>
-                <SelectContent align="end">
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="ko">한국어</SelectItem>
-                </SelectContent>
-              </Select>
-              <ThemeToggle />
-            </div>
-            <Button variant="outline" onClick={() => (globalThis.location.hash = "#/")} className="w-full sm:w-auto">
+          <div className="flex w-full flex-row flex-wrap items-center justify-end gap-2 sm:w-auto">
+            <Select value={language} onValueChange={(value) => (value === "ko" || value === "en" ? setLanguage(value) : null)}>
+              <SelectTrigger className="w-full min-w-[160px] sm:w-[140px]" aria-label={copy.languageLabel}>
+                <SelectValue placeholder={copy.languageLabel}>{LANGUAGE_LABELS[language]}</SelectValue>
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="ko">한국어</SelectItem>
+              </SelectContent>
+            </Select>
+            <ThemeToggle />
+            <Button
+              variant="outline"
+              onClick={() => {
+                try {
+                  globalThis.location.hash = "#/"
+                } catch (err) {
+                  console.error("Failed to navigate to dashboard", err)
+                }
+              }}
+              className="w-full sm:w-auto"
+            >
               {copy.backToDashboard}
             </Button>
           </div>
