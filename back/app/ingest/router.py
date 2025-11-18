@@ -5,6 +5,7 @@
 from typing import Any, Dict
 
 from fastapi import APIRouter, Request
+from starlette.concurrency import run_in_threadpool
 
 from .influx import write_events
 
@@ -16,6 +17,6 @@ router = APIRouter(prefix="/api/ingest", tags=["ingest"])
 async def ingest_events(req: Request) -> Dict[str, Any]:
     body: Dict[str, Any] = await req.json()
     events = body.get("events", [])
-    write_events(events)
+    await run_in_threadpool(write_events, events)
     return {"ok": True, "received": len(events)}
 

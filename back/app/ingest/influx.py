@@ -2,7 +2,7 @@
 분석 수집 파이프라인을 구동하는 InfluxDB 헬퍼 모듈입니다.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 import math
 
 from influxdb_client_3 import InfluxDBClient3, Point
@@ -33,6 +33,11 @@ def _safe_str(value: Any, default: str = "") -> str:
     text = text.replace("\r", "\\r").replace("\n", "\\n")
     return text
 
+
+
+def _safe_nullable_str(value: Any) -> Optional[str]:
+    text = _safe_str(value, "").strip()
+    return text or None
 
 
 def _safe_int(value: Any, default: Optional[int] = None) -> Optional[int]:
@@ -81,25 +86,36 @@ def _safe_bool(value: Any, default: Optional[bool] = None) -> Optional[bool]:
     return default
 
 
+def _set_field(point: Point, name: str, raw_value: Any, caster: Callable[[Any], Optional[Any]]) -> Point:
+    value = caster(raw_value)
+    if value is None:
+        return point
+    point.field(name, value)
+    return point
+
+
 def write_events(events: List[Dict[str, Any]]) -> None:
     """Persist collected events in the `events` measurement.
     수집된 이벤트를 `events` 측정값에 저장합니다.
 
     Tags:
-        site_id, path, event_name, element_hash,
+        site_id, path, event_name,
         device_type, browser_family, country_code
-        사이트, 경로, 이벤트 이름, 요소 해시,
+        사이트, 경로, 이벤트 이름,
         디바이스 유형, 브라우저 패밀리, 국가 코드
 
     Fields:
-        count, session_id, user_hash, dwell_ms, scroll_pct,
+        count, session_id, user_hash, path_raw,
+        dwell_ms, scroll_pct,
         click_x, click_y, viewport_click_x, viewport_click_y,
         element_rel_x, element_rel_y,
         element_rect_x, element_rect_y, element_rect_w, element_rect_h,
+        element_hash, element_preview,
         error_flag, extra_json
         수량, 세션 ID, 사용자 해시, 체류 시간, 스크롤 비율,
         클릭 좌표, 뷰포트 클릭 비율, 요소 상대 좌표,
-        요소 박스 치수, 뷰포트 크기, 오류 플래그, 추가 정보
+        요소 박스 치수, 뷰포트 크기, 요소 라벨/프리뷰,
+        오류 플래그, 추가 정보
     """
     points: List[Point] = []
 
@@ -116,7 +132,6 @@ def write_events(events: List[Dict[str, Any]]) -> None:
             .tag("site_id", _safe_tag_str(event.get("site_id")))  # 어떤 사이트에서 발생한 이벤트인지
             .tag("path", _safe_tag_str(event.get("path")))  # 페이지 경로
             .tag("event_name", _safe_tag_str(event.get("event_name")))  # 이벤트 종류(click, page_view 등)
-            .tag("element_hash", _safe_tag_str(event.get("element_hash")))  # 요소 식별용 해시/라벨
             .tag("device_type", _safe_tag_str(event.get("device_type")))  # desktop/mobile 구분
             .tag("browser_family", _safe_tag_str(event.get("browser_family")))  # 브라우저 종류
             .tag("country_code", _safe_tag_str(event.get("country_code")))  # 추정 국가 코드
@@ -125,21 +140,25 @@ def write_events(events: List[Dict[str, Any]]) -> None:
             .field("count", _safe_int(event.get("count"), 1) or 1)  # 배치 적재 시 합계
             .field("session_id", _safe_str(event.get("session_id")))  # 세션 식별자
             .field("user_hash", _safe_str(event.get("user_hash")))  # 익명화된 사용자 식별자
-            .field("dwell_ms", _safe_int(event.get("dwell_ms"), 0) or 0)  # 체류 시간(ms)
-            .field("scroll_pct", _safe_float(event.get("scroll_pct"), 0.0) or 0.0)  # 페이지 스크롤 퍼센트
-            .field("click_x", _safe_float(event.get("click_x"), 0.0) or 0.0)  # 문서 기준 클릭 X 비율
-            .field("click_y", _safe_float(event.get("click_y"), 0.0) or 0.0)  # 문서 기준 클릭 Y 비율
-            .field("viewport_click_x", _safe_float(event.get("viewport_click_x"), 0.0) or 0.0)  # 뷰포트 기준 X
-            .field("viewport_click_y", _safe_float(event.get("viewport_click_y"), 0.0) or 0.0)  # 뷰포트 기준 Y
-            .field("element_rel_x", _safe_float(event.get("element_rel_x"), 0.0) or 0.0)  # 요소 내부 상대 X
-            .field("element_rel_y", _safe_float(event.get("element_rel_y"), 0.0) or 0.0)  # 요소 내부 상대 Y
-            .field("element_rect_x", _safe_float(event.get("element_rect_x"), 0.0) or 0.0)  # 요소 왼쪽 위치(문서 비율)
-            .field("element_rect_y", _safe_float(event.get("element_rect_y"), 0.0) or 0.0)  # 요소 위쪽 위치(문서 비율)
-            .field("element_rect_w", _safe_float(event.get("element_rect_w"), 0.0) or 0.0)  # 요소 너비(문서 비율)
-            .field("element_rect_h", _safe_float(event.get("element_rect_h"), 0.0) or 0.0)  # 요소 높이(문서 비율)
-            .field("error_flag", _safe_bool(event.get("error_flag"), False) or False)  # 오류 이벤트 여부
-            .field("extra_json", _safe_str(event.get("extra_json")))  # 추가 정보(JSON 문자열)
+            .field("path_raw", _safe_str(event.get("path_raw"), ""))  # 정규화 전 경로
         )
+
+        point = _set_field(point, "dwell_ms", event.get("dwell_ms"), lambda v: _safe_int(v, None))
+        point = _set_field(point, "scroll_pct", event.get("scroll_pct"), lambda v: _safe_float(v, None))
+        point = _set_field(point, "click_x", event.get("click_x"), lambda v: _safe_float(v, None))
+        point = _set_field(point, "click_y", event.get("click_y"), lambda v: _safe_float(v, None))
+        point = _set_field(point, "viewport_click_x", event.get("viewport_click_x"), lambda v: _safe_float(v, None))
+        point = _set_field(point, "viewport_click_y", event.get("viewport_click_y"), lambda v: _safe_float(v, None))
+        point = _set_field(point, "element_rel_x", event.get("element_rel_x"), lambda v: _safe_float(v, None))
+        point = _set_field(point, "element_rel_y", event.get("element_rel_y"), lambda v: _safe_float(v, None))
+        point = _set_field(point, "element_rect_x", event.get("element_rect_x"), lambda v: _safe_float(v, None))
+        point = _set_field(point, "element_rect_y", event.get("element_rect_y"), lambda v: _safe_float(v, None))
+        point = _set_field(point, "element_rect_w", event.get("element_rect_w"), lambda v: _safe_float(v, None))
+        point = _set_field(point, "element_rect_h", event.get("element_rect_h"), lambda v: _safe_float(v, None))
+        point = _set_field(point, "element_hash", event.get("element_hash"), _safe_nullable_str)
+        point = _set_field(point, "element_preview", event.get("element_preview"), _safe_nullable_str)
+        point = _set_field(point, "error_flag", event.get("error_flag"), lambda v: _safe_bool(v, None))
+        point = _set_field(point, "extra_json", event.get("extra_json"), _safe_nullable_str)
 
         if timestamp_ms is not None:
             # Attach the explicit timestamp to preserve user ordering.

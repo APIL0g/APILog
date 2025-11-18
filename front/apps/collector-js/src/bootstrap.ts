@@ -70,7 +70,8 @@
     "[data-track-click]",
   ].join(", ");
 
-  const DEAD_CLICK_LABEL = "unknown"
+  const DEAD_CLICK_LABEL = "unknown";
+  const ELEMENT_PREVIEW_MAX_LEN = 1024;
 
   // ===========================================================================
   // 1. Small utility helpers
@@ -189,6 +190,27 @@
 
   function normalizePath(pathname: string): string {
     return pathname.split("?")[0];
+  }
+
+  function normalizePathForTags(pathname: string): string {
+    const cleaned = normalizePath(pathname) || "/";
+    const segments = cleaned
+      .split("/")
+      .filter(Boolean)
+      .slice(0, 5)
+      .map((seg) => {
+        if (/^[-\d]+$/.test(seg)) {
+          return ":n";
+        }
+        if (/^[0-9a-f]{8,}$/i.test(seg)) {
+          return ":id";
+        }
+        if (seg.length > 32) {
+          return seg.slice(0, 32);
+        }
+        return seg;
+      });
+    return segments.length ? `/${segments.join("/")}` : "/";
   }
 
   const COUNTRY_DEFAULT = "none";
@@ -435,7 +457,7 @@
   function sanitizeOuterHtml(
     el: Element | null,
     labelText?: string | null,
-    maxLength = 4000
+    maxLength = ELEMENT_PREVIEW_MAX_LEN
   ): string | null {
     if (!el) {
       return null;
@@ -691,8 +713,8 @@
     constructor(endpoint: string) {
       this.buf = [];
       this.flushTimer = null;
-      this.flushInterval = 5000;
-      this.maxBatch = 50;
+      this.flushInterval = 2000;
+      this.maxBatch = 250;
       this.endpoint = endpoint;
     }
 
@@ -835,13 +857,14 @@
 
           if (!interactiveEl) {
             this.q.push({
-              ...this.baseTags("click", DEAD_CLICK_LABEL),
+              ...this.baseTags("click"),
               ...this.baseFields(),
               click_x: docRatioX,
               click_y: docRatioY,
               viewport_click_x: viewportRatioX,
               viewport_click_y: viewportRatioY,
               scroll_pct: this.maxScrollSeen,
+              element_hash: DEAD_CLICK_LABEL,
               extra_json: JSON.stringify({ dead_click: true }),
               ts: now(),
             });
@@ -937,48 +960,44 @@
       return base;
     }
 
-    baseTags(eventName: string, elementHash: string | null, overridePath?: string) {
-      const path = overridePath ?? this.activePath ?? this.currentPath();
+    baseTags(eventName: string, overridePath?: string) {
+      const rawPath = overridePath ?? this.activePath ?? this.currentPath();
+      const normalizedPath = normalizePathForTags(rawPath);
       return {
         site_id: this.opts.siteId,
-        path,
+        path: normalizedPath,
         event_name: eventName,
-        element_hash: elementHash || null,
         device_type: detectDeviceType(),
         browser_family: detectBrowserFamily(),
         country_code: this.countryCode,
       };
     }
 
-    baseFields() {
+    baseFields(pathOverride?: string) {
+      const rawPath = pathOverride ?? this.activePath ?? this.currentPath();
       return {
         count: 1,
         session_id: this.sessionId,
         user_hash: this.userHash,
-        dwell_ms: null as number | null,
-        scroll_pct: null as number | null,
-        click_x: null as number | null,
-        click_y: null as number | null,
-        viewport_click_x: null as number | null,
-        viewport_click_y: null as number | null,
-        element_rel_x: null as number | null,
-        element_rel_y: null as number | null,
-        element_rect_x: null as number | null,
-        element_rect_y: null as number | null,
-        element_rect_w: null as number | null,
-        element_rect_h: null as number | null,
-        error_flag: null as boolean | null,
-        extra_json: null as string | null,
+        path_raw: rawPath,
       };
     }
 
     pushRecord(partial: Record<string, any>) {
-      const rec: EventRecord = Object.assign(
-        {
-          ts: partial.ts != null ? partial.ts : now(),
-        },
-        partial
-      );
+      const rec: EventRecord = {
+        ts: partial.ts != null ? partial.ts : now(),
+      };
+
+      Object.keys(partial).forEach((key) => {
+        if (key === "ts") {
+          return;
+        }
+        const value = partial[key];
+        if (value === null || value === undefined) {
+          return;
+        }
+        rec[key] = value;
+      });
       this.q.push(rec);
     }
 
@@ -988,8 +1007,8 @@
 
       const rec = Object.assign(
         {},
-        this.baseTags("page_view", null, path),
-        this.baseFields(),
+        this.baseTags("page_view", path),
+        this.baseFields(path),
         {
           dwell_ms: 0,
           scroll_pct: this.maxScrollSeen,
@@ -1018,11 +1037,10 @@
         labelEl
       );
       const outerHtml = sanitizeOuterHtml(labelEl ?? targetEl, sig.elementHash);
-      const elementHashPayload = outerHtml || sig.elementHash;
 
       const rec = Object.assign(
         {},
-        this.baseTags("click", elementHashPayload),
+        this.baseTags("click"),
         this.baseFields(),
         {
           click_x: clickMeta.docRatioX,
@@ -1036,6 +1054,8 @@
           element_rect_w: sig.rectW,
           element_rect_h: sig.rectH,
           scroll_pct: this.maxScrollSeen,
+          element_hash: sig.elementHash,
+          element_preview: outerHtml,
           ts: now(),
         }
       );
@@ -1048,8 +1068,8 @@
 
       const rec = Object.assign(
         {},
-        this.baseTags("scroll", null, pathOverride),
-        this.baseFields(),
+        this.baseTags("scroll", pathOverride),
+        this.baseFields(pathOverride),
         {
           scroll_pct: pct,
           ts: now(),
@@ -1064,8 +1084,8 @@
 
       const rec = Object.assign(
         {},
-        this.baseTags("page_view_dwell", null, pathOverride),
-        this.baseFields(),
+        this.baseTags("page_view_dwell", pathOverride),
+        this.baseFields(pathOverride),
         {
           dwell_ms: dur,
           scroll_pct: this.maxScrollSeen,
@@ -1083,7 +1103,7 @@
     markError(info: unknown) {
       const rec = Object.assign(
         {},
-        this.baseTags("error", null),
+        this.baseTags("error"),
         this.baseFields(),
         {
           error_flag: true,
