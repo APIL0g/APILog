@@ -142,10 +142,10 @@ const LANGUAGE_LABELS: Record<LanguageCode, string> = { en: "English", ko: "한�
 const RADAR_LABELS: Record<LanguageCode, Record<RadarAxisKey, string>> = {
   en: {
     performance: "Performance",
-    experience: "User Experience",
+    experience: "User Exp",
     growth: "Growth / Conversion",
     search: "Search Visibility",
-    stability: "Technical Stability",
+    stability: "Stability",
   },
   ko: {
     performance: "성능",
@@ -941,9 +941,19 @@ function RadarPentagon({ scores, title, language }: { scores?: RadarScore[]; tit
           }}
           className="h-[320px] w-full"
         >
-          <RadarChart data={data}>
+          <RadarChart
+            data={data}
+            outerRadius="78%"
+            margin={{ top: 16, right: 28, bottom: 16, left: 28 }}
+          >
             <PolarGrid strokeDasharray="3 3" stroke={gridColor} />
-            <PolarAngleAxis dataKey="axis" stroke={axisColor} tick={{ fill: axisColor, fontSize: 12 }} />
+            <PolarAngleAxis
+              dataKey="axis"
+              radius={92}
+              stroke={axisColor}
+              tickLine={false}
+              tick={{ fill: axisColor, fontSize: 12 }}
+            />
             <PolarRadiusAxis
               angle={90}
               domain={[0, 100]}
