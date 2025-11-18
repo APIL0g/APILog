@@ -1461,6 +1461,7 @@ export default function DashboardPage() {
       return
     }
     setRecentlyAddedWidgetId(added[added.length - 1])
+    setIsAiWidgetDialogOpen(false)
   }
   const handleRemoveAiWidgetFromLibrary = (widgetType: string) => {
     setAiGeneratedWidgets((prev) => prev.filter((widget) => widget.type !== widgetType))
