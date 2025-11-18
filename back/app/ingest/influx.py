@@ -110,11 +110,11 @@ def write_events(events: List[Dict[str, Any]]) -> None:
         click_x, click_y, viewport_click_x, viewport_click_y,
         element_rel_x, element_rel_y,
         element_rect_x, element_rect_y, element_rect_w, element_rect_h,
-        element_hash, element_preview,
+        element_hash,
         error_flag, extra_json
         수량, 세션 ID, 사용자 해시, 체류 시간, 스크롤 비율,
         클릭 좌표, 뷰포트 클릭 비율, 요소 상대 좌표,
-        요소 박스 치수, 뷰포트 크기, 요소 라벨/프리뷰,
+        요소 박스 치수, 뷰포트 크기, 요소 HTML 스냅샷,
         오류 플래그, 추가 정보
     """
     points: List[Point] = []
@@ -156,7 +156,6 @@ def write_events(events: List[Dict[str, Any]]) -> None:
         point = _set_field(point, "element_rect_w", event.get("element_rect_w"), lambda v: _safe_float(v, None))
         point = _set_field(point, "element_rect_h", event.get("element_rect_h"), lambda v: _safe_float(v, None))
         point = _set_field(point, "element_hash", event.get("element_hash"), _safe_nullable_str)
-        point = _set_field(point, "element_preview", event.get("element_preview"), _safe_nullable_str)
         point = _set_field(point, "error_flag", event.get("error_flag"), lambda v: _safe_bool(v, None))
         point = _set_field(point, "extra_json", event.get("extra_json"), _safe_nullable_str)
 

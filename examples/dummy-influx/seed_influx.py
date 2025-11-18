@@ -134,11 +134,27 @@ FUNNEL_STEPS = {
     "success": 6,
 }
 
+ELEMENT_HTML_SNIPPETS = {
+    "home-hero": '<section class="hero-banner" data-section="hero"><h1>Spring Sale</h1><p>Discover new arrivals</p></section>',
+    "hero-cta": '<button class="btn btn-primary hero-cta" data-action="primary-cta">Shop now</button>',
+    "product-grid": '<div class="product-grid" data-columns="4"><article class="product-card">Featured</article></div>',
+    "search-page": '<section class="search-page"><input type="search" placeholder="Search products" /><div class="results"></div></section>',
+    "search-result": '<a class="search-result-card"><span class="title">Result title</span><span class="price">KRW 59,000</span></a>',
+    "product-hero": '<section class="product-hero"><h1 class="title">Essential crew neck tee</h1><p class="price">KRW 39,000</p></section>',
+    "product-details": '<section class="product-details"><h2>Details</h2><ul><li>Fabric</li><li>Delivery</li></ul></section>',
+    "add-to-cart": '<button class="btn btn-accent add-to-cart" data-track-click="add_to_cart">Add to cart</button>',
+    "cart-summary": '<section class="cart-summary"><h1>Your cart</h1><button class="btn">Checkout</button></section>',
+    "checkout-button": '<button class="btn btn-primary checkout-button" data-step="cart">Go to checkout</button>',
+    "checkout-form": '<form class="checkout-form"><input name="card_number" /><button type="submit">Pay now</button></form>',
+    "complete-order": '<button class="btn btn-primary submit-order" data-step="checkout">Complete order</button>',
+    "order-complete": '<section class="order-complete"><h1>Thank you!</h1><p>Your order is confirmed.</p></section>',
+    "wishlist-page": '<section class="wishlist-page"><h1>Wishlist</h1><ul><li>Saved item</li></ul></section>',
+}
+
 TAG_KEYS = [
     "site_id",
     "path",
     "event_name",
-    "element_hash",
     "device_type",
     "browser_family",
     "country_code",
@@ -163,6 +179,7 @@ FIELD_ORDER = [
     "element_rect_y",
     "element_rect_w",
     "element_rect_h",
+    "element_hash",
     "viewport_w",
     "viewport_h",
     "funnel_step",
@@ -291,6 +308,16 @@ def _escape_field_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _element_html(key: str) -> str:
+    snippet = ELEMENT_HTML_SNIPPETS.get(key)
+    if snippet:
+        return snippet
+
+    safe_attr = key.replace('"', "&quot;") or "unknown"
+    safe_text = key.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") or "unknown element"
+    return f'<div data-apilog-element="{safe_attr}">{safe_text}</div>'
+
+
 def _format_field(key: str, value) -> str:
     if isinstance(value, bool):
         return f"{key}={'true' if value else 'false'}"
@@ -377,7 +404,7 @@ def _append_event(
     *,
     path: str,
     event_name: str,
-    element_hash: str,
+    element_key: str,
     funnel_step: int,
     dwell_ms: int | None = None,
     scroll_pct: float | None = None,
@@ -388,7 +415,7 @@ def _append_event(
     event = _base_event(ctx)
     event["path"] = path
     event["event_name"] = event_name
-    event["element_hash"] = element_hash
+    event["element_hash"] = _element_html(element_key)
     event["funnel_step"] = funnel_step
     event["dwell_ms"] = dwell_ms if dwell_ms is not None else event["dwell_ms"]
     event["scroll_pct"] = (
@@ -432,7 +459,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
     add_event(
         path="/",
         event_name="page_view",
-        element_hash="home-hero",
+        element_key="home-hero",
         funnel_step=FUNNEL_STEPS["landing"],
         scroll_pct=random.uniform(0.4, 0.9),
         extra={"section": "hero"},
@@ -441,7 +468,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
         add_event(
             path="/",
             event_name="click",
-            element_hash="hero-cta",
+            element_key="hero-cta",
             funnel_step=FUNNEL_STEPS["landing"],
             click=True,
             extra={"cta": "hero_primary"},
@@ -452,7 +479,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
         add_event(
             path="/products",
             event_name="page_view",
-            element_hash="product-grid",
+            element_key="product-grid",
             funnel_step=FUNNEL_STEPS["catalog"],
             scroll_pct=random.uniform(0.5, 0.95),
             extra={"category": "all"},
@@ -463,7 +490,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
         add_event(
             path="/search",
             event_name="page_view",
-            element_hash="search-page",
+            element_key="search-page",
             funnel_step=FUNNEL_STEPS["catalog"],
             scroll_pct=random.uniform(0.6, 0.95),
             extra={"query": query},
@@ -471,7 +498,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
         add_event(
             path="/search",
             event_name="click",
-            element_hash="search-result",
+            element_key="search-result",
             funnel_step=FUNNEL_STEPS["catalog"],
             click=True,
             extra={"query": query, "position": random.randint(1, 5)},
@@ -486,7 +513,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
         add_event(
             path=product_path,
             event_name="page_view",
-            element_hash="product-hero",
+            element_key="product-hero",
             funnel_step=FUNNEL_STEPS["product"],
             scroll_pct=random.uniform(0.5, 0.9),
             extra={
@@ -498,7 +525,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
         add_event(
             path=product_path,
             event_name="scroll",
-            element_hash="product-details",
+            element_key="product-details",
             funnel_step=FUNNEL_STEPS["product"],
             scroll_pct=random.uniform(0.7, 1.0),
             extra={"detail_section": random.choice(["specs", "reviews", "delivery"])},
@@ -511,7 +538,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
             add_event(
                 path=product_path,
                 event_name="click",
-                element_hash="add-to-cart",
+                element_key="add-to-cart",
                 funnel_step=FUNNEL_STEPS["product"],
                 click=True,
                 extra={"product_id": product.slug, "qty": qty},
@@ -522,7 +549,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
         add_event(
             path="/cart",
             event_name="page_view",
-            element_hash="cart-summary",
+            element_key="cart-summary",
             funnel_step=FUNNEL_STEPS["cart"],
             scroll_pct=random.uniform(0.4, 0.8),
             extra={"items": len(cart_items), "order_value": cart_value},
@@ -531,7 +558,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
             add_event(
                 path="/cart",
                 event_name="click",
-                element_hash="checkout-button",
+                element_key="checkout-button",
                 funnel_step=FUNNEL_STEPS["cart"],
                 click=True,
                 extra={"items": len(cart_items)},
@@ -543,7 +570,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
         add_event(
             path="/checkout",
             event_name="page_view",
-            element_hash="checkout-form",
+            element_key="checkout-form",
             funnel_step=FUNNEL_STEPS["checkout"],
             scroll_pct=random.uniform(0.3, 0.7),
             extra={"items": len(cart_items), "order_value": cart_value},
@@ -552,7 +579,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
         add_event(
             path="/checkout",
             event_name="click",
-            element_hash="complete-order",
+            element_key="complete-order",
             funnel_step=FUNNEL_STEPS["checkout"],
             click=True,
             extra={"payment_method": random.choice(["card", "kakaopay", "naverpay"])},
@@ -565,7 +592,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
         add_event(
             path="/success",
             event_name="page_view",
-            element_hash="order-complete",
+            element_key="order-complete",
             funnel_step=FUNNEL_STEPS["success"],
             scroll_pct=1.0,
             extra={"order_value": cart_value, "items": len(cart_items)},
@@ -573,7 +600,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
         add_event(
             path="/success",
             event_name="purchase",
-            element_hash="order-complete",
+            element_key="order-complete",
             funnel_step=FUNNEL_STEPS["success"],
             click=False,
             extra={
@@ -589,7 +616,7 @@ def _build_session(start: datetime, end: datetime, stats: Dict[str, int]) -> Lis
         add_event(
             path="/wishlist",
             event_name="page_view",
-            element_hash="wishlist-page",
+            element_key="wishlist-page",
             funnel_step=FUNNEL_STEPS["catalog"],
             scroll_pct=random.uniform(0.5, 0.8),
             extra={"items": random.randint(1, 5)},
