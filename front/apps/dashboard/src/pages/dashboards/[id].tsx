@@ -86,6 +86,7 @@ const MIN_WIDGET_H = 4
 const DEFAULT_WIDGET_W = 4
 const DEFAULT_WIDGET_H = 8
 const APPROX_COL_WIDTH_PX = 120
+const MOBILE_BREAKPOINT_PX = 768
 const RESIZE_HANDLES: NonNullable<Layout["resizeHandles"]> = ["s", "n", "e", "w", "se", "sw", "ne", "nw"]
 const DASHBOARD_TUTORIAL_STORAGE_KEY = "apilog-dashboard-tutorial-seen"
 const tutorialGifSourcesByLanguage = {
@@ -146,6 +147,7 @@ interface DashboardCopy {
   widgetTagLabels: Record<string, string>
   widgetTagDescriptions: Record<string, string>
   languageLabel: string
+  themeLabel: string
   presetButtonPlaceholder: string
   presetMenuTitle: string
   noPresets: string
@@ -253,6 +255,7 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       others: "Additional widgets that don't fit a single category.",
     },
     languageLabel: "Language",
+    themeLabel: "Theme",
     presetButtonPlaceholder: "Select preset",
     presetMenuTitle: "Presets",
     noPresets: "No presets yet",
@@ -353,6 +356,7 @@ const dashboardCopy: Record<LanguageCode, DashboardCopy> = {
       others: "다른 카테고리에 속하지 않은 위젯 모음이에요.",
     },
     languageLabel: "언어",
+    themeLabel: "테마",
     presetButtonPlaceholder: "프리셋 선택",
     presetMenuTitle: "프리셋",
     noPresets: "아직 프리셋이 없어요",
@@ -641,9 +645,19 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
 
+function isMobileViewport() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false
+  return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX}px)`).matches
+}
+
+function getDefaultGridWidth() {
+  return isMobileViewport() ? GRID_COLS : DEFAULT_WIDGET_W
+}
+
 function pxToGridWidth(width?: number) {
-  if (typeof width !== "number" || !Number.isFinite(width)) return DEFAULT_WIDGET_W
-  return clamp(Math.round(width / APPROX_COL_WIDTH_PX) || DEFAULT_WIDGET_W, MIN_WIDGET_W, GRID_COLS)
+  if (isMobileViewport()) return GRID_COLS
+  if (typeof width !== "number" || !Number.isFinite(width)) return getDefaultGridWidth()
+  return clamp(Math.round(width / APPROX_COL_WIDTH_PX) || getDefaultGridWidth(), MIN_WIDGET_W, GRID_COLS)
 }
 
 function pxToGridHeight(height?: number) {
@@ -652,10 +666,11 @@ function pxToGridHeight(height?: number) {
 }
 
 function createFallbackLayout(index: number, width?: number, height?: number): WidgetLayoutState {
-  const perRow = Math.max(1, Math.floor(GRID_COLS / DEFAULT_WIDGET_W))
+  const defaultGridWidth = getDefaultGridWidth()
+  const perRow = Math.max(1, Math.floor(GRID_COLS / defaultGridWidth))
   const w = pxToGridWidth(width)
   const h = pxToGridHeight(height)
-  const tentativeX = (index % perRow) * DEFAULT_WIDGET_W
+  const tentativeX = (index % perRow) * defaultGridWidth
   const x = clamp(tentativeX, 0, GRID_COLS - w)
   const y = Math.floor(index / perRow) * DEFAULT_WIDGET_H
   return { x, y, w, h }
@@ -1560,149 +1575,168 @@ export default function DashboardPage() {
               </Button>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="min-w-[220px] justify-between">
-                    <span className="truncate">{presetButtonLabel}</span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-64">
-                  <DropdownMenuLabel>{copy.presetMenuTitle}</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {presets.length === 0 ? (
-                    <DropdownMenuItem disabled>{copy.noPresets}</DropdownMenuItem>
-                  ) : (
-                    presets.map((preset) => (
-                      <DropdownMenuItem key={preset.id} onSelect={() => handlePresetSelect(preset.id)}>
-                        <div className="flex w-full items-center justify-between gap-2">
-                          <span className="truncate">{preset.name}</span>
-                          {preset.id === activePresetId && <Check className="h-4 w-4 text-primary" />}
-                        </div>
-                      </DropdownMenuItem>
-                    ))
-                  )}
-                  {(hasUnsavedChanges || dashboard) && <DropdownMenuSeparator />}
-                  {hasUnsavedChanges && (
-                    <DropdownMenuItem
-                      disabled={!activePresetId && !isNewPresetDraft}
-                      onSelect={() => handleSavePresetChanges()}
-                    >
-                      <Save className="mr-2 h-4 w-4" />
-                      {copy.saveChanges}
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onSelect={() => openSaveAsDialog()} disabled={!dashboard}>
-                    <CopyPlus className="mr-2 h-4 w-4" />
-                    {copy.saveAsPreset}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>{copy.actionsTitle}</DropdownMenuLabel>
-                  <DropdownMenuItem onSelect={() => openRenameDialog()} disabled={!activePresetId}>
-                    <PenLine className="mr-2 h-4 w-4" />
-                    {copy.renamePreset}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    disabled={presets.length <= 1}
-                    onSelect={() => setIsDeleteDialogOpen(true)}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    {copy.deletePreset}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {hasUnsavedChanges && (
-                <Badge variant="secondary" className="uppercase tracking-wide">
-                  {copy.unsavedBadge}
-                </Badge>
-              )}
-
-              {!isEditMode && !isNewPresetDraft && (
-                <Button variant="outline" size="sm" onClick={handleStartNewLayout}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  {copy.newLayout}
-                </Button>
-              )}
-
-              {isEditMode && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCancelEditing}
-                  className="text-destructive hover:text-destructive focus:text-destructive"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  {copy.cancelEdit}
-                </Button>
-              )}
-
-              {isEditMode && (
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-end">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-3">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={dashboard.widgets.length === 0}
-                      className="gap-2"
+                      className="min-w-[220px] justify-between w-full sm:w-auto"
                     >
-                      <Wand2 className="h-4 w-4" />
-                      {copy.autoLayout}
+                      <span className="truncate">{presetButtonLabel}</span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-72">
-                    <DropdownMenuLabel>{copy.autoLayoutTitle}</DropdownMenuLabel>
+                  <DropdownMenuContent className="w-64">
+                    <DropdownMenuLabel>{copy.presetMenuTitle}</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={dashboard.widgets.length === 0}
-                      onSelect={(event) => {
-                        event.preventDefault()
-                        handleAutoLayout("compact")
-                      }}
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{copy.autoLayoutCompact}</p>
-                        <p className="text-xs text-muted-foreground">{copy.autoLayoutCompactDescription}</p>
-                      </div>
+                    {presets.length === 0 ? (
+                      <DropdownMenuItem disabled>{copy.noPresets}</DropdownMenuItem>
+                    ) : (
+                      presets.map((preset) => (
+                        <DropdownMenuItem key={preset.id} onSelect={() => handlePresetSelect(preset.id)}>
+                          <div className="flex w-full items-center justify-between gap-2">
+                            <span className="truncate">{preset.name}</span>
+                            {preset.id === activePresetId && <Check className="h-4 w-4 text-primary" />}
+                          </div>
+                        </DropdownMenuItem>
+                      ))
+                    )}
+                    {(hasUnsavedChanges || dashboard) && <DropdownMenuSeparator />}
+                    {hasUnsavedChanges && (
+                      <DropdownMenuItem
+                        disabled={!activePresetId && !isNewPresetDraft}
+                        onSelect={() => handleSavePresetChanges()}
+                      >
+                        <Save className="mr-2 h-4 w-4" />
+                        {copy.saveChanges}
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onSelect={() => openSaveAsDialog()} disabled={!dashboard}>
+                      <CopyPlus className="mr-2 h-4 w-4" />
+                      {copy.saveAsPreset}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>{copy.actionsTitle}</DropdownMenuLabel>
+                    <DropdownMenuItem onSelect={() => openRenameDialog()} disabled={!activePresetId}>
+                      <PenLine className="mr-2 h-4 w-4" />
+                      {copy.renamePreset}
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      disabled={dashboard.widgets.length === 0}
-                      onSelect={(event) => {
-                        event.preventDefault()
-                        handleAutoLayout("two-column")
-                      }}
+                      className="text-destructive focus:text-destructive"
+                      disabled={presets.length <= 1}
+                      onSelect={() => setIsDeleteDialogOpen(true)}
                     >
-                      <div>
-                        <p className="text-sm font-medium">{copy.autoLayoutTwoColumn}</p>
-                        <p className="text-xs text-muted-foreground">{copy.autoLayoutTwoColumnDescription}</p>
-                      </div>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={dashboard.widgets.length === 0}
-                      onSelect={(event) => {
-                        event.preventDefault()
-                        handleAutoLayout("three-column")
-                      }}
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{copy.autoLayoutThreeColumn}</p>
-                        <p className="text-xs text-muted-foreground">{copy.autoLayoutThreeColumnDescription}</p>
-                      </div>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {copy.deletePreset}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              )}
 
-              <Button variant={isEditMode ? "default" : "outline"} size="sm" onClick={handleToggleEditMode}>
-                <LayoutGrid className="h-4 w-4 mr-2" />
-                {isEditMode ? copy.saveLayout : copy.editLayout}
-              </Button>
+                {hasUnsavedChanges && (
+                  <Badge
+                    variant="secondary"
+                    className="uppercase tracking-wide text-center w-full sm:w-auto"
+                  >
+                    {copy.unsavedBadge}
+                  </Badge>
+                )}
 
-              <div className="flex items-center gap-2 pl-3 border-l border-border">
+                {!isEditMode && !isNewPresetDraft && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleStartNewLayout}
+                    className="w-full sm:w-auto"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    {copy.newLayout}
+                  </Button>
+                )}
+
+                {isEditMode && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancelEditing}
+                    className="w-full text-destructive hover:text-destructive focus:text-destructive sm:w-auto"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    {copy.cancelEdit}
+                  </Button>
+                )}
+
+                {isEditMode && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={dashboard.widgets.length === 0}
+                        className="gap-2 w-full sm:w-auto"
+                      >
+                        <Wand2 className="h-4 w-4" />
+                        {copy.autoLayout}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-72">
+                      <DropdownMenuLabel>{copy.autoLayoutTitle}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        disabled={dashboard.widgets.length === 0}
+                        onSelect={(event) => {
+                          event.preventDefault()
+                          handleAutoLayout("compact")
+                        }}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{copy.autoLayoutCompact}</p>
+                          <p className="text-xs text-muted-foreground">{copy.autoLayoutCompactDescription}</p>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={dashboard.widgets.length === 0}
+                        onSelect={(event) => {
+                          event.preventDefault()
+                          handleAutoLayout("two-column")
+                        }}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{copy.autoLayoutTwoColumn}</p>
+                          <p className="text-xs text-muted-foreground">{copy.autoLayoutTwoColumnDescription}</p>
+                        </div>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={dashboard.widgets.length === 0}
+                        onSelect={(event) => {
+                          event.preventDefault()
+                          handleAutoLayout("three-column")
+                        }}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{copy.autoLayoutThreeColumn}</p>
+                          <p className="text-xs text-muted-foreground">{copy.autoLayoutThreeColumnDescription}</p>
+                        </div>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+
+                <Button
+                  variant={isEditMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={handleToggleEditMode}
+                  className="w-full sm:w-auto"
+                >
+                  <LayoutGrid className="h-4 w-4 mr-2" />
+                  {isEditMode ? copy.saveLayout : copy.editLayout}
+                </Button>
+              </div>
+
+              <div className="flex w-full flex-col gap-2 border-t border-border pt-3 sm:w-auto sm:flex-row sm:items-center sm:gap-2 sm:border-none sm:pt-0 lg:border-l lg:pl-3">
                 <Select value={language} onValueChange={(value) => (value === "ko" || value === "en" ? setLanguage(value) : null)}>
-                  <SelectTrigger className="w-[140px]" aria-label={copy.languageLabel}>
+                  <SelectTrigger className="w-full sm:w-[140px]" aria-label={copy.languageLabel}>
                     <SelectValue placeholder={copy.languageLabel} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1710,7 +1744,10 @@ export default function DashboardPage() {
                     <SelectItem value="ko">한국어</SelectItem>
                   </SelectContent>
                 </Select>
-                <ThemeToggle />
+                <div className="flex w-full items-center justify-between gap-2 rounded-md border border-border px-3 py-2 sm:w-auto sm:border-none sm:px-0 sm:py-0">
+                  <span className="text-sm font-medium text-muted-foreground sm:hidden">{copy.themeLabel}</span>
+                  <ThemeToggle />
+                </div>
               </div>
             </div>
           </div>
@@ -1775,7 +1812,7 @@ export default function DashboardPage() {
       {isEditMode && (
         <>
           <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-            <span className="rounded-full bg-background/90 px-4 py-2 text-sm font-medium text-foreground shadow-lg shadow-primary/20">
+            <span className="rounded-full bg-background/90 px-4 py-2 text-sm font-medium text-foreground shadow-lg shadow-primary/20 self-start sm:self-auto">
               <span className="block">{copy.addWidgetHint}</span>
               <span className="block text-xs font-normal text-muted-foreground">{copy.aiWidgetHint}</span>
             </span>
@@ -1812,7 +1849,7 @@ export default function DashboardPage() {
               }
             }}
           >
-            <DialogContent className="w-full max-w-[80vw] xl:max-w-[1200px]">
+            <DialogContent className="w-full max-w-[95vw] sm:max-w-[80vw] xl:max-w-[1200px]">
               <DialogHeader>
                 <DialogTitle>{copy.addWidgetTitle}</DialogTitle>
                 <DialogDescription>{copy.addWidgetDescription}</DialogDescription>
@@ -1963,7 +2000,7 @@ export default function DashboardPage() {
             }
           }}
         >
-          <DialogContent className="sm:max-w-4xl">
+          <DialogContent className="w-full max-w-[95vw] sm:max-w-4xl">
             <DialogHeader>
               <DialogTitle>{copy.aiWidgetTitle}</DialogTitle>
               <DialogDescription>{copy.aiWidgetDescription}</DialogDescription>

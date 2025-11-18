@@ -160,6 +160,12 @@
     opacity: 1;
   }
 
+  @media (hover: none) and (pointer: coarse) {
+    .react-grid-item .react-resizable-handle {
+      opacity: 1;
+    }
+  }
+
   .react-grid-item .react-resizable-handle-s,
   .react-grid-item .react-resizable-handle-n {
     left: 50%;

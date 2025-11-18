@@ -36,7 +36,7 @@ export function WidgetHost({ type, config, timeRange, language, isEditMode, onRe
     <Card className="relative group flex h-full flex-col">
       {/* Edit Mode Controls */}
       {isEditMode && (
-        <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
           <Button
             variant="ghost"
             size="icon"
