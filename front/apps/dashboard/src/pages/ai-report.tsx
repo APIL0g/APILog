@@ -444,18 +444,18 @@ export default function AIReportPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
+          <div className="flex flex-wrap items-center gap-3">
             <img src="/dashboard-logo.png" alt="ApiLog" className="h-8" />
             <div className="h-6 w-px bg-border" />
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-semibold text-foreground">{copy.headerTitle}</h1>
               <p className="text-sm text-muted-foreground">{copy.headerSubtitle}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
             <Select value={language} onValueChange={(value) => (value === "ko" || value === "en" ? setLanguage(value) : null)}>
-              <SelectTrigger className="w-[140px]" aria-label={copy.languageLabel}>
+              <SelectTrigger className="w-full min-w-[160px] sm:w-[140px]" aria-label={copy.languageLabel}>
                 <SelectValue placeholder={copy.languageLabel}>{LANGUAGE_LABELS[language]}</SelectValue>
               </SelectTrigger>
               <SelectContent align="end">
@@ -464,14 +464,14 @@ export default function AIReportPage() {
               </SelectContent>
             </Select>
             <ThemeToggle />
-            <Button variant="outline" onClick={() => (globalThis.location.hash = "#/")}>
+            <Button variant="outline" onClick={() => (globalThis.location.hash = "#/")} className="w-full sm:w-auto">
               {copy.backToDashboard}
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-6 p-6">
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
         <Card>
           <CardHeader>
             <CardTitle>{copy.generateCardTitle}</CardTitle>
@@ -510,7 +510,7 @@ export default function AIReportPage() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <CardTitle className="flex items-center gap-2">
                     {report.title}
                     <Badge variant="secondary" className="uppercase">
