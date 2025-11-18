@@ -139,13 +139,29 @@ const BASE_RADAR_AXIS_LABELS: Record<RadarAxisKey, string> = {
 type LanguageCode = "en" | "ko"
 const LANGUAGE_STORAGE_KEY = "dashboard-language"
 const LANGUAGE_LABELS: Record<LanguageCode, string> = { en: "English", ko: "한국어" }
-const RADAR_LABELS: Record<LanguageCode, Record<RadarAxisKey, string>> = {
+const RADAR_CHART_LABELS: Record<LanguageCode, Record<RadarAxisKey, string>> = {
   en: {
     performance: "Performance",
     experience: "User Exp",
     growth: "Growth / Conversion",
     search: "Search Visibility",
     stability: "Stability",
+  },
+  ko: {
+    performance: "성능",
+    experience: "사용자 경험",
+    growth: "전환 / 성장",
+    search: "검색 가시성",
+    stability: "기술 안정성",
+  },
+}
+const RADAR_LABELS: Record<LanguageCode, Record<RadarAxisKey, string>> = {
+  en: {
+    performance: "Performance",
+    experience: "User Experience",
+    growth: "Growth / Conversion",
+    search: "Search Visibility",
+    stability: "Technical Stability",
   },
   ko: {
     performance: "성능",
@@ -923,7 +939,8 @@ function RadarPentagon({ scores, title, language }: { scores?: RadarScore[]; tit
   const data = RADAR_AXIS_KEYS.map((axis) => {
     const found = normalizedScores[axis]
     return {
-      axis: RADAR_LABELS[language][axis],
+      axisShort: RADAR_CHART_LABELS[language][axis],
+      axisLong: RADAR_LABELS[language][axis],
       score: typeof found?.score === "number" ? found.score : 50,
       commentary: found?.commentary || "Insufficient data",
     }
@@ -948,7 +965,7 @@ function RadarPentagon({ scores, title, language }: { scores?: RadarScore[]; tit
           >
             <PolarGrid strokeDasharray="3 3" stroke={gridColor} />
             <PolarAngleAxis
-              dataKey="axis"
+              dataKey="axisShort"
               radius={92}
               stroke={axisColor}
               tickLine={false}
@@ -973,8 +990,8 @@ function RadarPentagon({ scores, title, language }: { scores?: RadarScore[]; tit
         </ChartContainer>
         <div className="space-y-2 text-sm text-muted-foreground">
           {data.map((item) => (
-            <div key={item.axis} className="flex items-center justify-between">
-              <span>{item.axis}</span>
+            <div key={item.axisLong} className="flex items-center justify-between">
+              <span>{item.axisLong}</span>
               <span className="font-medium text-foreground">{item.score}</span>
             </div>
           ))}
