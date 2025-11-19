@@ -1021,16 +1021,19 @@ export default function DashboardPage() {
   const presetButtonLabel = activePreset?.name ?? dashboard?.name ?? copy.presetButtonPlaceholder
   const tutorialDialogClasses = isMobileView
     ? "flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-none flex-col overflow-y-auto rounded-2xl p-4"
-    : "flex w-[min(90vw,1200px)] max-h-[90vh] max-w-none flex-col overflow-hidden sm:max-w-none"
+    : "flex w-[min(90vw,1200px)] max-h-[90vh] max-w-none flex-col overflow-y-auto sm:max-w-none"
   const tutorialStepListClasses = isMobileView
     ? "mb-4 flex w-full items-center justify-center gap-2"
     : "mb-4 flex flex-wrap items-center justify-center gap-3"
   const tutorialPreviewContainerClasses = isMobileView
-    ? "relative flex w-full flex-1 items-center justify-center overflow-hidden rounded-lg bg-background shadow-lg min-h-[55vh] max-h-[calc(100vh-14rem)]"
-    : "relative flex h-full min-h-[55vh] items-center justify-center rounded-lg bg-background shadow-lg"
-  const tutorialDetailsCardClasses = isMobileView
-    ? "flex flex-col gap-3 rounded-xl border border-border/60 bg-background/90 p-4 shadow-inner"
-    : "flex flex-col gap-4 rounded-xl border border-border/60 bg-background/90 p-5 shadow-inner"
+    ? "relative flex w-full flex-1 items-center justify-center overflow-hidden rounded-lg bg-background shadow-lg max-h-[calc(100vh-14rem)]"
+    : "relative flex h-full items-center justify-center overflow-hidden rounded-lg bg-background shadow-lg max-h-[calc(100vh-12rem)]"
+  const addWidgetDialogClasses = isMobileView
+    ? "w-full max-w-[95vw] max-h-[70vh] overflow-y-auto"
+    : "w-full max-w-[95vw] sm:max-w-[80vw] xl:max-w-[1200px]"
+  const aiWidgetDialogClasses = isMobileView
+    ? "w-full max-w-[95vw] max-h-[70vh] overflow-y-auto"
+    : "w-full max-w-[95vw] sm:max-w-4xl"
 
   // Load dashboard configuration & presets
   useEffect(() => {
@@ -1137,11 +1140,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
+
+    if (isMobileView) {
+      setIsTutorialOpen(false)
+      return
+    }
+
     const hasSeenTutorial = window.localStorage?.getItem(DASHBOARD_TUTORIAL_STORAGE_KEY)
     if (!hasSeenTutorial) {
       setIsTutorialOpen(true)
     }
-  }, [])
+  }, [isMobileView])
 
   useEffect(() => {
     if (totalTutorialSlides === 0) return
@@ -1621,7 +1630,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-border bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+      <header className="border-b border-border bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="mx-auto max-w-7xl px-4 py-4 space-y-4 lg:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
@@ -1923,7 +1932,7 @@ export default function DashboardPage() {
               }
             }}
           >
-            <DialogContent className="w-full max-w-[95vw] sm:max-w-[80vw] xl:max-w-[1200px]">
+            <DialogContent className={addWidgetDialogClasses}>
               <DialogHeader>
                 <DialogTitle>{copy.addWidgetTitle}</DialogTitle>
                 <DialogDescription>{copy.addWidgetDescription}</DialogDescription>
@@ -2074,7 +2083,7 @@ export default function DashboardPage() {
             }
           }}
         >
-          <DialogContent className="w-full max-w-[95vw] sm:max-w-4xl">
+          <DialogContent className={aiWidgetDialogClasses}>
             <DialogHeader>
               <DialogTitle>{copy.aiWidgetTitle}</DialogTitle>
               <DialogDescription>{copy.aiWidgetDescription}</DialogDescription>
@@ -2220,147 +2229,115 @@ export default function DashboardPage() {
         </>
       )}
 
-      <Dialog
-        open={isTutorialOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            dismissTutorial()
-          }
-        }}
-      >
-        <DialogContent className={tutorialDialogClasses}>
-          <DialogHeader>
-            <DialogTitle>{tutorialContent.title}</DialogTitle>
-            <DialogDescription>{tutorialContent.subtitle}</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-1 flex-col gap-6 overflow-hidden">
-            <div className="flex-1 rounded-xl border bg-muted/20 p-4">
-              <div className={tutorialStepListClasses}>
-                {tutorialSlides.map((step, index) => {
-                  const isActive = index === activeTutorialIndex
-                  if (isMobileView && !isActive) {
-                    return null
-                  }
-                  return (
-                    <button
-                      key={`${step.title}-${index}`}
-                      type="button"
-                      className={`flex items-center gap-2 rounded-full border ${
-                        isMobileView ? "w-full justify-center px-4 py-3 text-base" : "px-4 py-2 text-sm"
-                      } font-medium transition ${
-                        isActive
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border/70 bg-background text-muted-foreground hover:border-primary/40"
-                      }`}
-                      onClick={() => handleTutorialStepClick(index)}
-                    >
-                      <span
-                        className={`flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold ${
-                          isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+      {!isMobileView && (
+        <Dialog
+          open={isTutorialOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              dismissTutorial()
+            }
+          }}
+        >
+          <DialogContent className={tutorialDialogClasses}>
+            <DialogHeader>
+              <DialogTitle>{tutorialContent.title}</DialogTitle>
+              <DialogDescription>{tutorialContent.subtitle}</DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-1 flex-col gap-6 overflow-hidden">
+              <div className="flex-1 rounded-xl border bg-muted/20 p-4">
+                <div className={tutorialStepListClasses}>
+                  {tutorialSlides.map((step, index) => {
+                    const isActive = index === activeTutorialIndex
+                    if (isMobileView && !isActive) {
+                      return null
+                    }
+                    return (
+                      <button
+                        key={`${step.title}-${index}`}
+                        type="button"
+                        className={`flex items-center gap-2 rounded-full border ${
+                          isMobileView ? "w-full justify-center px-4 py-3 text-base" : "px-4 py-2 text-sm"
+                        } font-medium transition ${
+                          isActive
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border/70 bg-background text-muted-foreground hover:border-primary/40"
                         }`}
+                        onClick={() => handleTutorialStepClick(index)}
                       >
-                        {index + 1}
-                      </span>
-                      <span className={isMobileView ? "text-left text-sm font-semibold" : "hidden text-left sm:block"}>
-                        {step.title}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-              <div className={tutorialPreviewContainerClasses}>
-                {!isMobileView && (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={goToPreviousTutorialSlide}
-                    disabled={totalTutorialSlides === 0}
-                    aria-label="Previous tutorial preview"
-                    className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-background/80 shadow-lg backdrop-blur"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </Button>
-                )}
-                <img
-                  src={activeTutorialImage}
-                  alt={`${tutorialContent.imageAlt} - ${activeTutorialSlide?.title ?? ""}`}
-                  className="h-full w-full object-contain"
-                />
-                {!isMobileView && (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={goToNextTutorialSlide}
-                    disabled={totalTutorialSlides === 0}
-                    aria-label="Next tutorial preview"
-                    className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-background/80 shadow-lg backdrop-blur"
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </Button>
-                )}
-                {isMobileView && (
-                  <div className="absolute inset-x-0 bottom-3 flex items-center justify-between px-4">
+                        <span
+                          className={`flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold ${
+                            isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {index + 1}
+                        </span>
+                        <span className={isMobileView ? "text-left text-sm font-semibold" : "hidden text-left sm:block"}>
+                          {step.title}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className={tutorialPreviewContainerClasses}>
+                  {!isMobileView && (
                     <Button
                       variant="outline"
-                      size="sm"
+                      size="icon"
                       onClick={goToPreviousTutorialSlide}
                       disabled={totalTutorialSlides === 0}
                       aria-label="Previous tutorial preview"
-                      className="rounded-full bg-background/90 shadow"
+                      className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-background/80 shadow-lg backdrop-blur"
                     >
-                      <ChevronLeft className="h-4 w-4" />
+                      <ChevronLeft className="h-5 w-5" />
                     </Button>
+                  )}
+                  <img
+                    src={activeTutorialImage}
+                    alt={`${tutorialContent.imageAlt} - ${activeTutorialSlide?.title ?? ""}`}
+                    className="h-full w-full object-contain"
+                  />
+                  {!isMobileView && (
                     <Button
                       variant="outline"
-                      size="sm"
+                      size="icon"
                       onClick={goToNextTutorialSlide}
                       disabled={totalTutorialSlides === 0}
                       aria-label="Next tutorial preview"
-                      className="rounded-full bg-background/90 shadow"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-background/80 shadow-lg backdrop-blur"
                     >
-                      <ChevronRight className="h-4 w-4" />
+                      <ChevronRight className="h-5 w-5" />
                     </Button>
-                  </div>
-                )}
+                  )}
+                  {isMobileView && (
+                    <div className="absolute inset-x-0 bottom-3 flex items-center justify-between px-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={goToPreviousTutorialSlide}
+                        disabled={totalTutorialSlides === 0}
+                        aria-label="Previous tutorial preview"
+                        className="rounded-full bg-background/90 shadow"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={goToNextTutorialSlide}
+                        disabled={totalTutorialSlides === 0}
+                        aria-label="Next tutorial preview"
+                        className="rounded-full bg-background/90 shadow"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-            <div className={tutorialDetailsCardClasses}>
-              <div>
-                <p className="text-base font-semibold text-foreground flex items-center gap-2">
-                  <span
-                    className={`flex items-center justify-center rounded-full border border-primary bg-background text-primary ${
-                      isMobileView ? "h-8 w-8 text-base" : "h-10 w-10 text-lg"
-                    }`}
-                  >
-                    {activeTutorialIndex + 1}
-                  </span>
-                  {activeTutorialSlide?.title}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">{activeTutorialSlide?.description}</p>
-                {activeTutorialSlide?.details && (
-                  <p className="mt-2 text-sm text-muted-foreground opacity-90">{activeTutorialSlide.details}</p>
-                )}
-              </div>
-              <div
-                className={`flex flex-wrap items-center justify-between gap-4 ${
-                  isMobileView ? "flex-col items-stretch" : ""
-                }`}
-              >
-                <span className={`text-sm text-muted-foreground ${isMobileView ? "text-center" : ""}`}>
-                  {totalTutorialSlides > 0 ? `${activeTutorialIndex + 1} / ${totalTutorialSlides}` : null}
-                </span>
-                <Button
-                  variant="default"
-                  onClick={dismissTutorial}
-                  className={`${isMobileView ? "w-full" : "whitespace-nowrap"}`}
-                >
-                  {tutorialContent.primaryCta}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <Dialog open={isFinishPresetDialogOpen} onOpenChange={setIsFinishPresetDialogOpen}>
         <DialogContent className="sm:max-w-md">

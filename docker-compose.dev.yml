@@ -254,9 +254,9 @@ services:
       INFLUX_DATABASE: apilog_db
 
       # 시드 개수 / 기간 설정
-      SEED_EVENT_COUNT: 50000   # 5만 개
-      SEED_DAYS: 30             # 최근 30일
-      SEED_BATCH_SIZE: 5000     # 5k 라인 단위로 나눠서 write
+      SEED_EVENT_COUNT: 1000   # 5만 개
+      SEED_DAYS: 8             # 최근 30일
+      SEED_BATCH_SIZE: 1000     # 5k 라인 단위로 나눠서 write
 
     volumes:
       # ✅ 예제 디렉터리 전체를 동일 경로 구조(/workspace/examples)로 마운트
