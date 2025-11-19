@@ -275,10 +275,6 @@ export const widgetMeta: WidgetMeta = {
   description: "Ranked button clicks grouped by page",
   defaultWidth: 520,
   defaultHeight: 300,
-  minWidth: 420,
-  minHeight: 360,
-  relaxedMinHeight: 260,
-  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["conversion"],
   localizations: {

@@ -748,10 +748,6 @@ export const widgetMeta: WidgetMeta = {
   description: "Displays click heatmap overlayed on page snapshots using deck.gl",
   defaultWidth: 520,
   defaultHeight: 300,
-  minWidth: 520,
-  minHeight: 420,
-  relaxedMinHeight: 320,
-  relaxedMinHeightBreakpointCols: 7,
   previewImage,
   tags: ["behavior"],
   localizations: {

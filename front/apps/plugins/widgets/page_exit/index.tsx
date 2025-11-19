@@ -162,10 +162,6 @@ export const widgetMeta: WidgetMeta = {
   description: "페이지별 세션 종료 비율 Top 10",
   defaultWidth: 520,
   defaultHeight: 300,
-  minWidth: 420,
-  minHeight: 340,
-  relaxedMinHeight: 240,
-  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["behavior"],
   localizations: {

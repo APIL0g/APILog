@@ -194,10 +194,6 @@ export const widgetMeta: WidgetMeta = {
   description: "디바이스 유형별 사용자 수와 비중(원형 그래프)",
   defaultWidth: 520,
   defaultHeight: 300,
-  minWidth: 420,
-  minHeight: 360,
-  relaxedMinHeight: 220,
-  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["audience"],
   localizations: {

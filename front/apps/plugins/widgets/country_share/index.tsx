@@ -190,10 +190,6 @@ export const widgetMeta: WidgetMeta = {
   description: "Top countries by session share (pie)",
   defaultWidth: 520,
   defaultHeight: 300,
-  minWidth: 420,
-  minHeight: 320,
-  relaxedMinHeight: 200,
-  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["audience"],
   localizations: {
