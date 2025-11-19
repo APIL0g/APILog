@@ -164,10 +164,6 @@ export const widgetMeta: WidgetMeta = {
   description: "원형(도넛) 차트로 브라우저별 세션 비율",
   defaultWidth: 520,
   defaultHeight: 300,
-  minWidth: 420,
-  minHeight: 320,
-  relaxedMinHeight: 200,
-  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["audience"],
   localizations: {

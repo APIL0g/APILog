@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { createContext, useContext, useEffect, useState } from 'react'
 
 type Theme = 'light' | 'dark'
+const DEFAULT_THEME: Theme = 'light'
 
 interface ThemeContextType {
   theme: Theme
@@ -11,7 +12,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('dark')
+  const [theme, setTheme] = useState<Theme>(DEFAULT_THEME)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -23,8 +24,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    setTheme(prefersDark ? 'dark' : 'light')
+    setTheme(DEFAULT_THEME)
   }, [])
 
   useEffect(() => {

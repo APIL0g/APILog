@@ -147,10 +147,6 @@ export const widgetMeta: WidgetMeta = {
   description: "로그 집계 기반 AI 설명 위젯",
   defaultWidth: 520,
   defaultHeight: 300,
-  minWidth: 420,
-  minHeight: 360,
-  relaxedMinHeight: 260,
-  relaxedMinHeightBreakpointCols: 6,
   previewImage,
   tags: ["ai"],
   localizations: {
