@@ -68,12 +68,19 @@ import { getVisitorsStatCopy } from "@plugins/widgets/visitors_stat/locales"
 import { generateDynamicWidget } from "@/plugins/widgets/dynamic/api"
 import { registerDynamicWidget } from "@/plugins/widgets/dynamic/factory"
 import type { DynamicChartType } from "@/plugins/widgets/dynamic/types"
+import { useIsMobile } from "@/hooks/use-mobile"
 import tutorialGifStep1En from "@/assets/dashboard-tutorial-1_en.gif"
 import tutorialGifStep2En from "@/assets/dashboard-tutorial-2_en.gif"
 import tutorialGifStep3En from "@/assets/dashboard-tutorial-3_en.gif"
 import tutorialGifStep1Kr from "@/assets/dashboard-tutorial-1_kr.gif"
 import tutorialGifStep2Kr from "@/assets/dashboard-tutorial-2_kr.gif"
 import tutorialGifStep3Kr from "@/assets/dashboard-tutorial-3_kr.gif"
+import tutorialGifStep1MobileEn from "@/assets/dashboard-tutorial-1_mobile_en.gif"
+import tutorialGifStep2MobileEn from "@/assets/dashboard-tutorial-2_mobile_en.gif"
+import tutorialGifStep3MobileEn from "@/assets/dashboard-tutorial-3_mobile_en.gif"
+import tutorialGifStep1MobileKo from "@/assets/dashboard-tutorial-1_mobile_ko.gif"
+import tutorialGifStep2MobileKo from "@/assets/dashboard-tutorial-2_mobile_ko.gif"
+import tutorialGifStep3MobileKo from "@/assets/dashboard-tutorial-3_mobile_ko.gif"
 import examplePreviewFallback from "@plugins/widgets/example/preview.png"
 
 const ReactGridLayout = WidthProvider(RGL)
@@ -92,6 +99,10 @@ const DASHBOARD_TUTORIAL_STORAGE_KEY = "apilog-dashboard-tutorial-seen"
 const tutorialGifSourcesByLanguage = {
   en: [tutorialGifStep1En, tutorialGifStep2En, tutorialGifStep3En] as const,
   ko: [tutorialGifStep1Kr, tutorialGifStep2Kr, tutorialGifStep3Kr] as const,
+}
+const tutorialMobileGifSourcesByLanguage = {
+  en: [tutorialGifStep1MobileEn, tutorialGifStep2MobileEn, tutorialGifStep3MobileEn] as const,
+  ko: [tutorialGifStep1MobileKo, tutorialGifStep2MobileKo, tutorialGifStep3MobileKo] as const,
 }
 
 type AutoLayoutMode = "compact" | "two-column" | "three-column"
@@ -808,6 +819,7 @@ export default function DashboardPage() {
   const [editSnapshot, setEditSnapshot] = useState<EditSnapshot | null>(null)
   const [isTutorialOpen, setIsTutorialOpen] = useState(false)
   const [activeTutorialIndex, setActiveTutorialIndex] = useState(0)
+  const isMobileView = useIsMobile()
 
   const captureEditSnapshot = () => {
     setEditSnapshot({
@@ -993,7 +1005,8 @@ export default function DashboardPage() {
     label: copy.widgetTagLabels[section.tag] ?? fallbackTagLabels[section.tag] ?? section.tag,
   }))
   const tutorialContent = tutorialDialogCopy[language]
-  const tutorialGifSources = tutorialGifSourcesByLanguage[language] ?? tutorialGifSourcesByLanguage.en
+  const tutorialGifSourcesByDevice = isMobileView ? tutorialMobileGifSourcesByLanguage : tutorialGifSourcesByLanguage
+  const tutorialGifSources = tutorialGifSourcesByDevice[language] ?? tutorialGifSourcesByDevice.en
   const tutorialSlides = useMemo(
     () =>
       tutorialContent.steps.map((step, index) => ({
@@ -1006,6 +1019,18 @@ export default function DashboardPage() {
   const activeTutorialImage = activeTutorialSlide?.gif ?? tutorialGifSources[0]
   const totalTutorialSlides = tutorialSlides.length
   const presetButtonLabel = activePreset?.name ?? dashboard?.name ?? copy.presetButtonPlaceholder
+  const tutorialDialogClasses = isMobileView
+    ? "flex h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-none flex-col overflow-y-auto rounded-2xl p-4"
+    : "flex w-[min(90vw,1200px)] max-h-[90vh] max-w-none flex-col overflow-hidden sm:max-w-none"
+  const tutorialStepListClasses = isMobileView
+    ? "mb-4 flex w-full items-center justify-center gap-2"
+    : "mb-4 flex flex-wrap items-center justify-center gap-3"
+  const tutorialPreviewContainerClasses = isMobileView
+    ? "relative flex w-full flex-1 items-center justify-center overflow-hidden rounded-lg bg-background shadow-lg min-h-[55vh] max-h-[calc(100vh-14rem)]"
+    : "relative flex h-full min-h-[55vh] items-center justify-center rounded-lg bg-background shadow-lg"
+  const tutorialDetailsCardClasses = isMobileView
+    ? "flex flex-col gap-3 rounded-xl border border-border/60 bg-background/90 p-4 shadow-inner"
+    : "flex flex-col gap-4 rounded-xl border border-border/60 bg-background/90 p-5 shadow-inner"
 
   // Load dashboard configuration & presets
   useEffect(() => {
@@ -2203,21 +2228,26 @@ export default function DashboardPage() {
           }
         }}
       >
-        <DialogContent className="flex w-[min(90vw,1200px)] max-h-[90vh] max-w-none flex-col overflow-hidden sm:max-w-none">
+        <DialogContent className={tutorialDialogClasses}>
           <DialogHeader>
             <DialogTitle>{tutorialContent.title}</DialogTitle>
             <DialogDescription>{tutorialContent.subtitle}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-1 flex-col gap-6 overflow-hidden">
             <div className="flex-1 rounded-xl border bg-muted/20 p-4">
-              <div className="mb-4 flex flex-wrap items-center justify-center gap-3">
+              <div className={tutorialStepListClasses}>
                 {tutorialSlides.map((step, index) => {
                   const isActive = index === activeTutorialIndex
+                  if (isMobileView && !isActive) {
+                    return null
+                  }
                   return (
                     <button
                       key={`${step.title}-${index}`}
                       type="button"
-                      className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${
+                      className={`flex items-center gap-2 rounded-full border ${
+                        isMobileView ? "w-full justify-center px-4 py-3 text-base" : "px-4 py-2 text-sm"
+                      } font-medium transition ${
                         isActive
                           ? "border-primary bg-primary/10 text-primary"
                           : "border-border/70 bg-background text-muted-foreground hover:border-primary/40"
@@ -2225,50 +2255,83 @@ export default function DashboardPage() {
                       onClick={() => handleTutorialStepClick(index)}
                     >
                       <span
-                        className={`flex h-8 w-8 items-center justify-center rounded-full text-base font-semibold ${
+                        className={`flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold ${
                           isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {index + 1}
                       </span>
-                      <span className="hidden text-left sm:block">{step.title}</span>
+                      <span className={isMobileView ? "text-left text-sm font-semibold" : "hidden text-left sm:block"}>
+                        {step.title}
+                      </span>
                     </button>
                   )
                 })}
               </div>
-              <div className="relative flex h-full min-h-[55vh] items-center justify-center rounded-lg bg-background shadow-lg">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={goToPreviousTutorialSlide}
-                  disabled={totalTutorialSlides === 0}
-                  aria-label="Previous tutorial preview"
-                  className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-background/80 shadow-lg backdrop-blur"
-                >
-                  <ChevronLeft className="h-5 w-5" />
-                </Button>
+              <div className={tutorialPreviewContainerClasses}>
+                {!isMobileView && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={goToPreviousTutorialSlide}
+                    disabled={totalTutorialSlides === 0}
+                    aria-label="Previous tutorial preview"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-background/80 shadow-lg backdrop-blur"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </Button>
+                )}
                 <img
                   src={activeTutorialImage}
                   alt={`${tutorialContent.imageAlt} - ${activeTutorialSlide?.title ?? ""}`}
-                  className="max-h-full max-w-full object-contain"
-                  style={{ aspectRatio: "16 / 9" }}
+                  className="h-full w-full object-contain"
                 />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={goToNextTutorialSlide}
-                  disabled={totalTutorialSlides === 0}
-                  aria-label="Next tutorial preview"
-                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-background/80 shadow-lg backdrop-blur"
-                >
-                  <ChevronRight className="h-5 w-5" />
-                </Button>
+                {!isMobileView && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={goToNextTutorialSlide}
+                    disabled={totalTutorialSlides === 0}
+                    aria-label="Next tutorial preview"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-background/80 shadow-lg backdrop-blur"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </Button>
+                )}
+                {isMobileView && (
+                  <div className="absolute inset-x-0 bottom-3 flex items-center justify-between px-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToPreviousTutorialSlide}
+                      disabled={totalTutorialSlides === 0}
+                      aria-label="Previous tutorial preview"
+                      className="rounded-full bg-background/90 shadow"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToNextTutorialSlide}
+                      disabled={totalTutorialSlides === 0}
+                      aria-label="Next tutorial preview"
+                      className="rounded-full bg-background/90 shadow"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
-            <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-background/90 p-5 shadow-inner">
+            <div className={tutorialDetailsCardClasses}>
               <div>
                 <p className="text-base font-semibold text-foreground flex items-center gap-2">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full border border-primary bg-background text-lg text-primary">
+                  <span
+                    className={`flex items-center justify-center rounded-full border border-primary bg-background text-primary ${
+                      isMobileView ? "h-8 w-8 text-base" : "h-10 w-10 text-lg"
+                    }`}
+                  >
                     {activeTutorialIndex + 1}
                   </span>
                   {activeTutorialSlide?.title}
@@ -2278,11 +2341,19 @@ export default function DashboardPage() {
                   <p className="mt-2 text-sm text-muted-foreground opacity-90">{activeTutorialSlide.details}</p>
                 )}
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <span className="text-sm text-muted-foreground">
+              <div
+                className={`flex flex-wrap items-center justify-between gap-4 ${
+                  isMobileView ? "flex-col items-stretch" : ""
+                }`}
+              >
+                <span className={`text-sm text-muted-foreground ${isMobileView ? "text-center" : ""}`}>
                   {totalTutorialSlides > 0 ? `${activeTutorialIndex + 1} / ${totalTutorialSlides}` : null}
                 </span>
-                <Button variant="default" onClick={dismissTutorial} className="whitespace-nowrap">
+                <Button
+                  variant="default"
+                  onClick={dismissTutorial}
+                  className={`${isMobileView ? "w-full" : "whitespace-nowrap"}`}
+                >
                   {tutorialContent.primaryCta}
                 </Button>
               </div>
