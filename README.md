@@ -39,7 +39,7 @@ A detailed getting started guide can be found at [apilog.kr/docs](https://apilog
 
 ## 🛠 Installing from Source
 
-[▶️ Watch the user guide video](https://www.youtube.com/watch?v=pPGZDITqLdY) for a full walkthrough.
+[▶️ Watch the user guide video](https://youtu.be/9LJH8unmKWQ) for a full walkthrough.
 
 ### Requirements
 
