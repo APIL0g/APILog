@@ -15,6 +15,7 @@ from fastapi import HTTPException
 
 from config import (
     AI_INSIGHTS_EXPLAIN_CACHE_TTL,
+    LLM_API_KEY,
     LLM_ENDPOINT,
     LLM_MAX_TOKENS,
     LLM_MODEL,
@@ -44,6 +45,61 @@ def _cache_key(digest: Dict[str, Any], language: str, word_limit: int, audience:
         "model": LLM_MODEL,
     }, sort_keys=True)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+def _rule_based_insights(digest: Dict[str, Any]) -> Dict[str, Any]:
+    totals = digest.get("totals") if isinstance(digest, dict) else {}
+    top_paths = digest.get("top_paths") if isinstance(digest, dict) else []
+
+    pageviews = float(totals.get("pageviews") or 0)
+    sessions = float(totals.get("sessions") or 0)
+    users = float(totals.get("users") or 0)
+
+    insights: List[Dict[str, Any]] = []
+
+    if pageviews <= 0 or sessions <= 0:
+        insights.append(
+            {
+                "title": "트래픽 데이터 부족",
+                "severity": "medium",
+                "metric_refs": ["pageviews", "sessions"],
+                "evidence": {"pageviews": pageviews, "sessions": sessions},
+                "explanation": "최근 구간에서 수집된 페이지뷰/세션 데이터가 없어 AI 인사이트를 생성할 수 없습니다.",
+                "action": "SDK 스니펫과 수집 파이프라인이 정상 동작하는지 확인하세요.",
+            }
+        )
+    else:
+        avg_session = pageviews / max(sessions, 1)
+        insights.append(
+            {
+                "title": "세션당 페이지뷰",
+                "severity": "low",
+                "metric_refs": ["pageviews", "sessions"],
+                "evidence": {"pageviews": pageviews, "sessions": sessions, "pages_per_session": round(avg_session, 2)},
+                "explanation": f"세션당 평균 페이지뷰는 약 {avg_session:.1f} PVS 입니다.",
+                "action": "핵심 전환 경로의 페이지 수를 줄여 이탈을 방지하세요.",
+            }
+        )
+
+    if isinstance(top_paths, list) and top_paths:
+        primary = top_paths[0]
+        path = primary.get("path") or primary.get("url") or "unknown"
+        share = primary.get("share") or primary.get("ratio")
+        insights.append(
+            {
+                "title": "상위 페이지 집중도",
+                "severity": "medium",
+                "metric_refs": ["top_paths"],
+                "evidence": {"top_path": path, "share": share},
+                "explanation": f"'{path}' 경로가 트래픽의 대부분을 차지합니다.",
+                "action": "해당 페이지의 로딩 속도와 CTA 배치를 점검하세요.",
+            }
+        )
+
+    return {
+        "generated_at": _now_iso(),
+        "insights": insights,
+        "meta": {"provider": "rule_based", "fallback": True},
+    }
 
 def _extract_json(text: str) -> Dict[str, Any]:
     # 1) Entire content is JSON
@@ -231,6 +287,10 @@ def _build_messages(digest: Dict[str, Any], language: str, word_limit: int, audi
 def _call_openai_compatible(messages: List[Dict[str, str]]) -> str:
     url = (LLM_ENDPOINT or "").rstrip("/") + "/v1/chat/completions"
     headers = {"Content-Type": "application/json"}
+    api_key = (LLM_API_KEY or "").strip()
+    if not api_key:
+        raise RuntimeError("LLM_API_KEY is required for OpenAI-compatible providers")
+    headers["Authorization"] = f"Bearer {api_key}"
     payload = {
         "model": LLM_MODEL,
         "messages": messages,
@@ -247,45 +307,9 @@ def _call_openai_compatible(messages: List[Dict[str, str]]) -> str:
 
 # ---- Ollama resilient ----
 def _call_ollama_resilient(messages: List[Dict[str, str]]) -> str:
-    candidates: List[str] = []
-    if LLM_ENDPOINT:
-        candidates.append(LLM_ENDPOINT)
-    if _is_docker():
-        candidates.append("http://ollama:11434")
-    candidates.append("http://localhost:11434")
-
-    last_err: Optional[Exception] = None
-    for ep in candidates:
-        base = (ep or "").rstrip("/")
-        if not base:
-            continue
-        url = base + "/api/chat"
-        for use_json_mode in (True, False):
-            payload = {"model": LLM_MODEL, "messages": messages, "stream": False}
-            if use_json_mode:
-                payload["format"] = "json"
-            try:
-                log.info("[ai] ollama POST %s model=%s json_mode=%s", url, LLM_MODEL, use_json_mode)
-                # Set default and all four timeouts to satisfy httpx requirements
-                timeout = httpx.Timeout(
-                    LLM_TIMEOUT_S,
-                    connect=min(10.0, LLM_TIMEOUT_S),
-                    read=LLM_TIMEOUT_S,
-                    write=LLM_TIMEOUT_S,
-                    pool=LLM_TIMEOUT_S,
-                )
-                with httpx.Client(timeout=timeout) as client:
-                    r = client.post(url, json=payload)
-                    r.raise_for_status()
-                    data = r.json()
-                    return data["message"]["content"]
-            except Exception as e:
-                last_err = e
-                log.warning("[ai] ollama failed: %s json_mode=%s (%s)", url, use_json_mode, e)
-                continue
-    if last_err:
-        raise last_err
-    raise RuntimeError("No valid Ollama endpoint candidates")
+    raise RuntimeError(
+        "Local Ollama inference is disabled. Configure LLM_PROVIDER=openai_compat with a valid LLM_API_KEY."
+    )
 
 
 # ---- Entry point ----
@@ -300,7 +324,14 @@ def generate_insights(digest: Dict[str, Any], language: str, word_limit: int, au
         if LLM_PROVIDER in ("vllm", "openai_compat", "openai"):
             content = _call_openai_compatible(messages)
         elif LLM_PROVIDER == "ollama":
-            content = _call_ollama_resilient(messages)
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "ollama_disabled",
+                    "message": "Local LLM inference is disabled. Configure LLM_PROVIDER=openai_compat "
+                    "and supply LLM_API_KEY to use AI Insights.",
+                },
+            )
         else:
             result = _rule_based_insights(digest)
             if EXPLAIN_CACHE_TTL_S > 0:
@@ -315,6 +346,8 @@ def generate_insights(digest: Dict[str, Any], language: str, word_limit: int, au
             _cache[key] = parsed
         return parsed
 
+    except HTTPException:
+        raise
     except Exception as e:
         try:
             log.exception("[ai] LLM insights generation failed")
