@@ -39,7 +39,7 @@
 
 ## 🛠 소스에서 설치
 
-[▶️ 유저 가이드 영상 보기](https://www.youtube.com/watch?v=pPGZDITqLdY)
+[▶️ 유저 가이드 영상 보기](https://youtu.be/9LJH8unmKWQ)
 
 ### 요구 사항
 
