@@ -120,8 +120,10 @@ def write_events(events: List[Dict[str, Any]]) -> None:
     points: List[Point] = []
 
     for event in events:
-        if event.get("country_code") is None:
+        bot_flag = _safe_bool(event.get("bot_flag"), False)
+        if bot_flag:
             continue
+
         # Convert the provided timestamp into milliseconds if present.
         # 전달된 타임스탬프가 있으면 밀리초 단위로 변환합니다.
         timestamp_ms = _safe_int(event.get("ts"))
