@@ -255,6 +255,17 @@
     return countryLookupInFlight;
   }
 
+  function isAutomationEnvironment(): boolean {
+    if (typeof navigator === "undefined") {
+      return false;
+    }
+    const ua = (navigator.userAgent || "").toLowerCase();
+    if (navigator.webdriver) {
+      return true;
+    }
+    return /playwright|headlesschrome|puppeteer/.test(ua);
+  }
+
   // ===========================================================================
   // 2. Scroll depth
   // 스크롤 도달 깊이 계산
@@ -790,6 +801,7 @@
     countryCode: string;
     userHash: string;
     activePath: string;
+    isAutomation: boolean;
 
     constructor(opts: CollectorOpts) {
       this.opts = opts;
@@ -801,6 +813,7 @@
       this.countryCode = COUNTRY_DEFAULT;
       this.userHash = getOrCreateUserHash();
       this.activePath = this.currentPath();
+      this.isAutomation = isAutomationEnvironment();
 
       const pendingCountry = requestCountryCode();
       if (pendingCountry) {
@@ -981,6 +994,7 @@
         user_hash: this.userHash,
         path_raw: rawPath,
         error_flag: false,
+        bot_flag: this.isAutomation,
       };
     }
 
