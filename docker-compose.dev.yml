@@ -1,4 +1,4 @@
-version: "3.9"
+﻿version: "3.9"
 
 ############################################################
 # Docker Compose for APILog Dev Environment
@@ -121,6 +121,7 @@ services:
       AI_REPORT_LLM_ENDPOINT: ${AI_REPORT_LLM_ENDPOINT}
       AI_REPORT_LLM_MODEL: ${AI_REPORT_LLM_MODEL}
       AI_REPORT_LLM_API_KEY: ${AI_REPORT_LLM_API_KEY}
+      LLM_API_KEY: ${AI_REPORT_LLM_API_KEY}
       AI_REPORT_LLM_MAX_TOKENS: ${AI_REPORT_LLM_MAX_TOKENS}
       AI_REPORT_LLM_TEMPERATURE: ${AI_REPORT_LLM_TEMPERATURE}
       AI_REPORT_LLM_TIMEOUT_S: ${AI_REPORT_LLM_TIMEOUT_S}
@@ -240,38 +241,38 @@ services:
   #    InfluxDB에 매번 30일치 더미 이벤트 5만개 시드
   #    - docker compose up 할 때마다 새 DB + 랜덤 데이터 생성
   ############################################################
-  apilog-seeder:
-    image: python:3.12-slim
-    container_name: apilog-seeder
+  # apilog-seeder:
+  #   image: python:3.12-slim
+  #   container_name: apilog-seeder
 
-    depends_on:
-      - influxdb3-core
+  #   depends_on:
+  #     - influxdb3-core
 
-    environment:
-      # InfluxDB 3 Core 엔드포인트 (컨테이너 이름 기준)
-      INFLUX_URL: http://influxdb3-core:8181
-      # 쓸 DB 이름 (없으면 자동 생성)
-      INFLUX_DATABASE: apilog_db
+  #   environment:
+  #     # InfluxDB 3 Core 엔드포인트 (컨테이너 이름 기준)
+  #     INFLUX_URL: http://influxdb3-core:8181
+  #     # 쓸 DB 이름 (없으면 자동 생성)
+  #     INFLUX_DATABASE: apilog_db
 
-      # 시드 개수 / 기간 설정
-      SEED_EVENT_COUNT: 50000   # 5만 개
-      SEED_DAYS: 30             # 최근 30일
-      SEED_BATCH_SIZE: 5000     # 5k 라인 단위로 나눠서 write
+  #     # 시드 개수 / 기간 설정
+  #     SEED_EVENT_COUNT: 7000   # 5만 개
+  #     SEED_DAYS: 7             # 최근 30일
+  #     SEED_BATCH_SIZE: 3000     # 5k 라인 단위로 나눠서 write
 
-    volumes:
-      # ✅ 예제 디렉터리 전체를 동일 경로 구조(/workspace/examples)로 마운트
-      #    -> 컨테이너 내에서도 /workspace/examples/dummy-influx/seed_influx.py 경로가 유지됨
-      - ./examples:/workspace/examples:ro
+  #   volumes:
+  #     # ✅ 예제 디렉터리 전체를 동일 경로 구조(/workspace/examples)로 마운트
+  #     #    -> 컨테이너 내에서도 /workspace/examples/dummy-influx/seed_influx.py 경로가 유지됨
+  #     - ./examples:/workspace/examples:ro
 
-    working_dir: /workspace/examples/dummy-influx
+  #   working_dir: /workspace/examples/dummy-influx
 
-    # requests 설치 후 스크립트 한 번 실행
-    command: >
-      sh -c "pip install --no-cache-dir requests &&
-             python seed_influx.py"
+  #   # requests 설치 후 스크립트 한 번 실행
+  #   command: >
+  #     sh -c "pip install --no-cache-dir requests &&
+  #            python seed_influx.py"
 
-    # 한 번 돌고 끝나는 용도 (DB는 휘발성이라 up 할 때마다 새로 시드)
-    restart: "no"
+  #   # 한 번 돌고 끝나는 용도 (DB는 휘발성이라 up 할 때마다 새로 시드)
+  #   restart: "no"
 
 
 ##############################################################

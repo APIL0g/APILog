@@ -980,6 +980,7 @@
         session_id: this.sessionId,
         user_hash: this.userHash,
         path_raw: rawPath,
+        error_flag: false,
       };
     }
 

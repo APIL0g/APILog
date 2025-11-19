@@ -156,7 +156,7 @@ def write_events(events: List[Dict[str, Any]]) -> None:
         point = _set_field(point, "element_rect_w", event.get("element_rect_w"), lambda v: _safe_float(v, None))
         point = _set_field(point, "element_rect_h", event.get("element_rect_h"), lambda v: _safe_float(v, None))
         point = _set_field(point, "element_hash", event.get("element_hash"), _safe_nullable_str)
-        point = _set_field(point, "error_flag", event.get("error_flag"), lambda v: _safe_bool(v, None))
+        point = _set_field(point, "error_flag", event.get("error_flag"), lambda v: _safe_bool(v, False))
         point = _set_field(point, "extra_json", event.get("extra_json"), _safe_nullable_str)
 
         if timestamp_ms is not None:
