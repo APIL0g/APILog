@@ -31,6 +31,15 @@ log = logging.getLogger("ai_insights")
 EXPLAIN_CACHE_TTL_S = AI_INSIGHTS_EXPLAIN_CACHE_TTL
 _cache = TTLCache(maxsize=256, ttl=max(0, EXPLAIN_CACHE_TTL_S))
 
+
+def _missing_llm_credentials(provider: str) -> bool:
+    """Check if LLM access should be skipped due to missing credentials."""
+    if provider in {"", "disabled", "none"}:
+        return True
+    if provider in {"openai", "openai_compat", "gpt", "azure_openai", "vllm"}:
+        return not (LLM_API_KEY or "").strip()
+    return False
+
 # ---- Utils ----
 def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -99,6 +108,30 @@ def _rule_based_insights(digest: Dict[str, Any]) -> Dict[str, Any]:
         "generated_at": _now_iso(),
         "insights": insights,
         "meta": {"provider": "rule_based", "fallback": True},
+    }
+
+def _template_insights() -> Dict[str, Any]:
+    return {
+        "generated_at": _now_iso(),
+        "insights": [
+            {
+                "title": "AI 설정 필요",
+                "severity": "medium",
+                "metric_refs": ["pageviews", "sessions"],
+                "evidence": {"pageviews": "예: 1.2k", "sessions": "예: 450"},
+                "explanation": "LLM 키나 Ollama 엔드포인트가 비어 있어 예시 템플릿을 표시합니다.",
+                "action": "환경 변수 LLM_PROVIDER/LLM_API_KEY 또는 Ollama를 설정한 후 다시 시도하세요.",
+            },
+            {
+                "title": "상위 페이지 집중도",
+                "severity": "low",
+                "metric_refs": ["top_paths"],
+                "evidence": {"top_path": "/landing", "share": "예: 55%"},
+                "explanation": "트래픽이 일부 경로에 집중되어 있다고 가정한 예시입니다.",
+                "action": "핵심 경로의 로딩 속도와 CTA 배치를 우선 점검하세요.",
+            },
+        ],
+        "meta": {"provider": LLM_PROVIDER, "model": LLM_MODEL, "fallback": "template"},
     }
 
 def _extract_json(text: str) -> Dict[str, Any]:
@@ -317,6 +350,13 @@ def generate_insights(digest: Dict[str, Any], language: str, word_limit: int, au
     key = _cache_key(digest, language, word_limit, audience)
     if EXPLAIN_CACHE_TTL_S > 0 and key in _cache:
         return _cache[key]
+
+    provider = (LLM_PROVIDER or "").strip().lower()
+    if _missing_llm_credentials(provider):
+        result = _template_insights()
+        if EXPLAIN_CACHE_TTL_S > 0:
+            _cache[key] = result
+        return result
 
     messages = _build_messages(digest, language, word_limit, audience)
 

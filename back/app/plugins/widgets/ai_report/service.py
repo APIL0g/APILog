@@ -92,6 +92,15 @@ def _resolved_provider() -> str:
     return provider
 
 
+def _missing_report_llm_credentials(resolved: str) -> bool:
+    """Return True if we should skip LLM because credentials are missing/disabled."""
+    if resolved in {"", "disabled", "none"}:
+        return True
+    if resolved in {"openai", "openai_compat", "gpt", "azure_openai", "vllm"}:
+        return not (AI_REPORT_LLM_API_KEY or "").strip()
+    return False
+
+
 def _call_openai_compatible(messages: List[Dict[str, str]]) -> str:
     base = (AI_REPORT_LLM_ENDPOINT or "https://api.openai.com").rstrip("/")
     url = base + "/v1/chat/completions"
@@ -454,53 +463,56 @@ def _collect_widget_data() -> Dict[str, Any]:
             ("country_share", "/country-share", {}),
             ("daily_count", "/daily-count", {}),
             ("device_share", "/device-share", {}),
-            ("page_exit_rate", "/page-exit-rate", {}),
-            ("time_top_pages", "/time-top-pages", {}),
-            ("top_pages", "/top-pages", {}),
-            ("top_buttons_global", "/top-buttons/global", {}),
+            # ("page_exit_rate", "/page-exit-rate", {}),
+            # ("time_top_pages", "/time-top-pages", {}),
+            # ("top_pages", "/top-pages", {}),
         ]
         for key, rel, params in simple_gets:
             if rel in tails or ("/api/query" + rel) in tails:
                 ok, payload = _fetch_json(client, base + rel, params)
                 data[key] = _shrink(payload) if ok else {"_fail": payload}
 
-        if (
-            ("/top-buttons/paths" in tails or "/api/query/top-buttons/paths" in tails)
-            and ("/top-buttons/by-path" in tails or "/api/query/top-buttons/by-path" in tails)
-        ):
-            ok_paths, paths_payload = _fetch_json(client, base + "/top-buttons/paths", {})
-            sample_path = None
-            if ok_paths and isinstance(paths_payload, dict):
-                candidates = paths_payload.get("paths") or paths_payload.get("rows") or []
-                if isinstance(candidates, list) and candidates:
-                    first = candidates[0]
-                    if isinstance(first, str):
-                        sample_path = first
-                    elif isinstance(first, dict):
-                        sample_path = first.get("path")
-            if sample_path:
-                ok_btn, btn_payload = _fetch_json(
-                    client, base + "/top-buttons/by-path", {"path": sample_path, "range": "7d"}
-                )
-                data["top_buttons_by_path"] = _shrink(btn_payload) if ok_btn else {"_fail": btn_payload}
-            else:
-                data["top_buttons_by_path"] = {"_skip": "no path candidates"}
+        # Disabled: collecting top_buttons_by_path issues extra queries and can spike CPU usage.
+        # if (
+        #     ("/top-buttons/paths" in tails or "/api/query/top-buttons/paths" in tails)
+        #     and ("/top-buttons/by-path" in tails or "/api/query/top-buttons/by-path" in tails)
+        # ):
+        #     ok_paths, paths_payload = _fetch_json(client, base + "/top-buttons/paths", {})
+        #     sample_path = None
+        #     if ok_paths and isinstance(paths_payload, dict):
+        #         candidates = paths_payload.get("paths") or paths_payload.get("rows") or []
+        #         if isinstance(candidates, list) and candidates:
+        #             first = candidates[0]
+        #             if isinstance(first, str):
+        #                 sample_path = first
+        #             elif isinstance(first, dict):
+        #                 sample_path = first.get("path")
+        #     if sample_path:
+        #         ok_btn, btn_payload = _fetch_json(
+        #             client, base + "/top-buttons/by-path", {"path": sample_path, "range": "7d"}
+        #         )
+        #         data["top_buttons_by_path"] = _shrink(btn_payload) if ok_btn else {"_fail": btn_payload}
+        #     else:
+        #         data["top_buttons_by_path"] = {"_skip": "no path candidates"}
 
         known = {rel for _, rel, _ in simple_gets} | {"/top-buttons/paths", "/top-buttons/by-path"}
-        misc: Dict[str, Any] = {}
-        for full in discovered:
-            tail = full
-            if tail.startswith("/api/query"):
-                tail = tail[len("/api/query"):]
-            if not tail.startswith("/"):
-                tail = "/" + tail
-            if tail in known:
-                continue
-            ok, payload = _fetch_json(client, base + tail, {})
-            key = tail.strip("/").replace("/", "_") or "root"
-            misc[key] = _shrink(payload) if ok else {"_fail": payload}
-        if misc:
-            data["misc"] = misc
+        # Disabled: looping through every other discovered endpoint generated too many DB queries
+        # and caused CPU spikes while rendering the AI report. Re-enable only if we really need
+        # every /api/query payload in the bundle.
+        # misc: Dict[str, Any] = {}
+        # for full in discovered:
+        #     tail = full
+        #     if tail.startswith("/api/query"):
+        #         tail = tail[len("/api/query"):]
+        #     if not tail.startswith("/"):
+        #         tail = "/" + tail
+        #     if tail in known:
+        #         continue
+        #     ok, payload = _fetch_json(client, base + tail, {})
+        #     key = tail.strip("/").replace("/", "_") or "root"
+        #     misc[key] = _shrink(payload) if ok else {"_fail": payload}
+        # if misc:
+        #     data["misc"] = misc
     return data
 
 
@@ -638,6 +650,87 @@ def _sanitize_metrics(payload: Dict[str, Any]) -> None:
             entry["reason"] = "Tracking rationale missing"
         cleaned.append(entry)
     payload["metrics_to_track"] = cleaned
+
+
+def _template_report(provider_hint: Optional[str]) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "generated_at": _now_iso(),
+        "title": "AI 리포트 (설정 필요)",
+        "summary": "LLM 설정(키 또는 Ollama 엔드포인트)이 비어 있어 예시 템플릿을 반환합니다.",
+        "diagnostics": [
+            {
+                "focus": "모바일 Chrome",
+                "finding": "페이지뷰는 많지만 체류시간이 짧은 편입니다.",
+                "widget": "daily_count",
+                "severity": "medium",
+                "share": "예: 45%",
+                "insight": "번들 최적화 또는 이미지 압축을 고려하세요.",
+            }
+        ],
+        "page_issues": [
+            {
+                "page": "/checkout",
+                "issue": "이탈률이 높습니다.",
+                "widget": "page_exit_rate",
+                "dwell_time": "예: 12s",
+                "exit_rate": "예: 65%",
+                "insight": "CTA 대비와 결제 폼 단계를 점검하세요.",
+            }
+        ],
+        "interaction_insights": [
+            {
+                "area": "상단 CTA 버튼",
+                "insight": "클릭이 한 영역에 과도하게 집중되어 있습니다.",
+                "widget": "top_buttons_by_path",
+                "action": "보조 CTA를 줄이고 주요 CTA를 명확히 노출하세요.",
+            }
+        ],
+        "ux_recommendations": [
+            {
+                "category": "UX",
+                "suggestion": "랜딩 페이지 헤더에 주요 가치 제안을 한 줄로 요약해 배치하세요.",
+                "rationale": "초기 스크롤 이탈을 줄이는 데 효과적입니다.",
+                "validation": "스크롤 깊이·체류 시간으로 7일 추적",
+            }
+        ],
+        "tech_recommendations": [
+            {
+                "category": "Tech",
+                "suggestion": "이미지 lazy-load와 번들 분할을 적용하세요.",
+                "rationale": "로드 타임을 줄여 전환 저하를 방지합니다.",
+                "validation": "LCP/CLS 변화 모니터링",
+            }
+        ],
+        "priorities": [
+            {
+                "title": "모바일 퍼포먼스 개선",
+                "priority": "High",
+                "impact": "이탈률 10%p 감소 기대",
+                "widget": "device_share",
+            }
+        ],
+        "metrics_to_track": [
+            {"metric": "page_exit_rate", "widget": "page_exit_rate", "reason": "이탈 개선 여부 확인"}
+        ],
+        "predictions": [
+            {
+                "metric": "전환율",
+                "baseline": 2.1,
+                "expected": 2.6,
+                "unit": "%",
+                "narrative": "결제 퍼널 최적화 시",
+            }
+        ],
+        "radar_scores": [
+            {"axis": "performance", "score": 60, "commentary": RADAR_FALLBACK_COMMENTARY},
+            {"axis": "experience", "score": 62, "commentary": RADAR_FALLBACK_COMMENTARY},
+            {"axis": "growth", "score": 58, "commentary": RADAR_FALLBACK_COMMENTARY},
+            {"axis": "search", "score": 65, "commentary": RADAR_FALLBACK_COMMENTARY},
+            {"axis": "stability", "score": 70, "commentary": RADAR_FALLBACK_COMMENTARY},
+        ],
+        "meta": {"mode": "template", "prompt_version": "v2", "source": "router_scan"},
+    }
+    return _finalize_report(payload, mode="template", provider_hint=provider_hint, model_hint=AI_REPORT_LLM_MODEL)
 
 
 def _fallback_report(bundle: Dict[str, Any]) -> Dict[str, Any]:
@@ -831,10 +924,14 @@ def generate_report(
     audience: str,
     word_limit: int,
 ) -> Dict[str, Any]:
+    provider = _resolved_provider()
+
+    if _missing_report_llm_credentials(provider):
+        return _template_report(provider_hint=provider)
+
     del from_ts, to_ts, bucket, site_id  # Inputs are handled via widget bundle collection.
     bundle = _collect_widget_data()
     messages = _build_messages(bundle, prompt, language, audience, word_limit)
-    provider = _resolved_provider()
 
     try:
         if provider in {"", "disabled", "none"}:
