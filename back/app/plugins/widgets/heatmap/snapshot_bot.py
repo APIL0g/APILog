@@ -25,7 +25,7 @@ async def take_snapshot(target_url: str, device_type: str, output_path: str):
         try:
             print(f"[Snapshot Bot] Attempting snapshot for: {target_url}")
             # 네트워크가 안정화될 때까지 대기 (timeout 15초)
-            await page.goto(target_url, wait_until="networkidle", timeout=15000)
+            await page.goto(target_url, wait_until="domcontentloaded", timeout=15000)
             
             # 스냅샷 저장 디렉토리 생성 (최초 1회)
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
