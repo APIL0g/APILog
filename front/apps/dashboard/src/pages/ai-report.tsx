@@ -1,30 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { useTheme } from "@/components/theme-provider"
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart"
-import {
-  Line,
-  LineChart,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Radar,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-} from "recharts"
 
 type TrafficDiagnosis = {
   focus: string
@@ -44,10 +26,11 @@ type PageIssue = {
   widget?: string
 }
 
-type InteractionInsight = {
-  area: string
-  insight: string
-  action?: string
+type ErrorAnalysisItem = {
+  path: string
+  browser: string
+  error_rate: number
+  detail?: string
   widget?: string
 }
 
@@ -75,20 +58,6 @@ type MetricWatch = {
   timeframe?: string
 }
 
-type Prediction = {
-  metric: string
-  baseline: number
-  expected: number
-  unit?: string
-  narrative?: string
-}
-
-type RadarScore = {
-  axis: string
-  score: number
-  commentary?: string
-}
-
 type ReportTrendMeta = {
   label?: string
   change_pct?: number
@@ -105,6 +74,7 @@ type ReportMeta = {
   site_id?: string | null
   widgets?: string[]
   missing_widgets?: string[]
+  partial_failures?: string[]
   trend?: ReportTrendMeta
   fallback?: boolean
   [key: string]: any
@@ -116,61 +86,17 @@ type Report = {
   summary?: string
   diagnostics?: TrafficDiagnosis[]
   page_issues?: PageIssue[]
-  interaction_insights?: InteractionInsight[]
+  error_analysis?: ErrorAnalysisItem[]
   ux_recommendations?: Recommendation[]
   tech_recommendations?: Recommendation[]
   priorities?: Priority[]
   metrics_to_track?: MetricWatch[]
-  predictions?: Prediction[]
-  radar_scores?: RadarScore[]
   meta?: ReportMeta
-}
-
-const RADAR_AXIS_KEYS = ["performance", "experience", "growth", "search", "stability"] as const
-type RadarAxisKey = typeof RADAR_AXIS_KEYS[number]
-const BASE_RADAR_AXIS_LABELS: Record<RadarAxisKey, string> = {
-  performance: "Performance",
-  experience: "User Experience",
-  growth: "Growth / Conversion",
-  search: "Search Visibility",
-  stability: "Technical Stability",
 }
 
 type LanguageCode = "en" | "ko"
 const LANGUAGE_STORAGE_KEY = "dashboard-language"
 const LANGUAGE_LABELS: Record<LanguageCode, string> = { en: "English", ko: "한국어" }
-const RADAR_CHART_LABELS: Record<LanguageCode, Record<RadarAxisKey, string>> = {
-  en: {
-    performance: "Performance",
-    experience: "User Exp",
-    growth: "Growth / Conversion",
-    search: "Search Visibility",
-    stability: "Stability",
-  },
-  ko: {
-    performance: "성능",
-    experience: "사용자 경험",
-    growth: "전환 / 성장",
-    search: "검색 가시성",
-    stability: "기술 안정성",
-  },
-}
-const RADAR_LABELS: Record<LanguageCode, Record<RadarAxisKey, string>> = {
-  en: {
-    performance: "Performance",
-    experience: "User Experience",
-    growth: "Growth / Conversion",
-    search: "Search Visibility",
-    stability: "Technical Stability",
-  },
-  ko: {
-    performance: "성능",
-    experience: "사용자 경험",
-    growth: "전환 / 성장",
-    search: "검색 가시성",
-    stability: "기술 안정성",
-  },
-}
 
 type Copy = {
   headerTitle: string
@@ -189,7 +115,7 @@ type Copy = {
   generatedAt: string
   trafficChangeLabel: string
   missingWidgets: string
-  impactChartTitle: string
+  partialFailures: string
   envDiagnosticsTitle: string
   noDiagnostics: string
   sourceWidget: string
@@ -197,8 +123,8 @@ type Copy = {
   noPageIssues: string
   dwellLabel: string
   exitLabel: string
-  interactionTitle: string
-  noInteractions: string
+  errorAnalysisTitle: string
+  noErrors: string
   recommendationsTitle: string
   designColumnTitle: string
   techColumnTitle: string
@@ -209,10 +135,9 @@ type Copy = {
   metricsTitle: string
   noMetrics: string
   widgetLabel: string
-  predictionsTitle: string
-  noPredictions: string
-  radarTitle: string
   analysisWindow: string
+  errorReportTitle: string
+  errorReportRetry: string
 }
 
 const COPY: Record<LanguageCode, Copy> = {
@@ -233,7 +158,7 @@ const COPY: Record<LanguageCode, Copy> = {
     generatedAt: "Generated at",
     trafficChangeLabel: "Traffic change",
     missingWidgets: "Missing widgets (no data)",
-    impactChartTitle: "Projected KPI impact",
+    partialFailures: "Incomplete sections",
     envDiagnosticsTitle: "Environment health diagnostics",
     noDiagnostics: "No diagnostics available.",
     sourceWidget: "Source widget",
@@ -241,8 +166,8 @@ const COPY: Record<LanguageCode, Copy> = {
     noPageIssues: "No dwell/exit anomalies.",
     dwellLabel: "Dwell",
     exitLabel: "Exit",
-    interactionTitle: "Interaction and heatmap insights",
-    noInteractions: "No interaction anomalies.",
+    errorAnalysisTitle: "Error analysis by path & browser",
+    noErrors: "No significant errors detected.",
     recommendationsTitle: "Actionable recommendations",
     designColumnTitle: "Design / UX",
     techColumnTitle: "Performance / Engineering",
@@ -253,10 +178,9 @@ const COPY: Record<LanguageCode, Copy> = {
     metricsTitle: "Key metrics to watch",
     noMetrics: "No metrics defined.",
     widgetLabel: "Widget",
-    predictionsTitle: "Projected performance",
-    noPredictions: "Not enough data to project.",
-    radarTitle: "Experience radar (0-100)",
     analysisWindow: "Analysis window",
+    errorReportTitle: "Report generation failed",
+    errorReportRetry: "Please try again. If the problem persists, check LLM provider settings.",
   },
   ko: {
     headerTitle: "AI 진단 리포트",
@@ -275,7 +199,7 @@ const COPY: Record<LanguageCode, Copy> = {
     generatedAt: "생성 시각",
     trafficChangeLabel: "트래픽 변화",
     missingWidgets: "데이터 없음 위젯",
-    impactChartTitle: "예상 KPI 영향",
+    partialFailures: "불완전한 섹션",
     envDiagnosticsTitle: "환경 진단",
     noDiagnostics: "진단 정보가 없습니다.",
     sourceWidget: "데이터 출처",
@@ -283,8 +207,8 @@ const COPY: Record<LanguageCode, Copy> = {
     noPageIssues: "이탈 이상이 없습니다.",
     dwellLabel: "체류",
     exitLabel: "이탈",
-    interactionTitle: "인터랙션 및 히트맵 인사이트",
-    noInteractions: "인터랙션 이상이 없습니다.",
+    errorAnalysisTitle: "경로·브라우저별 에러 분석",
+    noErrors: "유의미한 에러가 감지되지 않았습니다.",
     recommendationsTitle: "실행 가능한 권고안",
     designColumnTitle: "디자인 / UX",
     techColumnTitle: "성능 / 엔지니어링",
@@ -295,53 +219,10 @@ const COPY: Record<LanguageCode, Copy> = {
     metricsTitle: "주시해야 할 지표",
     noMetrics: "정의된 지표가 없습니다.",
     widgetLabel: "위젯",
-    predictionsTitle: "예상 성과",
-    noPredictions: "예측할 데이터가 부족합니다.",
-    radarTitle: "경험 레이더 (0-100)",
     analysisWindow: "분석 기간",
+    errorReportTitle: "리포트 생성 실패",
+    errorReportRetry: "다시 시도해주세요. 문제가 지속되면 LLM 설정을 확인하세요.",
   },
-}
-
-// Allow LLM responses that localize axis labels to still map onto our canonical axes.
-const RADAR_AXIS_NORMALIZERS: Array<{ key: RadarAxisKey; matches: string[] }> = [
-  {
-    key: "performance",
-    matches: ["performance", "perf", "speed", BASE_RADAR_AXIS_LABELS.performance],
-  },
-  {
-    key: "experience",
-    matches: ["experience", "ux", BASE_RADAR_AXIS_LABELS.experience, "ux/ui"],
-  },
-  {
-    key: "growth",
-    matches: ["growth", "acquisition", BASE_RADAR_AXIS_LABELS.growth],
-  },
-  {
-    key: "search",
-    matches: ["search", "seo", BASE_RADAR_AXIS_LABELS.search],
-  },
-  {
-    key: "stability",
-    matches: ["stability", "reliability", BASE_RADAR_AXIS_LABELS.stability],
-  },
-]
-
-function normalizeRadarAxis(value?: string): RadarAxisKey | null {
-  if (!value) return null
-  const normalized = value.trim().toLowerCase()
-  if (!normalized) return null
-  for (const { key, matches } of RADAR_AXIS_NORMALIZERS) {
-    if (
-      matches.some((token) => {
-        const tokenValue = token?.trim().toLowerCase()
-        if (!tokenValue) return false
-        return normalized === tokenValue || normalized.includes(tokenValue)
-      })
-    ) {
-      return key
-    }
-  }
-  return null
 }
 
 const SEVERITY_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -440,35 +321,12 @@ export default function AIReportPage() {
       setReport(data)
     } catch (e: any) {
       setError(e?.message || "Failed to generate the report. Please try again.")
-      setReport({
-        generated_at: nowIso(),
-        title: "AI Traffic Diagnosis Report",
-        summary: "Widget data is unavailable, so we are showing a sample. Please verify the log pipeline and try again.",
-        diagnostics: [],
-        page_issues: [],
-        interaction_insights: [],
-        ux_recommendations: [],
-        tech_recommendations: [],
-        priorities: [],
-        metrics_to_track: [
-          { metric: "Page exit rate", widget: "page_exit_rate", reason: "Confirms whether exits decrease" },
-          { metric: "Top page dwell time", widget: "time_top_pages", reason: "Validates UX improvements" },
-        ],
-        predictions: [],
-        radar_scores: [],
-        meta: {
-          fallback: true,
-          mode: "fallback",
-          provider: "insight-engine",
-          model: "sample",
-          trend: { label: "unknown" },
-          missing_widgets: [],
-        },
-      })
     } finally {
       setLoading(false)
     }
   }
+
+  const isErrorMode = report?.meta?.mode === "error"
 
   return (
     <div className="min-h-screen bg-background">
@@ -545,7 +403,22 @@ export default function AIReportPage() {
           </CardContent>
         </Card>
 
-        {report && (
+        {report && isErrorMode && (
+          <Card className="border-destructive">
+            <CardHeader>
+              <CardTitle className="text-destructive">{copy.errorReportTitle}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {report.summary && <p className="text-sm">{report.summary}</p>}
+              <p className="text-sm text-muted-foreground">{copy.errorReportRetry}</p>
+              <Button onClick={handleGenerate} disabled={loading} variant="outline">
+                {loading ? copy.generatingButton : copy.generateButton}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {report && !isErrorMode && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
               <Card>
@@ -555,7 +428,7 @@ export default function AIReportPage() {
                     <Badge variant="secondary" className="uppercase">
                       {report?.meta?.model || report?.meta?.provider || "AI"}
                     </Badge>
-                    {report?.meta?.fallback && <Badge variant="destructive">Fallback</Badge>}
+                    {report?.meta?.mode === "template" && <Badge variant="outline">Template</Badge>}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -567,7 +440,7 @@ export default function AIReportPage() {
                     {formatTimeWindow(report.meta, copy, language)}
                     {report.meta?.trend && (
                       <div>
-                        {copy.trafficChangeLabel}: {report.meta.trend.label || "-"} (Δ {formatPercentDelta(report.meta.trend.change_pct)})
+                        {copy.trafficChangeLabel}: {report.meta.trend.label || "-"} ({"\u0394"} {formatPercentDelta(report.meta.trend.change_pct)})
                       </div>
                     )}
                     {report.meta?.missing_widgets?.length ? (
@@ -575,11 +448,14 @@ export default function AIReportPage() {
                         {copy.missingWidgets}: {report.meta.missing_widgets.join(", ")}
                       </div>
                     ) : null}
+                    {report.meta?.partial_failures?.length ? (
+                      <div className="text-amber-600">
+                        {copy.partialFailures}: {report.meta.partial_failures.join(", ")}
+                      </div>
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>
-
-              <ImpactChart report={report} title={copy.impactChartTitle} />
 
               <Card>
                 <CardHeader>
@@ -598,7 +474,7 @@ export default function AIReportPage() {
                       <div className="text-sm">{diag.finding}</div>
                       <div className="text-xs text-muted-foreground">
                         {copy.sourceWidget}: {diag.widget}
-                        {diag.share ? ` · ${diag.share}` : ""}
+                        {diag.share ? ` \u00b7 ${diag.share}` : ""}
                       </div>
                       {diag.insight && <div className="text-xs text-muted-foreground">{diag.insight}</div>}
                     </div>
@@ -627,7 +503,7 @@ export default function AIReportPage() {
                         {(dwellText || exitText) && (
                           <div className="text-xs text-muted-foreground">
                             {dwellText ? `${copy.dwellLabel}: ${dwellText}` : ""}
-                            {dwellText && exitText ? " · " : ""}
+                            {dwellText && exitText ? " \u00b7 " : ""}
                             {exitText ? `${copy.exitLabel}: ${exitText}` : ""}
                           </div>
                         )}
@@ -640,20 +516,22 @@ export default function AIReportPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>{copy.interactionTitle}</CardTitle>
+                  <CardTitle>{copy.errorAnalysisTitle}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {(report.interaction_insights || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">{copy.noInteractions}</div>
+                  {(report.error_analysis || []).length === 0 && (
+                    <div className="text-sm text-muted-foreground">{copy.noErrors}</div>
                   )}
-                  {(report.interaction_insights || []).map((insight, i) => (
-                    <div key={`${insight.area}-${i}`} className="rounded-md border p-3 space-y-1.5">
+                  {(report.error_analysis || []).map((err, i) => (
+                    <div key={`${err.path}-${err.browser}-${i}`} className="rounded-md border p-3 space-y-1.5">
                       <div className="flex items-center justify-between text-sm font-medium">
-                        <span>{insight.area}</span>
-                        {insight.widget && <Badge variant="outline">{insight.widget}</Badge>}
+                        <span>{err.path}</span>
+                        <Badge variant={err.error_rate >= 5 ? "destructive" : "default"}>
+                          {err.error_rate.toFixed(1)}%
+                        </Badge>
                       </div>
-                      <div className="text-sm">{insight.insight}</div>
-                      {insight.action && <div className="text-xs text-muted-foreground">Action: {insight.action}</div>}
+                      <div className="text-xs text-muted-foreground">{err.browser}</div>
+                      {err.detail && <div className="text-sm">{err.detail}</div>}
                     </div>
                   ))}
                 </CardContent>
@@ -723,35 +601,6 @@ export default function AIReportPage() {
                   ))}
                 </CardContent>
               </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>{copy.predictionsTitle}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {(report.predictions || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">{copy.noPredictions}</div>
-                  )}
-                  {(report.predictions || []).map((pred, i) => (
-                    <div key={`${pred.metric}-${i}`} className="rounded-md border p-3 space-y-1">
-                      <div className="flex items-center justify-between text-sm font-medium">
-                        <span>{pred.metric}</span>
-                        <Badge variant="secondary">
-                          {formatNumber(pred.expected)}{pred.unit || ""}
-                        </Badge>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Now {formatNumber(pred.baseline)}
-                        {pred.unit || ""} -&gt; Expected {formatNumber(pred.expected)}
-                        {pred.unit || ""}
-                      </div>
-                      {pred.narrative && <div className="text-sm">{pred.narrative}</div>}
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              <RadarPentagon scores={report.radar_scores} title={copy.radarTitle} language={language} />
             </div>
           </div>
         )}
@@ -813,11 +662,6 @@ function priorityVariant(level?: string) {
   return "outline"
 }
 
-function formatNumber(value?: number) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "-"
-  return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2)
-}
-
 function formatPrettyDate(value?: string, locale: LanguageCode = "en") {
   if (!value) return "-"
   const date = new Date(value)
@@ -867,175 +711,4 @@ function buildHumanRange(from?: string, to?: string, bucket?: string, locale: La
     primary: `${spanText} · ${intervalText} interval`,
     secondary: `${fromPretty} → ${toPretty}`,
   }
-}
-
-function buildPredictionSeries(report: Report | null) {
-  const target = report?.predictions?.[0]
-  const metricLabel = target?.metric || "Impact Index"
-  const unit = target?.unit || ""
-  const baseline = typeof target?.baseline === "number" ? target.baseline : 100
-  const expected = typeof target?.expected === "number" ? target.expected : baseline * 1.05
-  const midpoint = baseline + (expected - baseline) * 0.5
-  const data = [
-    { name: "Now", baseline, projected: baseline },
-    { name: "+1 wk", baseline, projected: Math.round(midpoint * 10) / 10 },
-    { name: "+2 wk", baseline, projected: Math.round(expected * 10) / 10 },
-  ]
-  return { data, metricLabel: unit ? `${metricLabel} (${unit})` : metricLabel, delta: expected - baseline }
-}
-
-function ImpactChart({ report, title }: { report: Report | null; title: string }) {
-  const { theme } = useTheme()
-  const { baselineColor, projectedColor, dotStroke, gridColor, axisColor } = useMemo(() => {
-    const isDark = theme === "dark"
-    return {
-      baselineColor: isDark ? "rgba(248,250,252,0.5)" : "rgba(15,23,42,0.35)",
-      projectedColor: isDark ? "rgba(167,210,255,0.75)" : "rgba(15,23,42,0.5)",
-      dotStroke: isDark ? "rgba(2,6,23,0.85)" : "rgba(255,255,255,0.85)",
-      gridColor: isDark ? "rgba(248,250,252,0.15)" : "rgba(15,23,42,0.08)",
-      axisColor: isDark ? "rgba(248,250,252,0.6)" : "rgba(15,23,42,0.5)",
-    }
-  }, [theme])
-  const { data, metricLabel, delta } = useMemo(() => buildPredictionSeries(report), [report])
-  const improvement = delta >= 0 ? `+${delta.toFixed(2)}` : delta.toFixed(2)
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="text-xs text-muted-foreground">
-          {metricLabel} Two-week delta {improvement}
-        </div>
-        <ChartContainer
-          config={{
-            baseline: { label: "Current trend", color: baselineColor },
-            projected: { label: "Projected after action", color: projectedColor },
-          }}
-          className="w-full"
-        >
-          <LineChart data={data} margin={{ left: 12, right: 12 }}>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={gridColor} />
-            <XAxis
-              dataKey="name"
-              tickLine={false}
-              axisLine={{ stroke: axisColor }}
-              tick={{ fill: axisColor }}
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={{ stroke: axisColor }}
-              tick={{ fill: axisColor }}
-              domain={["auto", "auto"]}
-            />
-            <ChartTooltip cursor content={<ChartTooltipContent />} />
-            <Line
-              type="monotone"
-              dataKey="baseline"
-              stroke={baselineColor}
-              strokeWidth={2}
-              dot={{ r: 4, fill: baselineColor, stroke: dotStroke, strokeWidth: 2 }}
-              activeDot={{ r: 5, fill: baselineColor, stroke: dotStroke, strokeWidth: 2 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="projected"
-              stroke={projectedColor}
-              strokeWidth={2}
-              dot={{ r: 4.5, fill: projectedColor, stroke: dotStroke, strokeWidth: 2 }}
-              activeDot={{ r: 6, fill: projectedColor, stroke: dotStroke, strokeWidth: 2 }}
-            />
-          </LineChart>
-        </ChartContainer>
-      </CardContent>
-    </Card>
-  )
-}
-
-function RadarPentagon({ scores, title, language }: { scores?: RadarScore[]; title: string; language: LanguageCode }) {
-  const { theme } = useTheme()
-  const { gridColor, axisColor, radarStroke, radarFill } = useMemo(() => {
-    const isDark = theme === "dark"
-    return {
-      gridColor: isDark ? "rgba(248,250,252,0.18)" : "rgba(15,23,42,0.08)",
-      axisColor: isDark ? "rgba(248,250,252,0.7)" : "rgba(15,23,42,0.65)",
-      radarStroke: isDark ? "rgba(167,210,255,0.8)" : "rgba(15,23,42,0.55)",
-      radarFill: isDark ? "rgba(167,210,255,0.22)" : "rgba(15,23,42,0.15)",
-    }
-  }, [theme])
-  const normalizedScores = useMemo(() => {
-    const map: Partial<Record<RadarAxisKey, RadarScore>> = {}
-    for (const item of scores || []) {
-      const axisKey = normalizeRadarAxis(item.axis)
-      if (axisKey) {
-        map[axisKey] = item
-      }
-    }
-    return map
-  }, [scores])
-
-  const data = RADAR_AXIS_KEYS.map((axis) => {
-    const found = normalizedScores[axis]
-    return {
-      axisShort: RADAR_CHART_LABELS[language][axis],
-      axisLong: RADAR_LABELS[language][axis],
-      score: typeof found?.score === "number" ? found.score : 50,
-      commentary: found?.commentary || "Insufficient data",
-    }
-  })
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <ChartContainer
-          config={{
-            score: { label: "Score", color: radarStroke },
-          }}
-          className="h-[320px] w-full"
-        >
-          <RadarChart
-            data={data}
-            outerRadius="78%"
-            margin={{ top: 16, right: 28, bottom: 16, left: 28 }}
-          >
-            <PolarGrid strokeDasharray="3 3" stroke={gridColor} />
-            <PolarAngleAxis
-              dataKey="axisShort"
-              radius={92}
-              stroke={axisColor}
-              tickLine={false}
-              tick={{ fill: axisColor, fontSize: 12 }}
-            />
-            <PolarRadiusAxis
-              angle={90}
-              domain={[0, 100]}
-              tickCount={6}
-              stroke={axisColor}
-              tick={{ fill: axisColor, fontSize: 10 }}
-            />
-            <Radar
-              name="score"
-              dataKey="score"
-              stroke={radarStroke}
-              strokeWidth={2}
-              fill={radarFill}
-              fillOpacity={1}
-            />
-          </RadarChart>
-        </ChartContainer>
-        <div className="space-y-2 text-sm text-muted-foreground">
-          {data.map((item) => (
-            <div key={item.axisLong} className="flex items-center justify-between">
-              <span>{item.axisLong}</span>
-              <span className="font-medium text-foreground">{item.score}</span>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  )
 }

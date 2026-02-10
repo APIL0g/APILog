@@ -81,7 +81,7 @@ LLM_TIMEOUT_S: float = _as_float(_raw_llm_timeout_s, 60.0)
 
 # AI Report specific LLM overrides (falls back to global LLM_* when unset)
 _raw_report_llm_provider = os.getenv("AI_REPORT_LLM_PROVIDER")
-AI_REPORT_LLM_PROVIDER: str = _clean_str(_raw_report_llm_provider, LLM_PROVIDER)
+AI_REPORT_LLM_PROVIDER: str = _clean_str(_raw_report_llm_provider, "auto")
 
 _raw_report_llm_endpoint = os.getenv("AI_REPORT_LLM_ENDPOINT")
 AI_REPORT_LLM_ENDPOINT: str = _clean_str(
