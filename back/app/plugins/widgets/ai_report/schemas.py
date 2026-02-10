@@ -26,9 +26,10 @@ class TrafficDiagnosis(BaseModel):
     focus: str
     finding: str
     widget: str
-    severity: Optional[str] = None
+    severity: Optional[str] = None      # High / Medium / Low
     share: Optional[str] = None
     insight: Optional[str] = None
+    delta_pct: Optional[float] = None   # week-over-week change %
 
 
 class PageIssue(BaseModel):
@@ -80,6 +81,14 @@ class MetricWatch(BaseModel):
     timeframe: Optional[str] = None
 
 
+class HealthScore(BaseModel):
+    stability: Optional[float] = None           # (1 - error_rate) × 100
+    engagement: Optional[float] = None          # avg dwell normalized 0~100
+    content_consumption: Optional[float] = None # avg scroll_pct × 100
+    retention: Optional[float] = None           # (1 - exit_rate) × 100
+    interactivity: Optional[float] = None       # click_ratio × 100
+
+
 class TrendMeta(BaseModel):
     label: str
     change_pct: float
@@ -93,7 +102,7 @@ class ReportMeta(BaseModel):
 
     provider: str = "unknown"
     model: str = "unknown"
-    prompt_version: str = "v3"
+    prompt_version: str = "v4"
     mode: Union[Literal["llm", "error"], str] = "llm"
     source: Optional[str] = None
     site_id: Optional[str] = None
@@ -110,6 +119,7 @@ class ReportResponse(BaseModel):
     generated_at: str
     title: str = "AI Traffic Diagnosis Report"
     summary: str = ""
+    health_score: Optional[HealthScore] = None
     diagnostics: List[TrafficDiagnosis] = Field(default_factory=list)
     page_issues: List[PageIssue] = Field(default_factory=list)
     error_analysis: List[ErrorAnalysis] = Field(default_factory=list)
