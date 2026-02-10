@@ -40,11 +40,12 @@ class PageIssue(BaseModel):
     insight: Optional[str] = None
 
 
-class InteractionInsight(BaseModel):
-    area: str
-    insight: str
-    widget: str
-    action: Optional[str] = None
+class ErrorAnalysis(BaseModel):
+    path: str
+    browser: str
+    error_rate: float
+    detail: Optional[str] = None
+    widget: Optional[str] = None
 
 
 class Recommendation(BaseModel):
@@ -79,20 +80,6 @@ class MetricWatch(BaseModel):
     timeframe: Optional[str] = None
 
 
-class Prediction(BaseModel):
-    metric: str
-    baseline: float
-    expected: float
-    unit: Optional[str] = None
-    narrative: Optional[str] = None
-
-
-class RadarScoreItem(BaseModel):
-    axis: Union[Literal["performance", "experience", "growth", "search", "stability"], str]
-    score: int
-    commentary: Optional[str] = None
-
-
 class TrendMeta(BaseModel):
     label: str
     change_pct: float
@@ -106,13 +93,14 @@ class ReportMeta(BaseModel):
 
     provider: str = "unknown"
     model: str = "unknown"
-    prompt_version: str = "v2"
-    mode: Union[Literal["llm", "fallback", "deterministic", "error"], str] = "llm"
+    prompt_version: str = "v3"
+    mode: Union[Literal["llm", "error"], str] = "llm"
     source: Optional[str] = None
     site_id: Optional[str] = None
     time: Dict[str, Optional[str]] = Field(default_factory=dict)
     widgets: List[str] = Field(default_factory=list)
     missing_widgets: List[str] = Field(default_factory=list)
+    partial_failures: List[str] = Field(default_factory=list)
     trend: Optional[TrendMeta] = None
     notes: Dict[str, str] = Field(default_factory=dict)
     extras: Dict[str, Any] = Field(default_factory=dict)
@@ -124,11 +112,9 @@ class ReportResponse(BaseModel):
     summary: str = ""
     diagnostics: List[TrafficDiagnosis] = Field(default_factory=list)
     page_issues: List[PageIssue] = Field(default_factory=list)
-    interaction_insights: List[InteractionInsight] = Field(default_factory=list)
+    error_analysis: List[ErrorAnalysis] = Field(default_factory=list)
     ux_recommendations: List[Recommendation] = Field(default_factory=list)
     tech_recommendations: List[Recommendation] = Field(default_factory=list)
     priorities: List[PriorityItem] = Field(default_factory=list)
     metrics_to_track: List[MetricWatch] = Field(default_factory=list)
-    predictions: List[Prediction] = Field(default_factory=list)
-    radar_scores: List[RadarScoreItem] = Field(default_factory=list)
     meta: ReportMeta = Field(default_factory=ReportMeta)
