@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from "recharts"
 
 type TrafficDiagnosis = {
   focus: string
@@ -15,6 +16,7 @@ type TrafficDiagnosis = {
   severity?: string
   share?: string
   insight?: string
+  delta_pct?: number
 }
 
 type PageIssue = {
@@ -80,10 +82,19 @@ type ReportMeta = {
   [key: string]: any
 }
 
+type HealthScore = {
+  stability: number | null
+  engagement: number | null
+  content_consumption: number | null
+  retention: number | null
+  interactivity: number | null
+}
+
 type Report = {
   generated_at: string
   title: string
   summary?: string
+  health_score?: HealthScore | null
   diagnostics?: TrafficDiagnosis[]
   page_issues?: PageIssue[]
   error_analysis?: ErrorAnalysisItem[]
@@ -138,6 +149,13 @@ type Copy = {
   analysisWindow: string
   errorReportTitle: string
   errorReportRetry: string
+  healthScoreTitle: string
+  healthInsufficient: string
+  hsStability: string
+  hsEngagement: string
+  hsContentConsumption: string
+  hsRetention: string
+  hsInteractivity: string
 }
 
 const COPY: Record<LanguageCode, Copy> = {
@@ -181,6 +199,13 @@ const COPY: Record<LanguageCode, Copy> = {
     analysisWindow: "Analysis window",
     errorReportTitle: "Report generation failed",
     errorReportRetry: "Please try again. If the problem persists, check LLM provider settings.",
+    healthScoreTitle: "Health Score",
+    healthInsufficient: "Insufficient data",
+    hsStability: "Stability",
+    hsEngagement: "Engagement",
+    hsContentConsumption: "Content",
+    hsRetention: "Retention",
+    hsInteractivity: "Interactivity",
   },
   ko: {
     headerTitle: "AI 진단 리포트",
@@ -222,6 +247,13 @@ const COPY: Record<LanguageCode, Copy> = {
     analysisWindow: "분석 기간",
     errorReportTitle: "리포트 생성 실패",
     errorReportRetry: "다시 시도해주세요. 문제가 지속되면 LLM 설정을 확인하세요.",
+    healthScoreTitle: "Health Score",
+    healthInsufficient: "데이터 부족",
+    hsStability: "안정성",
+    hsEngagement: "참여도",
+    hsContentConsumption: "콘텐츠 소비",
+    hsRetention: "유지력",
+    hsInteractivity: "상호작용",
   },
 }
 
@@ -468,7 +500,14 @@ export default function AIReportPage() {
                   {(report.diagnostics || []).map((diag, i) => (
                     <div key={`${diag.focus}-${i}`} className="rounded-md border p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <div className="text-sm font-medium">{diag.focus}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{diag.focus}</span>
+                          {typeof diag.delta_pct === "number" && (
+                            <span className={`text-xs font-semibold ${diag.delta_pct > 0 ? "text-emerald-600" : diag.delta_pct < 0 ? "text-red-500" : "text-muted-foreground"}`}>
+                              {diag.delta_pct > 0 ? "\u25B2" : diag.delta_pct < 0 ? "\u25BC" : ""} {Math.abs(diag.delta_pct).toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
                         <Badge variant={severityVariant(diag.severity)}>{diag.severity || "Info"}</Badge>
                       </div>
                       <div className="text-sm">{diag.finding}</div>
@@ -549,6 +588,8 @@ export default function AIReportPage() {
             </div>
 
             <div className="space-y-6">
+              {report.health_score && <HealthScoreCard score={report.health_score} copy={copy} />}
+
               <Card>
                 <CardHeader>
                   <CardTitle>{copy.prioritiesTitle}</CardTitle>
@@ -607,6 +648,82 @@ export default function AIReportPage() {
       </main>
     </div>
   )
+}
+
+const HEALTH_AXIS_KEYS: (keyof HealthScore)[] = ["stability", "engagement", "content_consumption", "retention", "interactivity"]
+
+function HealthScoreCard({ score, copy }: { score: HealthScore; copy: Copy }) {
+  const labelMap: Record<keyof HealthScore, string> = {
+    stability: copy.hsStability,
+    engagement: copy.hsEngagement,
+    content_consumption: copy.hsContentConsumption,
+    retention: copy.hsRetention,
+    interactivity: copy.hsInteractivity,
+  }
+
+  const data = HEALTH_AXIS_KEYS.map((key) => ({
+    axis: labelMap[key],
+    value: score[key] ?? 0,
+    isNull: score[key] === null || score[key] === undefined,
+  }))
+
+  const hasAnyData = data.some((d) => !d.isNull)
+  const nullAxes = data.filter((d) => d.isNull)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{copy.healthScoreTitle}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {!hasAnyData ? (
+          <div className="text-sm text-muted-foreground">{copy.healthInsufficient}</div>
+        ) : (
+          <div className="flex flex-col items-center gap-4">
+            <ResponsiveContainer width="100%" height={300}>
+              <RadarChart data={data} cx="50%" cy="50%" outerRadius="70%">
+                <PolarGrid stroke="hsl(var(--border))" />
+                <PolarAngleAxis
+                  dataKey="axis"
+                  tick={{ fontSize: 12, fill: "hsl(var(--foreground))" }}
+                />
+                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
+                <Radar
+                  name="Health"
+                  dataKey="value"
+                  stroke="hsl(var(--primary))"
+                  fill="hsl(var(--primary))"
+                  fillOpacity={0.25}
+                  strokeWidth={2}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+            <div className="flex flex-wrap justify-center gap-3">
+              {data.map((d) => (
+                <div key={d.axis} className="text-center min-w-[80px]">
+                  <div className={`text-lg font-bold ${d.isNull ? "text-muted-foreground" : scoreColor(d.value)}`}>
+                    {d.isNull ? "—" : d.value.toFixed(0)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{d.axis}</div>
+                </div>
+              ))}
+            </div>
+            {nullAxes.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                {copy.healthInsufficient}: {nullAxes.map((d) => d.axis).join(", ")}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function scoreColor(value: number): string {
+  if (value >= 80) return "text-emerald-600"
+  if (value >= 50) return "text-amber-500"
+  return "text-red-500"
 }
 
 function RecommendationColumn({ title, items, emptyText }: { title: string; items: Recommendation[]; emptyText: string }) {
