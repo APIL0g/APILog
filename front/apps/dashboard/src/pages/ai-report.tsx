@@ -682,19 +682,32 @@ function HealthScoreCard({ score, copy }: { score: HealthScore; copy: Copy }) {
           <div className="flex flex-col items-center gap-4">
             <ResponsiveContainer width="100%" height={300}>
               <RadarChart data={data} cx="50%" cy="50%" outerRadius="70%">
-                <PolarGrid stroke="hsl(var(--border))" />
+                <PolarGrid
+                  gridType="polygon"
+                  stroke="hsl(var(--border))"
+                  strokeWidth={1}
+                  radialLines={true}
+                  polarRadius={[20, 40, 60, 80, 100].map((v) => v * 0.7)}
+                />
                 <PolarAngleAxis
                   dataKey="axis"
-                  tick={{ fontSize: 12, fill: "hsl(var(--foreground))" }}
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))", fontWeight: 500 }}
+                  axisLine={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5, strokeOpacity: 0.5 }}
                 />
-                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
+                <PolarRadiusAxis
+                  angle={90}
+                  domain={[0, 100]}
+                  tick={false}
+                  axisLine={false}
+                />
                 <Radar
                   name="Health"
                   dataKey="value"
-                  stroke="hsl(var(--primary))"
-                  fill="hsl(var(--primary))"
-                  fillOpacity={0.25}
-                  strokeWidth={2}
+                  stroke="hsl(142, 71%, 45%)"
+                  fill="hsl(142, 71%, 45%)"
+                  fillOpacity={0.2}
+                  strokeWidth={2.5}
+                  dot={{ r: 4, fill: "hsl(142, 71%, 45%)", strokeWidth: 0 }}
                 />
               </RadarChart>
             </ResponsiveContainer>
