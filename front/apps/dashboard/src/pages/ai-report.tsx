@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from "recharts"
 
 type TrafficDiagnosis = {
   focus: string
@@ -15,6 +16,7 @@ type TrafficDiagnosis = {
   severity?: string
   share?: string
   insight?: string
+  delta_pct?: number
 }
 
 type PageIssue = {
@@ -80,10 +82,19 @@ type ReportMeta = {
   [key: string]: any
 }
 
+type HealthScore = {
+  stability: number | null
+  engagement: number | null
+  content_consumption: number | null
+  retention: number | null
+  interactivity: number | null
+}
+
 type Report = {
   generated_at: string
   title: string
   summary?: string
+  health_score?: HealthScore | null
   diagnostics?: TrafficDiagnosis[]
   page_issues?: PageIssue[]
   error_analysis?: ErrorAnalysisItem[]
@@ -138,6 +149,13 @@ type Copy = {
   analysisWindow: string
   errorReportTitle: string
   errorReportRetry: string
+  healthScoreTitle: string
+  healthInsufficient: string
+  hsStability: string
+  hsEngagement: string
+  hsContentConsumption: string
+  hsRetention: string
+  hsInteractivity: string
 }
 
 const COPY: Record<LanguageCode, Copy> = {
@@ -181,6 +199,13 @@ const COPY: Record<LanguageCode, Copy> = {
     analysisWindow: "Analysis window",
     errorReportTitle: "Report generation failed",
     errorReportRetry: "Please try again. If the problem persists, check LLM provider settings.",
+    healthScoreTitle: "Health Score",
+    healthInsufficient: "Insufficient data",
+    hsStability: "Stability",
+    hsEngagement: "Engagement",
+    hsContentConsumption: "Content",
+    hsRetention: "Retention",
+    hsInteractivity: "Interactivity",
   },
   ko: {
     headerTitle: "AI 진단 리포트",
@@ -222,6 +247,13 @@ const COPY: Record<LanguageCode, Copy> = {
     analysisWindow: "분석 기간",
     errorReportTitle: "리포트 생성 실패",
     errorReportRetry: "다시 시도해주세요. 문제가 지속되면 LLM 설정을 확인하세요.",
+    healthScoreTitle: "Health Score",
+    healthInsufficient: "데이터 부족",
+    hsStability: "안정성",
+    hsEngagement: "참여도",
+    hsContentConsumption: "콘텐츠 소비",
+    hsRetention: "유지력",
+    hsInteractivity: "상호작용",
   },
 }
 
@@ -457,85 +489,83 @@ export default function AIReportPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>{copy.envDiagnosticsTitle}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {(report.diagnostics || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">{copy.noDiagnostics}</div>
-                  )}
-                  {(report.diagnostics || []).map((diag, i) => (
-                    <div key={`${diag.focus}-${i}`} className="rounded-md border p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-medium">{diag.focus}</div>
-                        <Badge variant={severityVariant(diag.severity)}>{diag.severity || "Info"}</Badge>
-                      </div>
-                      <div className="text-sm">{diag.finding}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {copy.sourceWidget}: {diag.widget}
-                        {diag.share ? ` \u00b7 ${diag.share}` : ""}
-                      </div>
-                      {diag.insight && <div className="text-xs text-muted-foreground">{diag.insight}</div>}
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>{copy.pageIssuesTitle}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {(report.page_issues || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">{copy.noPageIssues}</div>
-                  )}
-                  {(report.page_issues || []).map((page, i) => {
-                    const dwellText = page.dwell_time && page.dwell_time !== "-" ? page.dwell_time : null
-                    const exitText = page.exit_rate && page.exit_rate !== "-" ? page.exit_rate : null
-                    return (
-                      <div key={`${page.page}-${i}`} className="rounded-md border p-3 space-y-1.5">
-                        <div className="flex items-center justify-between text-sm font-medium">
-                          <span>{page.page}</span>
-                          <Badge variant="outline">{page.widget || "page_exit_rate"}</Badge>
-                        </div>
-                        <div className="text-sm">{page.issue}</div>
-                        {(dwellText || exitText) && (
-                          <div className="text-xs text-muted-foreground">
-                            {dwellText ? `${copy.dwellLabel}: ${dwellText}` : ""}
-                            {dwellText && exitText ? " \u00b7 " : ""}
-                            {exitText ? `${copy.exitLabel}: ${exitText}` : ""}
-                          </div>
+              <ReportSection<TrafficDiagnosis>
+                title={copy.envDiagnosticsTitle}
+                items={report.diagnostics || []}
+                emptyText={copy.noDiagnostics}
+                keyFn={(diag, i) => `${diag.focus}-${i}`}
+              >
+                {(diag) => (
+                  <div className="rounded-md border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{diag.focus}</span>
+                        {typeof diag.delta_pct === "number" && (
+                          <span className={`text-xs font-semibold ${diag.delta_pct > 0 ? "text-emerald-600" : diag.delta_pct < 0 ? "text-red-500" : "text-muted-foreground"}`}>
+                            {diag.delta_pct > 0 ? "\u25B2" : diag.delta_pct < 0 ? "\u25BC" : ""} {Math.abs(diag.delta_pct).toFixed(1)}%
+                          </span>
                         )}
-                        {page.insight && <div className="text-xs text-muted-foreground">{page.insight}</div>}
                       </div>
-                    )
-                  })}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>{copy.errorAnalysisTitle}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {(report.error_analysis || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">{copy.noErrors}</div>
-                  )}
-                  {(report.error_analysis || []).map((err, i) => (
-                    <div key={`${err.path}-${err.browser}-${i}`} className="rounded-md border p-3 space-y-1.5">
-                      <div className="flex items-center justify-between text-sm font-medium">
-                        <span>{err.path}</span>
-                        <Badge variant={err.error_rate >= 5 ? "destructive" : "default"}>
-                          {err.error_rate.toFixed(1)}%
-                        </Badge>
-                      </div>
-                      <div className="text-xs text-muted-foreground">{err.browser}</div>
-                      {err.detail && <div className="text-sm">{err.detail}</div>}
+                      <Badge variant={severityVariant(diag.severity)}>{diag.severity || "Info"}</Badge>
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
+                    <div className="text-sm">{diag.finding}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {copy.sourceWidget}: {diag.widget}
+                      {diag.share ? ` \u00b7 ${diag.share}` : ""}
+                    </div>
+                    {diag.insight && <div className="text-xs text-muted-foreground">{diag.insight}</div>}
+                  </div>
+                )}
+              </ReportSection>
+
+              <ReportSection<PageIssue>
+                title={copy.pageIssuesTitle}
+                items={report.page_issues || []}
+                emptyText={copy.noPageIssues}
+                keyFn={(page, i) => `${page.page}-${i}`}
+              >
+                {(page) => {
+                  const dwellText = page.dwell_time && page.dwell_time !== "-" ? page.dwell_time : null
+                  const exitText = page.exit_rate && page.exit_rate !== "-" ? page.exit_rate : null
+                  return (
+                    <div className="rounded-md border p-3 space-y-1.5">
+                      <div className="flex items-center justify-between text-sm font-medium">
+                        <span>{page.page}</span>
+                        <Badge variant="outline">{page.widget || "page_exit_rate"}</Badge>
+                      </div>
+                      <div className="text-sm">{page.issue}</div>
+                      {(dwellText || exitText) && (
+                        <div className="text-xs text-muted-foreground">
+                          {dwellText ? `${copy.dwellLabel}: ${dwellText}` : ""}
+                          {dwellText && exitText ? " \u00b7 " : ""}
+                          {exitText ? `${copy.exitLabel}: ${exitText}` : ""}
+                        </div>
+                      )}
+                      {page.insight && <div className="text-xs text-muted-foreground">{page.insight}</div>}
+                    </div>
+                  )
+                }}
+              </ReportSection>
+
+              <ReportSection<ErrorAnalysisItem>
+                title={copy.errorAnalysisTitle}
+                items={report.error_analysis || []}
+                emptyText={copy.noErrors}
+                keyFn={(err, i) => `${err.path}-${err.browser}-${i}`}
+              >
+                {(err) => (
+                  <div className="rounded-md border p-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-sm font-medium">
+                      <span>{err.path}</span>
+                      <Badge variant={err.error_rate >= 5 ? "destructive" : "default"}>
+                        {err.error_rate.toFixed(1)}%
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground">{err.browser}</div>
+                    {err.detail && <div className="text-sm">{err.detail}</div>}
+                  </div>
+                )}
+              </ReportSection>
 
               <Card>
                 <CardHeader>
@@ -549,63 +579,169 @@ export default function AIReportPage() {
             </div>
 
             <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{copy.prioritiesTitle}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {(report.priorities || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">{copy.noPriorities}</div>
-                  )}
-                  {(report.priorities || []).map((p, i) => (
-                    <div key={`${p.title}-${i}`} className="rounded-md border p-3 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-medium">{p.title}</div>
-                        <Badge variant={priorityVariant(p.priority)}>{p.priority}</Badge>
-                      </div>
-                      <div className="text-sm">{p.impact}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {copy.effortLabel}: {p.effort || "-"}
-                        {p.business_outcome ? ` - ${p.business_outcome}` : ""}
-                      </div>
-                      {p.expected_metric_change && (
-                        <div className="text-xs text-muted-foreground">
-                          Target metric: {p.expected_metric_change.metric || "-"} {p.expected_metric_change.target || ""}
-                          {p.expected_metric_change.period ? ` / ${p.expected_metric_change.period}` : ""}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
+              {report.health_score && <HealthScoreCard score={report.health_score} copy={copy} />}
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>{copy.metricsTitle}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {(report.metrics_to_track || []).length === 0 && (
-                    <div className="text-sm text-muted-foreground">{copy.noMetrics}</div>
-                  )}
-                  {(report.metrics_to_track || []).map((metric, i) => (
-                    <div key={`${metric.metric}-${i}`} className="rounded-md border p-3 space-y-1">
-                      <div className="flex items-center justify-between text-sm font-medium">
-                        <span>{metric.metric}</span>
-                        {metric.target_change && <Badge variant="outline">{metric.target_change}</Badge>}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {copy.widgetLabel}: {metric.widget} {metric.timeframe ? ` - Period ${metric.timeframe}` : ""}
-                      </div>
-                      <div className="text-sm">{metric.reason}</div>
+              <ReportSection<Priority>
+                title={copy.prioritiesTitle}
+                items={report.priorities || []}
+                emptyText={copy.noPriorities}
+                keyFn={(p, i) => `${p.title}-${i}`}
+              >
+                {(p) => (
+                  <div className="rounded-md border p-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium">{p.title}</div>
+                      <Badge variant={priorityVariant(p.priority)}>{p.priority}</Badge>
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
+                    <div className="text-sm">{p.impact}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {copy.effortLabel}: {p.effort || "-"}
+                      {p.business_outcome ? ` - ${p.business_outcome}` : ""}
+                    </div>
+                    {p.expected_metric_change && (
+                      <div className="text-xs text-muted-foreground">
+                        Target metric: {p.expected_metric_change.metric || "-"} {p.expected_metric_change.target || ""}
+                        {p.expected_metric_change.period ? ` / ${p.expected_metric_change.period}` : ""}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </ReportSection>
+
+              <ReportSection<MetricWatch>
+                title={copy.metricsTitle}
+                items={report.metrics_to_track || []}
+                emptyText={copy.noMetrics}
+                keyFn={(m, i) => `${m.metric}-${i}`}
+              >
+                {(metric) => (
+                  <div className="rounded-md border p-3 space-y-1">
+                    <div className="flex items-center justify-between text-sm font-medium">
+                      <span>{metric.metric}</span>
+                      {metric.target_change && <Badge variant="outline">{metric.target_change}</Badge>}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {copy.widgetLabel}: {metric.widget} {metric.timeframe ? ` - Period ${metric.timeframe}` : ""}
+                    </div>
+                    <div className="text-sm">{metric.reason}</div>
+                  </div>
+                )}
+              </ReportSection>
             </div>
           </div>
         )}
       </main>
     </div>
+  )
+}
+
+const HEALTH_AXIS_KEYS: (keyof HealthScore)[] = ["stability", "engagement", "content_consumption", "retention", "interactivity"]
+
+function HealthScoreCard({ score, copy }: { score: HealthScore; copy: Copy }) {
+  const labelMap: Record<keyof HealthScore, string> = {
+    stability: copy.hsStability,
+    engagement: copy.hsEngagement,
+    content_consumption: copy.hsContentConsumption,
+    retention: copy.hsRetention,
+    interactivity: copy.hsInteractivity,
+  }
+
+  const data = HEALTH_AXIS_KEYS.map((key) => ({
+    axis: labelMap[key],
+    value: score[key] ?? 0,
+    isNull: score[key] === null || score[key] === undefined,
+  }))
+
+  const hasAnyData = data.some((d) => !d.isNull)
+  const nullAxes = data.filter((d) => d.isNull)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{copy.healthScoreTitle}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {!hasAnyData ? (
+          <div className="text-sm text-muted-foreground">{copy.healthInsufficient}</div>
+        ) : (
+          <div className="flex flex-col items-center gap-4">
+            <ResponsiveContainer width="100%" height={300}>
+              <RadarChart data={data} cx="50%" cy="50%" outerRadius="70%">
+                <PolarGrid
+                  gridType="polygon"
+                  stroke="hsl(var(--border))"
+                  strokeWidth={1}
+                  radialLines={true}
+                  polarRadius={[20, 40, 60, 80, 100].map((v) => v * 0.7)}
+                />
+                <PolarAngleAxis
+                  dataKey="axis"
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))", fontWeight: 500 }}
+                  axisLine={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5, strokeOpacity: 0.5 }}
+                />
+                <PolarRadiusAxis
+                  angle={90}
+                  domain={[0, 100]}
+                  tick={false}
+                  axisLine={false}
+                />
+                <Radar
+                  name="Health"
+                  dataKey="value"
+                  stroke="hsl(142, 71%, 45%)"
+                  fill="hsl(142, 71%, 45%)"
+                  fillOpacity={0.2}
+                  strokeWidth={2.5}
+                  dot={{ r: 4, fill: "hsl(142, 71%, 45%)", strokeWidth: 0 }}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+            <div className="flex flex-wrap justify-center gap-3">
+              {data.map((d) => (
+                <div key={d.axis} className="text-center min-w-[80px]">
+                  <div className={`text-lg font-bold ${d.isNull ? "text-muted-foreground" : scoreColor(d.value)}`}>
+                    {d.isNull ? "—" : d.value.toFixed(0)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{d.axis}</div>
+                </div>
+              ))}
+            </div>
+            {nullAxes.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                {copy.healthInsufficient}: {nullAxes.map((d) => d.axis).join(", ")}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function scoreColor(value: number): string {
+  if (value >= 80) return "text-emerald-600"
+  if (value >= 50) return "text-amber-500"
+  return "text-red-500"
+}
+
+function ReportSection<T>({
+  title, items, emptyText, keyFn, children, contentClassName,
+}: {
+  title: string
+  items: T[]
+  emptyText: string
+  keyFn: (item: T, index: number) => string
+  children: (item: T, index: number) => React.ReactNode
+  contentClassName?: string
+}) {
+  return (
+    <Card>
+      <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+      <CardContent className={contentClassName || "space-y-3"}>
+        {items.length === 0 && <div className="text-sm text-muted-foreground">{emptyText}</div>}
+        {items.map((item, i) => <div key={keyFn(item, i)}>{children(item, i)}</div>)}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -620,8 +756,8 @@ function RecommendationColumn({ title, items, emptyText }: { title: string; item
             <span className="text-sm font-medium">{item.category}</span>
           </div>
           <div className="text-sm">{item.suggestion}</div>
-        {item.rationale && <div className="text-xs text-muted-foreground">Rationale: {item.rationale}</div>}
-        {item.validation && <div className="text-xs text-muted-foreground">Validation: {item.validation}</div>}
+          {item.rationale && <div className="text-xs text-muted-foreground">Rationale: {item.rationale}</div>}
+          {item.validation && <div className="text-xs text-muted-foreground">Validation: {item.validation}</div>}
         </div>
       ))}
     </div>
